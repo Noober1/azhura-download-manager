@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Azhura Download Manager</title>
+    <style>
+      :root {
+        color-scheme: dark light;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+        background: #191712;
+        color: #f5efe1;
+      }
+      .card {
+        max-width: 30rem;
+        padding: 1.5rem 1.75rem;
+        background: #231f18;
+        border: 2px solid #f5efe1;
+        border-radius: 8px;
+        box-shadow: 4px 4px 0 #f5efe1;
+      }
+      h1 {
+        margin: 0 0 0.5rem;
+        font-size: 1.1rem;
+      }
+      p {
+        margin: 0.5rem 0 0;
+        color: #bcb4a2;
+      }
+      a {
+        color: #a99cff;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>Handing off to Azhura Download Manager…</h1>
+      <p>
+        If your browser asks for permission to open the app, choose
+        <strong>Open Azhura Download Manager</strong>. Tick
+        <em>Always allow</em> to skip this prompt next time.
+      </p>
+      <p id="fallback" hidden>
+        Nothing happened? <a id="retry" href="#">Try the hand-off again</a> —
+        make sure Azhura Download Manager has been run at least once so it can
+        register the <code>adm://</code> link type.
+      </p>
+    </div>
+    <script src="launcher.js"></script>
+  </body>
+</html>

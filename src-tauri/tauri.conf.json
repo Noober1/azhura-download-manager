@@ -1,0 +1,47 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Azhura Download Manager",
+  "version": "0.2.0",
+  "identifier": "adm.ruhiyatna.id",
+  "build": {
+    "beforeDevCommand": "bun run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "bun run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Azhura Download Manager",
+        "width": 940,
+        "height": 620,
+        "minWidth": 544,
+        "minHeight": 368,
+        "decorations": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "resources": ["../extension/**/*", "../extension-firefox/**/*"]
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["adm"]
+      }
+    }
+  }
+}

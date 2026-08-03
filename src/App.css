@@ -1,0 +1,996 @@
+/* Azhura Download Manager — Neobrutalist (dark), Persepolis-style shell:
+   top icon toolbar · category sidebar · download table · modal dialogs. */
+
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800;900&family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap');
+
+:root {
+  --ink: #f5efe1;
+  --ink-soft: #bcb4a2;
+  --faint: #8a8272;
+  --canvas: #191712;
+  --surface: #231f18;
+  --surface-2: #2b2720;
+  --accent: #7b6cff;
+  --accent-strong: #6a5bf0;
+  --accent-wash: #2c2757;
+  --highlight: #ffd23f;
+  --highlight-ink: #17150f;
+  --positive: #3ecb76;
+  --danger: #ff6b5e;
+  --warn-wash: #382c12;
+  --violet-wash: #2b2352;
+  --positive-wash: #173521;
+  --danger-wash: #3a1a17;
+  --queued-wash: #2b2820;
+
+  --bw: 2px;
+  --bw-lg: 2.5px;
+  --sh-sm: 2px 2px 0 var(--ink);
+  --sh: 3px 3px 0 var(--ink);
+  --radius-field: 6px;
+  --radius-card: 7px;
+
+  --font-sans: 'Geist', ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
+  --font-head: 'Archivo', 'Geist', system-ui, sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, Consolas, monospace;
+
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  background: var(--canvas);
+  overflow: hidden;
+}
+
+body {
+  user-select: none;
+  -webkit-user-select: none;
+}
+input,
+textarea,
+.selectable {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.tabular {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- App shell ----------------------------------------------------------- */
+
+.app {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---- Top toolbar --------------------------------------------------------- */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.6rem 0.8rem;
+  background: var(--surface);
+  border-bottom: var(--bw-lg) solid var(--ink);
+}
+
+.tbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  color: var(--ink);
+  background: var(--surface-2);
+  border: var(--bw) solid var(--ink);
+  border-radius: var(--radius-field);
+  box-shadow: var(--sh-sm);
+  cursor: pointer;
+  transition: transform 0.08s ease, box-shadow 0.08s ease, background 0.1s ease;
+}
+.tbtn:hover:not(:disabled) {
+  box-shadow: var(--sh);
+}
+.tbtn:active:not(:disabled) {
+  transform: translate(2px, 2px);
+  box-shadow: 0 0 0 var(--ink);
+}
+.tbtn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+.tbtn.primary {
+  background: var(--accent);
+  color: #fff;
+}
+.tbtn.primary:hover:not(:disabled) {
+  background: var(--accent-strong);
+}
+.tbtn.danger {
+  background: var(--surface-2);
+  color: var(--danger);
+}
+
+.tsep {
+  width: var(--bw);
+  height: 19px;
+  background: var(--ink);
+  margin: 0 0.35rem;
+  border-radius: 2px;
+}
+
+.topbar-status {
+  margin-left: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.15;
+}
+.ts-speed {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.ts-counts {
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--faint);
+}
+
+[data-tauri-drag-region] {
+  cursor: default;
+}
+.win-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-left: 0.5rem;
+}
+.win-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  color: var(--ink);
+  background: var(--surface-2);
+  border: var(--bw) solid var(--ink);
+  border-radius: var(--radius-field);
+  box-shadow: var(--sh-sm);
+  cursor: pointer;
+}
+.win-btn:hover {
+  box-shadow: var(--sh);
+}
+.win-btn.win-close:hover {
+  background: var(--danger);
+  color: #fff;
+}
+.add-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+/* ---- Body: sidebar + table ---------------------------------------------- */
+
+.body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.sidebar {
+  width: 142px;
+  flex-shrink: 0;
+  padding: 0.9rem 0.7rem;
+  background: var(--surface);
+  border-right: var(--bw-lg) solid var(--ink);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  overflow-y: auto;
+}
+
+.side-title {
+  font-family: var(--font-head);
+  font-weight: 800;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--faint);
+  padding: 0 0.3rem 0.5rem;
+}
+
+.cat {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--ink);
+  background: transparent;
+  border: var(--bw) solid transparent;
+  border-radius: var(--radius-field);
+  box-shadow: none;
+  padding: 0.5em 0.6em;
+  cursor: pointer;
+  transition: background 0.1s ease;
+}
+.cat:hover {
+  background: var(--surface-2);
+  box-shadow: none;
+}
+.cat.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--ink);
+  box-shadow: var(--sh-sm);
+}
+.cat-n {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+
+/* ---- Download table ------------------------------------------------------ */
+
+.table-wrap {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  padding: 0.9rem;
+}
+
+.dtable {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  border: var(--bw) solid var(--ink);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.dtable thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface-2);
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-soft);
+  text-align: left;
+  padding: 0.6rem 0.8rem;
+  border-bottom: var(--bw) solid var(--ink);
+}
+
+.col-num {
+  text-align: right;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  width: 10%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.col-speed {
+  width: 14%;
+}
+.col-status {
+  width: 11%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.col-pct {
+  width: 25%;
+}
+.col-name {
+  max-width: 0;
+  width: 30%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.drow td {
+  padding: 0.55rem 0.8rem;
+  border-bottom: 1px solid #38332a;
+  font-size: 0.85rem;
+}
+.drow {
+  cursor: pointer;
+}
+.drow:hover td {
+  background: var(--surface-2);
+}
+.drow.selected td {
+  background: var(--accent-wash);
+}
+.drow .col-name {
+  font-weight: 600;
+}
+
+.cell-pct {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.mini-track {
+  flex: 1;
+  height: 7px;
+  border: 1.5px solid var(--ink);
+  border-radius: 999px;
+  background: var(--canvas);
+  overflow: hidden;
+}
+.mini-bar {
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+  transition: width 0.15s ease-out;
+}
+.mini-bar.done {
+  background: var(--positive);
+}
+.mini-bar.error {
+  background: var(--danger);
+}
+.mini-bar.indeterminate {
+  width: 40% !important;
+  background: repeating-linear-gradient(
+    45deg,
+    var(--accent) 0,
+    var(--accent) 8px,
+    var(--accent-strong) 8px,
+    var(--accent-strong) 16px
+  );
+  animation: sweep 1s linear infinite;
+}
+@keyframes sweep {
+  0% {
+    transform: translateX(-60%);
+  }
+  100% {
+    transform: translateX(160%);
+  }
+}
+.pct-num {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+  width: 2.6rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.empty-cell {
+  padding: 3rem 1rem !important;
+  text-align: center;
+  color: var(--faint);
+}
+
+/* ---- Status badge -------------------------------------------------------- */
+
+.mode-tag {
+  display: inline-block;
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+  background: var(--surface-2);
+  border: 1.5px solid var(--ink);
+  border-radius: 999px;
+  padding: 0.1em 0.55em;
+  white-space: nowrap;
+}
+.mode-tag.downloading {
+  background: var(--accent-wash);
+}
+.mode-tag.completed {
+  background: var(--positive-wash);
+}
+.mode-tag.paused {
+  background: var(--warn-wash);
+}
+.mode-tag.error,
+.mode-tag.canceled {
+  background: var(--danger-wash);
+}
+.mode-tag.queued {
+  background: var(--queued-wash);
+}
+.mode-tag.verifying {
+  background: var(--violet-wash);
+}
+/* Declared last: it shares specificity with the state classes above and must
+   win when a completed download's file has gone missing. */
+.mode-tag.missing {
+  background: var(--queued-wash);
+  border-style: dashed;
+  color: var(--ink-soft);
+}
+
+/* ---- Expanded detail row ------------------------------------------------- */
+
+.detail-row td {
+  background: var(--canvas);
+  border-bottom: 1px solid #38332a;
+  padding: 0.9rem 1rem;
+}
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.detail-meta {
+  display: flex;
+  gap: 1.2rem;
+  align-items: baseline;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+  flex-wrap: wrap;
+}
+.detail-note {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--faint);
+}
+.detail-path {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--faint);
+  word-break: break-all;
+}
+
+.segments {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.seg {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.seg-idx {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--faint);
+  width: 1.8rem;
+}
+.seg-track {
+  flex: 1;
+  height: 6px;
+  border: 1.5px solid var(--ink);
+  border-radius: 999px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.seg-bar {
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+  transition: width 0.15s ease-out;
+}
+.seg-bar.idle {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--faint) 0,
+    var(--faint) 4px,
+    transparent 4px,
+    transparent 8px
+  );
+}
+.seg-pct {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--faint);
+  width: 3.4rem;
+  text-align: right;
+}
+
+.ok {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--positive);
+}
+.err {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--danger);
+  word-break: break-all;
+}
+
+/* ---- Download Details popup window --------------------------------------- */
+
+.detail-window-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  overflow-y: auto;
+}
+.detail-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.detail-title {
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 1rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.detail-overall {
+  width: 100%;
+}
+.detail-overall .mini-track {
+  height: 10px;
+}
+.detail-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 1rem;
+  row-gap: 0.4rem;
+  font-size: 0.78rem;
+  border-top: 1.5px solid var(--surface-2);
+  padding-top: 0.6rem;
+}
+.detail-grid-label {
+  color: var(--faint);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.detail-grid-value {
+  font-family: var(--font-mono);
+  color: var(--ink-soft);
+  word-break: break-all;
+}
+
+/* ---- Inputs & buttons (base) --------------------------------------------- */
+
+input,
+button,
+textarea {
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  color: var(--ink);
+  background: var(--surface-2);
+  border: var(--bw) solid var(--ink);
+  border-radius: var(--radius-field);
+  padding: 0.5em 0.75em;
+  box-shadow: var(--sh-sm);
+  outline: none;
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+select {
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  color: var(--ink);
+  background: var(--surface-2);
+  border: var(--bw) solid var(--ink);
+  border-radius: var(--radius-field);
+  padding: 0.5em 0.75em;
+  box-shadow: var(--sh-sm);
+  outline: none;
+  cursor: pointer;
+}
+select:focus {
+  border-color: var(--accent);
+  box-shadow: var(--sh);
+}
+.conn-select {
+  width: 4.6rem;
+  text-align: center;
+  font-family: var(--font-mono);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--faint);
+}
+input:focus,
+textarea:focus {
+  border-color: var(--accent);
+  box-shadow: var(--sh);
+}
+button {
+  cursor: pointer;
+  font-weight: 700;
+}
+button:hover:not(:disabled) {
+  box-shadow: var(--sh);
+}
+button:active:not(:disabled) {
+  transform: translate(2px, 2px);
+  box-shadow: 0 0 0 var(--ink);
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+button.primary-btn {
+  background: var(--accent);
+  color: #fff;
+}
+button.primary-btn:hover:not(:disabled) {
+  background: var(--accent-strong);
+}
+button.danger {
+  background: var(--danger);
+  color: #fff;
+}
+
+/* ---- Dialogs ------------------------------------------------------------- */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 9, 6, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  z-index: 50;
+}
+
+.dialog {
+  width: 100%;
+  max-width: 416px;
+  background: var(--surface);
+  border: var(--bw-lg) solid var(--ink);
+  border-radius: var(--radius-card);
+  box-shadow: 5px 5px 0 var(--ink);
+}
+
+/* Standalone add window fills its native OS window. */
+.add-window {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+}
+.add-window .dialog-body {
+  flex: 1;
+  overflow-y: auto;
+}
+.dialog-sm {
+  max-width: 320px;
+}
+
+.dialog-head {
+  font-family: var(--font-head);
+  font-weight: 800;
+  font-size: 1.05rem;
+  padding: 0.9rem 1.1rem;
+  border-bottom: var(--bw) solid var(--ink);
+}
+.dialog-body {
+  padding: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+.dialog-body input,
+.dialog-body textarea {
+  width: 100%;
+}
+.dlg-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-soft);
+}
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 0.9rem 1.1rem;
+  border-top: var(--bw) solid var(--ink);
+}
+
+/* ---- Browser extension dialog --------------------------------------------- */
+
+.ext-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.8rem;
+  padding: 0.7rem 0.8rem;
+  background: var(--surface-2);
+  border: var(--bw) solid var(--ink);
+  border-radius: var(--radius-card);
+}
+.ext-name {
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 0.82rem;
+}
+.ext-hint {
+  margin-top: 0.25rem;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: var(--faint);
+}
+.ext-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+.ext-row > button,
+.ext-actions > button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* ---- Add window tabs ------------------------------------------------------ */
+
+.tabs {
+  display: flex;
+  gap: 0.3rem;
+  padding: 0.6rem 1.1rem 0;
+  background: var(--surface);
+  border-bottom: var(--bw) solid var(--ink);
+  flex-shrink: 0;
+}
+.tab {
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+  background: transparent;
+  border: var(--bw) solid transparent;
+  border-bottom: none;
+  border-radius: var(--radius-field) var(--radius-field) 0 0;
+  box-shadow: none;
+  padding: 0.55em 0.9em;
+  cursor: pointer;
+}
+.tab:hover:not(.active):not(:disabled) {
+  background: var(--surface-2);
+  box-shadow: none;
+  transform: none;
+}
+.tab:active:not(:disabled) {
+  transform: none;
+  box-shadow: none;
+}
+.tab.active {
+  color: var(--ink);
+  background: var(--canvas);
+  border-color: var(--ink);
+  box-shadow: none;
+}
+
+.tab-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+.tab-hidden {
+  display: none;
+}
+.tab-empty {
+  align-items: center;
+  justify-content: center;
+  min-height: 10rem;
+  color: var(--faint);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.field-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.field-row label {
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-soft);
+}
+.field-row input[type="number"] {
+  width: 4.2rem;
+  text-align: center;
+  font-family: var(--font-mono);
+}
+.field-unit {
+  font-size: 0.72rem;
+  color: var(--faint);
+}
+.field-headers {
+  flex-direction: column;
+  align-items: stretch;
+}
+.checksum-input {
+  flex: 1;
+  min-width: 11rem;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+.tab-panel textarea {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.path-row input {
+  flex: 1;
+  min-width: 8rem;
+}
+
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.check-row input[type="checkbox"] {
+  width: auto;
+  padding: 0;
+  box-shadow: none;
+  cursor: pointer;
+}
+.check-row input:not([type="checkbox"]) {
+  flex: 1;
+  cursor: text;
+}
+
+.link-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+.link-btn {
+  font-size: 0.75rem;
+  padding: 0.4em 0.7em;
+}
+.size-readout {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--faint);
+}
+
+/* ---- Row context menu ----------------------------------------------------- */
+
+.ctx-menu {
+  position: fixed;
+  z-index: 60;
+  min-width: 12rem;
+  padding: 0.35rem;
+  background: var(--surface);
+  border: var(--bw-lg) solid var(--ink);
+  border-radius: var(--radius-card);
+  box-shadow: 3px 3px 0 var(--ink);
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.ctx-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.82rem;
+  color: var(--ink);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-field);
+  box-shadow: none;
+  padding: 0.5em 0.7em;
+  cursor: pointer;
+}
+.ctx-item:hover:not(:disabled) {
+  background: var(--surface-2);
+  box-shadow: none;
+  transform: none;
+}
+.ctx-item:active:not(:disabled) {
+  transform: none;
+  box-shadow: none;
+}
+.ctx-item:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.ctx-item.danger {
+  /* Beats the global `button.danger` rule (background: var(--danger); color: #fff),
+     which otherwise wins on specificity and paints red text on a red background. */
+  background: transparent;
+  color: var(--danger);
+}
+.ctx-item.danger:hover:not(:disabled) {
+  background: var(--danger-wash);
+}
+.ctx-sep {
+  height: 1px;
+  margin: 0.3rem 0.2rem;
+  background: #38332a;
+}
+
+/* ---- Delete dialog --------------------------------------------------------- */
+
+.del-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+  max-height: 8rem;
+  overflow-y: auto;
+}
+.del-list li {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inline-warn {
+  padding: 0.8rem;
+  font-size: 0.85rem;
+  background: var(--warn-wash);
+  border: var(--bw) solid var(--ink);
+  border-radius: var(--radius-card);
+  color: var(--ink);
+}
+.inline-warn-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.7rem;
+}
+
+code {
+  font-family: var(--font-mono);
+  background: var(--accent-wash);
+  border: 1px solid var(--ink);
+  padding: 0.02em 0.35em;
+  border-radius: 4px;
+  font-size: 0.85em;
+}
