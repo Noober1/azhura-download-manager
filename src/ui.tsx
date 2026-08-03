@@ -96,16 +96,94 @@ export function WindowControls({ variant }: { variant: "full" | "close" }) {
   );
 }
 
-/* Suppress the browser's native right-click menu, except in editable fields (so Paste
-   works). Custom per-item context menus attach separately via onContextMenu. */
-export function useSuppressContextMenu() {
+/** Whether `target` is something the user can type into — inputs get to keep
+ *  their native key handling (Backspace, Ctrl+C/V/X, etc). */
+export function isEditable(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null;
+  return !!el?.closest('input, textarea, [contenteditable="true"]');
+}
+
+const BLOCKED_FUNCTION_KEYS = new Set(["F1", "F3", "F5", "F6", "F7", "F11", "F12"]);
+// Browser-chrome accelerators with no meaning in a download manager: find,
+// history, downloads-list, focus-address-bar, new-window/tab, open, print,
+// save-as, view-source, close-tab, bookmark, search-page, minimize, favorites.
+const BLOCKED_CTRL_LETTERS = new Set([
+  "f", "g", "h", "j", "k", "l", "n", "o", "p", "r", "s", "t", "u", "w", "d", "e", "b", "i", "m",
+]);
+const BLOCKED_CTRL_SHIFT_LETTERS = new Set(["i", "j", "c", "k"]); // devtools variants
+const ZOOM_KEYS = new Set(["=", "-", "+", "_", "0"]);
+
+/** Suppresses the browser-isms WebView2 still exposes even with the
+ *  host-level hardening applied in Rust (`harden_webview` in lib.rs) —
+ *  find-in-page, reload, print, zoom, history navigation, the default context
+ *  menu, ctrl-scroll zoom, and drag-and-drop navigation. Defense-in-depth on
+ *  Windows; the only protection at all on other targets. */
+export function useNativeShell() {
   useEffect(() => {
-    const onCtx = (e: MouseEvent) => {
-      const t = e.target as HTMLElement | null;
-      if (t?.closest('input, textarea, [contenteditable="true"]')) return;
+    function onContextMenu(e: MouseEvent) {
+      if (isEditable(e.target)) return;
       e.preventDefault();
+    }
+
+    // Capture phase: runs before any app-level key handler (e.g. App.tsx's
+    // own keydown effect for Ctrl+A/Escape/Delete), but doesn't stop it —
+    // only preventDefault() to kill the browser's default action.
+    function onKeyDown(e: KeyboardEvent) {
+      const mod = e.ctrlKey || e.metaKey;
+      const key = e.key;
+      const lower = key.toLowerCase();
+
+      if (BLOCKED_FUNCTION_KEYS.has(key)) {
+        e.preventDefault();
+        return;
+      }
+      if (mod && e.shiftKey && BLOCKED_CTRL_SHIFT_LETTERS.has(lower)) {
+        e.preventDefault();
+        return;
+      }
+      if (mod && !e.shiftKey && BLOCKED_CTRL_LETTERS.has(lower)) {
+        e.preventDefault();
+        return;
+      }
+      if (mod && ZOOM_KEYS.has(key)) {
+        e.preventDefault();
+        return;
+      }
+      if (e.altKey && (key === "ArrowLeft" || key === "ArrowRight")) {
+        e.preventDefault();
+        return;
+      }
+      if (key === "Backspace" && !isEditable(e.target)) {
+        e.preventDefault();
+      }
+    }
+
+    function onWheel(e: WheelEvent) {
+      if (e.ctrlKey) e.preventDefault();
+    }
+    function onDragOver(e: DragEvent) {
+      e.preventDefault();
+    }
+    function onDrop(e: DragEvent) {
+      e.preventDefault();
+    }
+    function onAuxClick(e: MouseEvent) {
+      e.preventDefault();
+    }
+
+    document.addEventListener("contextmenu", onContextMenu);
+    document.addEventListener("keydown", onKeyDown, true);
+    document.addEventListener("wheel", onWheel, { passive: false });
+    document.addEventListener("dragover", onDragOver);
+    document.addEventListener("drop", onDrop);
+    document.addEventListener("auxclick", onAuxClick);
+    return () => {
+      document.removeEventListener("contextmenu", onContextMenu);
+      document.removeEventListener("keydown", onKeyDown, true);
+      document.removeEventListener("wheel", onWheel);
+      document.removeEventListener("dragover", onDragOver);
+      document.removeEventListener("drop", onDrop);
+      document.removeEventListener("auxclick", onAuxClick);
     };
-    document.addEventListener("contextmenu", onCtx);
-    return () => document.removeEventListener("contextmenu", onCtx);
   }, []);
 }

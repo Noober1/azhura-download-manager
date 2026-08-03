@@ -1,7 +1,19 @@
 /* Azhura Download Manager — Neobrutalist (dark), Persepolis-style shell:
    top icon toolbar · category sidebar · download table · modal dialogs. */
 
-@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800;900&family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap');
+/* Bundled locally (not Google Fonts) so the app never needs network access to
+   render and never flashes unstyled/system text at startup. */
+@import "@fontsource/archivo/600.css";
+@import "@fontsource/archivo/700.css";
+@import "@fontsource/archivo/800.css";
+@import "@fontsource/archivo/900.css";
+@import "@fontsource/geist-sans/400.css";
+@import "@fontsource/geist-sans/500.css";
+@import "@fontsource/geist-sans/600.css";
+@import "@fontsource/geist-sans/700.css";
+@import "@fontsource/geist-mono/400.css";
+@import "@fontsource/geist-mono/500.css";
+@import "@fontsource/geist-mono/600.css";
 
 :root {
   --ink: #f5efe1;
@@ -30,8 +42,8 @@
   --radius-field: 6px;
   --radius-card: 7px;
 
-  --font-sans: 'Geist', ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
-  --font-head: 'Archivo', 'Geist', system-ui, sans-serif;
+  --font-sans: 'Geist Sans', ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
+  --font-head: 'Archivo', 'Geist Sans', system-ui, sans-serif;
   --font-mono: 'Geist Mono', ui-monospace, Consolas, monospace;
 
   font-family: var(--font-sans);
@@ -993,4 +1005,128 @@ code {
   padding: 0.02em 0.35em;
   border-radius: 4px;
   font-size: 0.85em;
+}
+
+/* ---- Native-feel polish --------------------------------------------------- */
+/* Kept at the end of the file so these overrides win the cascade regardless
+   of where the selectors they touch are declared above. */
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--canvas);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--surface-2);
+  border: 1.5px solid var(--ink);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+}
+::-webkit-scrollbar-corner {
+  background: var(--canvas);
+}
+
+:focus {
+  outline: none;
+}
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+::selection {
+  background: var(--accent);
+  color: #fff;
+}
+
+html,
+body {
+  overscroll-behavior: none;
+}
+* {
+  -webkit-user-drag: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Native apps show the arrow cursor over controls, not the web "hand". */
+button,
+.tbtn,
+.win-btn,
+.cat,
+.tab,
+.ctx-item,
+.drow,
+.check-row,
+[data-tauri-drag-region] {
+  cursor: default;
+}
+button:disabled {
+  cursor: not-allowed;
+}
+input:not([type="checkbox"]),
+textarea,
+.selectable {
+  cursor: text;
+}
+
+/* ---- Sortable table headers ------------------------------------------------ */
+
+.dtable thead th.sortable {
+  cursor: default;
+  user-select: none;
+}
+.dtable thead th.sortable:hover {
+  background: var(--surface);
+}
+.sort-arrow {
+  margin-left: 0.35em;
+  color: var(--accent);
+  font-size: 0.65em;
+}
+
+/* ---- Context menu submenus (Speed cap / Connections) ---------------------- */
+
+.ctx-sub {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.ctx-sub.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.ctx-caret {
+  margin-left: 0.6em;
+  color: var(--faint);
+}
+.ctx-flyout {
+  display: none;
+  position: absolute;
+  left: 100%;
+  top: -0.35rem;
+  min-width: 11rem;
+  padding: 0.35rem;
+  background: var(--surface);
+  border: var(--bw-lg) solid var(--ink);
+  border-radius: var(--radius-card);
+  box-shadow: 3px 3px 0 var(--ink);
+  flex-direction: column;
+  gap: 0.15rem;
+  z-index: 61;
+}
+.ctx-sub:hover:not(.disabled) .ctx-flyout {
+  display: flex;
+}
+.ctx-menu.flip .ctx-flyout {
+  left: auto;
+  right: 100%;
+}
+.ctx-check {
+  display: inline-block;
+  width: 1em;
+  color: var(--accent);
 }

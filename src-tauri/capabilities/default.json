@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Capability for the main window",
-  "windows": ["main", "add", "detail"],
+  "windows": ["main", "add", "detail-*"],
   "permissions": [
     "core:default",
     "opener:default",
@@ -11,6 +11,9 @@
     "core:window:allow-toggle-maximize",
     "core:window:allow-close",
     "core:window:allow-is-maximized",
+    "core:window:allow-show",
+    "core:window:allow-set-focus",
+    "core:window:allow-set-title",
     "clipboard-manager:allow-read-text",
     "clipboard-manager:allow-write-text",
     "dialog:allow-open",

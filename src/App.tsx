@@ -1,6 +1,14 @@
-import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 import { invoke, Channel } from "@tauri-apps/api/core";
 import { emitTo, listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import type {
@@ -8,6 +16,7 @@ import type {
   AppSettings,
   DownloadEvent,
   DownloadItem,
+  DlState,
   HistoryEntry,
   HistoryLoad,
   ResumableInfo,
@@ -25,12 +34,37 @@ import {
   statusClass,
   statusLabel,
 } from "./format";
-import { Icon, WindowControls, useSuppressContextMenu } from "./ui";
+import { Icon, WindowControls, useNativeShell, isEditable } from "./ui";
 import "./App.css";
 
 const TERMINAL_STATES = ["completed", "error", "canceled"] as const;
 /** Sent by the browser extension; re-captured on demand rather than stored. */
 const CREDENTIAL_HEADERS = ["cookie", "authorization", "proxy-authorization"];
+
+type SortKey = "name" | "status" | "size" | "downloaded" | "pct" | "speed";
+/** Sort order for the Status column: what needs attention floats to the top. */
+const STATUS_RANK: Record<DlState, number> = {
+  downloading: 0,
+  verifying: 1,
+  queued: 2,
+  paused: 3,
+  error: 4,
+  canceled: 5,
+  completed: 6,
+};
+
+/** Presets offered in the context menu's "Speed cap" submenu, in bytes/sec. */
+const SPEED_PRESETS: { label: string; bytes: number }[] = [
+  { label: "Unlimited", bytes: 0 },
+  { label: "128 KB/s", bytes: 128 * 1024 },
+  { label: "256 KB/s", bytes: 256 * 1024 },
+  { label: "512 KB/s", bytes: 512 * 1024 },
+  { label: "1 MB/s", bytes: 1 * 1024 * 1024 },
+  { label: "2 MB/s", bytes: 2 * 1024 * 1024 },
+  { label: "5 MB/s", bytes: 5 * 1024 * 1024 },
+  { label: "10 MB/s", bytes: 10 * 1024 * 1024 },
+];
+const CONNECTION_PRESETS = [1, 2, 4, 8, 16];
 
 function toHistoryEntry(d: DownloadItem): HistoryEntry {
   const headers = d.headers.filter(([k]) => !CREDENTIAL_HEADERS.includes(k.toLowerCase()));
@@ -103,9 +137,25 @@ function App() {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [pendingDelete, setPendingDelete] = useState<DownloadItem[] | null>(null);
   const [deleteWithFile, setDeleteWithFile] = useState(false);
-  // Id of the download shown in the "Download Details" popup, or null when
-  // it's closed. Main keeps pushing snapshots to it as long as this is set.
-  const [detailId, setDetailId] = useState<string | null>(null);
+  // Ids of every open "Download Details" popup. Main keeps pushing snapshots
+  // to each one as long as its id is in this set.
+  const [detailIds, setDetailIds] = useState<Set<string>>(new Set());
+  const lastDetailSentRef = useRef<Map<string, string>>(new Map());
+  // Column sort for the table; null = default order (newest row first).
+  const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" } | null>(null);
+  // Custom… speed-cap dialog, opened from the context menu's submenu.
+  const [speedCapDialog, setSpeedCapDialog] = useState<{ items: DownloadItem[]; mbps: number } | null>(
+    null,
+  );
+  // Confirmation for changing connections on a download that's currently
+  // running — the worker pool is fixed for the life of a run, so applying a
+  // new count means pausing and re-queuing it.
+  const [connRestart, setConnRestart] = useState<{ items: DownloadItem[]; value: number } | null>(
+    null,
+  );
+  // Ids paused specifically to restart with a new connection count — lets
+  // the "paused" event handler re-queue them instead of leaving them paused.
+  const pendingRestartRef = useRef<Set<string>>(new Set());
 
   // Stays false until the history file has been read, so the save effect can't
   // fire against the empty initial state and wipe the file before the load
@@ -118,7 +168,20 @@ function App() {
   // Guards against piling up pushes if one command outlives the 1s interval.
   const traySendingRef = useRef(false);
 
-  useSuppressContextMenu();
+  useNativeShell();
+
+  // The main window starts hidden (`visible: false` in tauri.conf.json) so
+  // there's no white flash before React paints; show it right after the
+  // first frame instead.
+  useEffect(() => {
+    const w = getCurrentWindow();
+    const raf = requestAnimationFrame(() => {
+      w.show()
+        .then(() => w.setFocus())
+        .catch(() => {});
+    });
+    return () => cancelAnimationFrame(raf);
+  }, []);
 
   // Restore persisted settings (scheduler knobs + tray behavior) from a
   // previous session; they otherwise reset to defaults every launch.
@@ -280,7 +343,14 @@ function App() {
         break;
       }
       case "paused":
-        patchItem(id, { state: "paused", speed: 0 });
+        // A restart requested by applyConnections (§ context menu) pauses the
+        // run just to pick up a new connection count — re-queue it instead of
+        // leaving it sitting paused.
+        if (pendingRestartRef.current.delete(id)) {
+          patchItem(id, { state: "queued", speed: 0 });
+        } else {
+          patchItem(id, { state: "paused", speed: 0 });
+        }
         break;
       case "canceled":
         patchItem(id, { state: "canceled", speed: 0, finishedAt: Date.now() });
@@ -470,6 +540,45 @@ function App() {
       }),
     );
   }
+
+  // Context menu "Speed cap": updates the row(s) so a not-yet-started
+  // download picks up the new cap at its next `start_download` call, and — for
+  // anything currently running — pushes it live via `set_download_speed_limit`
+  // so the change is visible within a couple of seconds instead of waiting for
+  // a restart.
+  function applySpeedCap(items: DownloadItem[], bytes: number) {
+    const ids = new Set(items.map((i) => i.id));
+    setDownloads((ds) => ds.map((d) => (ids.has(d.id) ? { ...d, speedLimit: bytes } : d)));
+    items
+      .filter((i) => i.state === "downloading" || i.state === "verifying")
+      .forEach((i) =>
+        invoke("set_download_speed_limit", { id: i.id, bytesPerSec: bytes }).catch(() => {}),
+      );
+  }
+
+  // Context menu "Connections": the worker pool is fixed for the life of a
+  // run, so a row that's currently downloading needs the user's say-so to
+  // pause + re-queue it (see the "paused" case in handleEvent, which detects
+  // `pendingRestartRef` and re-queues instead of leaving it paused). Anything
+  // not running just picks up the new count at its next start.
+  function applyConnections(items: DownloadItem[], n: number) {
+    const ids = new Set(items.map((i) => i.id));
+    setDownloads((ds) => ds.map((d) => (ids.has(d.id) ? { ...d, connections: n } : d)));
+    const running = items.filter((i) => i.state === "downloading");
+    if (running.length > 0) {
+      setConnRestart({ items: running, value: n });
+    }
+  }
+
+  function confirmConnRestart() {
+    if (!connRestart) return;
+    connRestart.items.forEach((i) => {
+      pendingRestartRef.current.add(i.id);
+      invoke("pause_download", { id: i.id }).catch(() => {});
+    });
+    setConnRestart(null);
+  }
+
   async function removeMany(items: DownloadItem[], deleteFile: boolean) {
     await Promise.allSettled(
       items
@@ -512,32 +621,58 @@ function App() {
     setPendingDelete(null);
   }
 
-  // Opens the "Download Details" popup targeted at `id` — a double-click, a
-  // context-menu action, or the tray's per-download menu item all funnel
-  // through here.
-  //
-  // The snapshot is pushed *before* the window is revealed, and awaited: the
-  // popup's webview is reused rather than recreated, so it still holds the
-  // previously viewed download. Letting the effect below deliver the new one
-  // would race the `open_detail_window` round-trip and flash the old row's
-  // name and progress bars first.
-  async function openDetail(id: string) {
-    setDetailId(id);
-    const item = downloadsRef.current.find((d) => d.id === id) ?? null;
-    await emitTo("detail", "detail-data", item).catch(() => {});
-    invoke("open_detail_window").catch(() => {});
+  // Opens (or reveals) a "Download Details" popup for `id` — a double-click,
+  // a context-menu action, or the tray's per-download menu item all funnel
+  // through here. The popup hands itself back via `detail-ready` once its own
+  // React tree has mounted; that's what actually seeds and shows it (below),
+  // so there's no race with the window-creation round-trip.
+  function openDetail(id: string) {
+    invoke("open_detail_window", { id }).catch(() => {});
   }
 
-  // Keeps the (possibly hidden) detail window's snapshot in sync with the
-  // targeted row. A `null` payload tells it the row was removed.
+  // A popup announces itself once it's mounted and ready for its first
+  // snapshot. Track it, push the current snapshot, then reveal the window —
+  // ordering it this way means the popup never shows an empty state first.
   useEffect(() => {
-    if (!detailId) return;
-    const item = downloads.find((d) => d.id === detailId) ?? null;
-    emitTo("detail", "detail-data", item).catch(() => {});
-  }, [downloads, detailId]);
+    const unlisten = listen<string>("detail-ready", async (e) => {
+      const id = e.payload;
+      setDetailIds((prev) => new Set(prev).add(id));
+      const item = downloadsRef.current.find((d) => d.id === id) ?? null;
+      lastDetailSentRef.current.set(id, JSON.stringify(item));
+      await emitTo(`detail-${id}`, "detail-data", item).catch(() => {});
+      invoke("show_detail_window", { id }).catch(() => {});
+    });
+    return () => {
+      unlisten.then((f) => f());
+    };
+  }, []);
+
+  // Keeps every open detail popup's snapshot in sync with its targeted row.
+  // A `null` payload tells it the row was removed. Skips a popup whose
+  // snapshot hasn't actually changed, so N open popups don't each eat a push
+  // on every one of the ~7/sec progress patches.
+  useEffect(() => {
+    if (detailIds.size === 0) return;
+    detailIds.forEach((id) => {
+      const item = downloads.find((d) => d.id === id) ?? null;
+      const json = JSON.stringify(item);
+      if (lastDetailSentRef.current.get(id) === json) return;
+      lastDetailSentRef.current.set(id, json);
+      emitTo(`detail-${id}`, "detail-data", item).catch(() => {});
+    });
+  }, [downloads, detailIds]);
 
   useEffect(() => {
-    const unlisten = listen("detail-closed", () => setDetailId(null));
+    const unlisten = listen<string>("detail-closed", (e) => {
+      const id = e.payload;
+      setDetailIds((prev) => {
+        if (!prev.has(id)) return prev;
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      lastDetailSentRef.current.delete(id);
+    });
     return () => {
       unlisten.then((f) => f());
     };
@@ -666,6 +801,48 @@ function App() {
   const shown =
     category === "active" ? activeItems : category === "finished" ? finishedItems : downloads;
 
+  // `shown` ordered by the active column sort, or left as-is (newest first)
+  // when `sort` is null. `Array.prototype.sort` is stable, so ties keep
+  // insertion order either way.
+  const rows = useMemo(() => {
+    if (!sort) return shown;
+    const dir = sort.dir === "asc" ? 1 : -1;
+    const key = sort.key;
+    function value(d: DownloadItem): number | string {
+      switch (key) {
+        case "name":
+          return d.filename;
+        case "status":
+          return STATUS_RANK[d.state];
+        case "size":
+          return d.total ?? -1;
+        case "downloaded":
+          return d.downloaded;
+        case "pct":
+          return pctOf(d) ?? -1;
+        case "speed":
+          return d.speed;
+      }
+    }
+    return [...shown].sort((a, b) => {
+      const va = value(a);
+      const vb = value(b);
+      if (typeof va === "string" || typeof vb === "string") {
+        return dir * String(va).localeCompare(String(vb), undefined, { numeric: true, sensitivity: "base" });
+      }
+      return dir * (va - vb);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shown, sort]);
+
+  function toggleSort(key: SortKey) {
+    setSort((prev) => {
+      if (!prev || prev.key !== key) return { key, dir: "asc" };
+      if (prev.dir === "asc") return { key, dir: "desc" };
+      return null;
+    });
+  }
+
   const totalSpeed = downloads
     .filter((d) => d.state === "downloading")
     .reduce((s, d) => s + d.speed, 0);
@@ -699,7 +876,7 @@ function App() {
 
   function selectRow(id: string, e: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }) {
     if (e.shiftKey && anchorRef.current) {
-      const ids = shown.map((d) => d.id);
+      const ids = rows.map((d) => d.id);
       const a = ids.indexOf(anchorRef.current);
       const b = ids.indexOf(id);
       if (a !== -1 && b !== -1) {
@@ -722,31 +899,88 @@ function App() {
     anchorRef.current = id;
   }
 
+  function scrollRowIntoView(id: string) {
+    document.querySelector(`.drow[data-id="${id}"]`)?.scrollIntoView({ block: "nearest" });
+  }
+
   // Keyboard shortcuts for the selection: Ctrl/Cmd+A selects everything shown,
-  // Escape clears, Delete opens the confirmation dialog for the current selection.
+  // Escape clears, Delete opens the confirmation dialog for the current
+  // selection, arrow keys/Home/End move a single-row cursor (Shift extends
+  // the range from the anchor), Enter opens the detail popup for one row.
   useEffect(() => {
-    function isEditable(t: EventTarget | null) {
-      const el = t as HTMLElement | null;
-      return !!el?.closest('input, textarea, [contenteditable="true"]');
-    }
     function onKeyDown(e: KeyboardEvent) {
       if (isEditable(e.target)) return;
       // A modal dialog or the context menu owns keyboard input while open —
       // their own handlers deal with Escape.
-      if (pendingDelete || showSettings || showExtensions || menu) return;
+      if (pendingDelete || showSettings || showExtensions || menu || speedCapDialog || connRestart) {
+        return;
+      }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
         e.preventDefault();
-        setSelectedIds(new Set(shown.map((d) => d.id)));
-      } else if (e.key === "Escape") {
+        setSelectedIds(new Set(rows.map((d) => d.id)));
+        return;
+      }
+      if (e.key === "Escape") {
         setSelectedIds(new Set());
-      } else if (e.key === "Delete") {
+        return;
+      }
+      if (e.key === "Delete") {
         requestDelete(selectedItems);
+        return;
+      }
+      if (rows.length === 0) return;
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        const ids = rows.map((d) => d.id);
+        const from = anchorRef.current ? ids.indexOf(anchorRef.current) : -1;
+        const base = from === -1 ? (e.key === "ArrowDown" ? -1 : ids.length) : from;
+        const next = Math.min(ids.length - 1, Math.max(0, base + (e.key === "ArrowDown" ? 1 : -1)));
+        const nextId = ids[next];
+        if (e.shiftKey && from !== -1) {
+          const [lo, hi] = from < next ? [from, next] : [next, from];
+          setSelectedIds(new Set(ids.slice(lo, hi + 1)));
+        } else {
+          setSelectedIds(new Set([nextId]));
+          anchorRef.current = nextId;
+        }
+        scrollRowIntoView(nextId);
+        return;
+      }
+      if (e.key === "Home" || e.key === "End") {
+        e.preventDefault();
+        const ids = rows.map((d) => d.id);
+        const targetId = e.key === "Home" ? ids[0] : ids[ids.length - 1];
+        const from = anchorRef.current ? ids.indexOf(anchorRef.current) : -1;
+        if (e.shiftKey && from !== -1) {
+          const targetIdx = e.key === "Home" ? 0 : ids.length - 1;
+          const [lo, hi] = from < targetIdx ? [from, targetIdx] : [targetIdx, from];
+          setSelectedIds(new Set(ids.slice(lo, hi + 1)));
+        } else {
+          setSelectedIds(new Set([targetId]));
+          anchorRef.current = targetId;
+        }
+        scrollRowIntoView(targetId);
+        return;
+      }
+      if (e.key === "Enter" && singleSelected) {
+        e.preventDefault();
+        openDetail(singleSelected.id);
       }
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shown, selectedItems, pendingDelete, showSettings, showExtensions, menu]);
+  }, [
+    rows,
+    selectedItems,
+    singleSelected,
+    pendingDelete,
+    showSettings,
+    showExtensions,
+    menu,
+    speedCapDialog,
+    connRestart,
+  ]);
 
   return (
     <div className="app">
@@ -848,23 +1082,47 @@ function App() {
           <table className="dtable">
             <thead>
               <tr>
-                <th className="col-name">Name</th>
-                <th className="col-status">Status</th>
-                <th className="col-num">Size</th>
-                <th className="col-num">Downloaded</th>
-                <th className="col-pct">Percentage</th>
-                <th className="col-num col-speed">Speed</th>
+                <SortTh className="col-name" label="Name" sortKey="name" sort={sort} onSort={toggleSort} />
+                <SortTh
+                  className="col-status"
+                  label="Status"
+                  sortKey="status"
+                  sort={sort}
+                  onSort={toggleSort}
+                />
+                <SortTh className="col-num" label="Size" sortKey="size" sort={sort} onSort={toggleSort} />
+                <SortTh
+                  className="col-num"
+                  label="Downloaded"
+                  sortKey="downloaded"
+                  sort={sort}
+                  onSort={toggleSort}
+                />
+                <SortTh
+                  className="col-pct"
+                  label="Percentage"
+                  sortKey="pct"
+                  sort={sort}
+                  onSort={toggleSort}
+                />
+                <SortTh
+                  className="col-num col-speed"
+                  label="Speed"
+                  sortKey="speed"
+                  sort={sort}
+                  onSort={toggleSort}
+                />
               </tr>
             </thead>
             <tbody>
-              {shown.length === 0 && (
+              {rows.length === 0 && (
                 <tr>
                   <td colSpan={6} className="empty-cell">
                     No downloads here — click <strong>+</strong> to add one.
                   </td>
                 </tr>
               )}
-              {shown.map((item) => {
+              {rows.map((item) => {
                 const pct = pctOf(item);
                 const selectedRow = selectedIds.has(item.id);
                 return (
@@ -1002,6 +1260,9 @@ function App() {
           canCopy={selectedItems.length > 0}
           canDelete={deletableSel.length > 0}
           canShowDetail={!!singleSelected}
+          canModify={selectedItems.length > 0}
+          currentSpeedLimit={singleSelected?.speedLimit ?? null}
+          currentConnections={singleSelected?.connections ?? null}
           onResume={() => resumeMany(resumableSel)}
           onPause={() => pauseMany(pausableSel)}
           onCancel={() => cancelMany(cancelableSel)}
@@ -1010,6 +1271,14 @@ function App() {
           }
           onCopyLink={() => writeText(selectedItems.map((i) => i.url).join("\n"))}
           onShowDetail={() => singleSelected && openDetail(singleSelected.id)}
+          onSpeedCap={(bytes) => applySpeedCap(selectedItems, bytes)}
+          onCustomSpeedCap={() =>
+            setSpeedCapDialog({
+              items: selectedItems,
+              mbps: singleSelected ? singleSelected.speedLimit / (1024 * 1024) : 0,
+            })
+          }
+          onConnections={(n) => applyConnections(selectedItems, n)}
           onDelete={() => requestDelete(selectedItems)}
           onClose={() => setMenu(null)}
         />
@@ -1025,7 +1294,106 @@ function App() {
           onConfirm={confirmDelete}
         />
       )}
+
+      {/* ---- Custom speed cap dialog ---- */}
+      {speedCapDialog && (
+        <div className="overlay" onClick={() => setSpeedCapDialog(null)}>
+          <div className="dialog dialog-sm" onClick={(e) => e.stopPropagation()}>
+            <div className="dialog-head">Speed cap</div>
+            <div className="dialog-body">
+              <div className="field-row">
+                <label htmlFor="custom-cap">Limit</label>
+                <input
+                  id="custom-cap"
+                  type="number"
+                  min={0}
+                  step={0.5}
+                  autoFocus
+                  value={speedCapDialog.mbps}
+                  onChange={(e) =>
+                    setSpeedCapDialog({
+                      ...speedCapDialog,
+                      mbps: Math.max(0, Number(e.currentTarget.value) || 0),
+                    })
+                  }
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      applySpeedCap(speedCapDialog.items, Math.round(speedCapDialog.mbps * 1024 * 1024));
+                      setSpeedCapDialog(null);
+                    }
+                  }}
+                />
+                <span className="field-unit">MB/s · 0 = unlimited</span>
+              </div>
+            </div>
+            <div className="dialog-actions">
+              <button onClick={() => setSpeedCapDialog(null)}>Cancel</button>
+              <button
+                className="primary-btn"
+                onClick={() => {
+                  applySpeedCap(speedCapDialog.items, Math.round(speedCapDialog.mbps * 1024 * 1024));
+                  setSpeedCapDialog(null);
+                }}
+              >
+                Apply
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---- Connections-change restart confirmation ---- */}
+      {connRestart && (
+        <div className="overlay" onClick={() => setConnRestart(null)}>
+          <div className="dialog dialog-sm" onClick={(e) => e.stopPropagation()}>
+            <div className="dialog-head">Apply new connection count?</div>
+            <div className="dialog-body">
+              <p className="detail-note">
+                {connRestart.items.length > 1
+                  ? `${connRestart.items.length} downloads are running.`
+                  : "This download is running."}{" "}
+                Restarting resumes from where it left off — no progress is lost.
+              </p>
+            </div>
+            <div className="dialog-actions">
+              <button onClick={() => setConnRestart(null)}>Apply on next start</button>
+              <button className="primary-btn" onClick={confirmConnRestart}>
+                Restart now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+/* A sortable column header: click cycles asc → desc → default (unsorted)
+   for its own key, and starts at asc when switching from a different key. */
+function SortTh({
+  className,
+  label,
+  sortKey,
+  sort,
+  onSort,
+}: {
+  className: string;
+  label: string;
+  sortKey: SortKey;
+  sort: { key: SortKey; dir: "asc" | "desc" } | null;
+  onSort: (key: SortKey) => void;
+}) {
+  const active = sort?.key === sortKey;
+  const ariaSort = active ? (sort!.dir === "asc" ? "ascending" : "descending") : "none";
+  return (
+    <th
+      className={`${className} sortable`}
+      aria-sort={ariaSort}
+      onClick={() => onSort(sortKey)}
+    >
+      {label}
+      {active && <span className="sort-arrow">{sort!.dir === "asc" ? "▲" : "▼"}</span>}
+    </th>
   );
 }
 
@@ -1050,6 +1418,7 @@ function Row({
   return (
     <tr
       className={`drow ${selected ? "selected" : ""}`}
+      data-id={item.id}
       onClick={onSelect}
       onDoubleClick={onOpenDetail}
       onContextMenu={(e) => {
@@ -1103,12 +1472,18 @@ function ContextMenu({
   canCopy,
   canDelete,
   canShowDetail,
+  canModify,
+  currentSpeedLimit,
+  currentConnections,
   onResume,
   onPause,
   onCancel,
   onReveal,
   onCopyLink,
   onShowDetail,
+  onSpeedCap,
+  onCustomSpeedCap,
+  onConnections,
   onDelete,
   onClose,
 }: {
@@ -1121,17 +1496,24 @@ function ContextMenu({
   canCopy: boolean;
   canDelete: boolean;
   canShowDetail: boolean;
+  canModify: boolean;
+  currentSpeedLimit: number | null;
+  currentConnections: number | null;
   onResume: () => void;
   onPause: () => void;
   onCancel: () => void;
   onReveal: () => void;
   onCopyLink: () => void;
   onShowDetail: () => void;
+  onSpeedCap: (bytes: number) => void;
+  onCustomSpeedCap: () => void;
+  onConnections: (n: number) => void;
   onDelete: () => void;
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ x, y });
+  const [flip, setFlip] = useState(false);
 
   useLayoutEffect(() => {
     const el = ref.current;
@@ -1141,6 +1523,9 @@ function ContextMenu({
     const ny =
       y + rect.height > window.innerHeight ? Math.max(0, window.innerHeight - rect.height - 4) : y;
     setPos({ x: nx, y: ny });
+    // Flyouts open to the right by default (180px wide); flip them to the
+    // left instead if that would run off the screen.
+    setFlip(nx + rect.width + 180 > window.innerWidth);
   }, [x, y]);
 
   useEffect(() => {
@@ -1168,7 +1553,7 @@ function ContextMenu({
   }
 
   return (
-    <div className="ctx-menu" style={{ left: pos.x, top: pos.y }} ref={ref}>
+    <div className={`ctx-menu ${flip ? "flip" : ""}`} style={{ left: pos.x, top: pos.y }} ref={ref}>
       <button
         type="button"
         className="ctx-item"
@@ -1208,6 +1593,52 @@ function ContextMenu({
       <button type="button" className="ctx-item" disabled={!canCopy} onClick={() => run(onCopyLink)}>
         Copy link
       </button>
+      <div className="ctx-sep" />
+      <div className={`ctx-item ctx-sub ${!canModify ? "disabled" : ""}`}>
+        Speed cap
+        <span className="ctx-caret">▸</span>
+        <div className="ctx-flyout">
+          {SPEED_PRESETS.map((p) => (
+            <button
+              key={p.bytes}
+              type="button"
+              className="ctx-item"
+              disabled={!canModify}
+              onClick={() => run(() => onSpeedCap(p.bytes))}
+            >
+              <span className="ctx-check">{currentSpeedLimit === p.bytes ? "•" : ""}</span>
+              {p.label}
+            </button>
+          ))}
+          <div className="ctx-sep" />
+          <button
+            type="button"
+            className="ctx-item"
+            disabled={!canModify}
+            onClick={() => run(onCustomSpeedCap)}
+          >
+            Custom…
+          </button>
+        </div>
+      </div>
+      <div className={`ctx-item ctx-sub ${!canModify ? "disabled" : ""}`}>
+        Connections
+        <span className="ctx-caret">▸</span>
+        <div className="ctx-flyout">
+          {CONNECTION_PRESETS.map((n) => (
+            <button
+              key={n}
+              type="button"
+              className="ctx-item"
+              disabled={!canModify}
+              onClick={() => run(() => onConnections(n))}
+            >
+              <span className="ctx-check">{currentConnections === n ? "•" : ""}</span>
+              {n}
+            </button>
+          ))}
+        </div>
+      </div>
       <div className="ctx-sep" />
       <button
         type="button"

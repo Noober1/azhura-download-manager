@@ -5,7 +5,7 @@ import { readText } from "@tauri-apps/plugin-clipboard-manager";
 import { open } from "@tauri-apps/plugin-dialog";
 import type { AddPayload } from "./types";
 import { formatBytes, isInsecureHttp, looksLikeUrl, mergeHeaders } from "./format";
-import { WindowControls, useSuppressContextMenu } from "./ui";
+import { WindowControls, useNativeShell } from "./ui";
 import "./App.css";
 
 type ProbeInfo = { total: number | null; supportsRanges: boolean; filename: string };
@@ -43,7 +43,7 @@ export function AddWindow() {
   const [cookieText, setCookieText] = useState("");
   const [headersText, setHeadersText] = useState("");
 
-  useSuppressContextMenu();
+  useNativeShell();
 
   useEffect(() => {
     invoke<string>("default_download_dir")

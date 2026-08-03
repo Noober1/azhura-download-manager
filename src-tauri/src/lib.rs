@@ -35,13 +35,17 @@ const PIECE_MAX: u64 = 8 * 1024 * 1024; // 8 MB
 struct Control {
     paused: AtomicBool,
     canceled: AtomicBool,
+    /// This download's own rate cap, reachable after `start_download` returns
+    /// so `set_download_speed_limit` can adjust it live.
+    limiter: Arc<RateLimiter>,
 }
 
 impl Control {
-    fn new() -> Self {
+    fn new(rate: u64) -> Self {
         Self {
             paused: AtomicBool::new(false),
             canceled: AtomicBool::new(false),
+            limiter: Arc::new(RateLimiter::new(rate)),
         }
     }
     fn is_paused(&self) -> bool {
@@ -1004,7 +1008,7 @@ async fn start_download(
     on_event: Channel<DownloadEvent>,
     manager: tauri::State<'_, Manager>,
 ) -> Result<(), String> {
-    let control = Arc::new(Control::new());
+    let control = Arc::new(Control::new(speed_limit.unwrap_or(0)));
     manager
         .downloads
         .lock()
@@ -1013,7 +1017,7 @@ async fn start_download(
 
     let limits = Arc::new(Limits {
         global: manager.global.clone(),
-        per: Arc::new(RateLimiter::new(speed_limit.unwrap_or(0))),
+        per: control.limiter.clone(),
     });
 
     let result = download_inner(
@@ -1063,6 +1067,15 @@ fn set_global_speed_limit(bytes_per_sec: u64, manager: tauri::State<'_, Manager>
     manager.global.set_rate(bytes_per_sec);
 }
 
+/// Set one download's own speed cap in bytes/sec (0 = unlimited). Live — the
+/// running workers share this bucket, so it takes effect on the next chunk.
+#[tauri::command]
+fn set_download_speed_limit(id: String, bytes_per_sec: u64, manager: tauri::State<'_, Manager>) {
+    if let Some(c) = manager.downloads.lock().unwrap().get(&id) {
+        c.limiter.set_rate(bytes_per_sec);
+    }
+}
+
 /// Show + focus the (hidden-at-startup) "Add Download" window — it's owned by
 /// `main` (see `setup()`), so it's always above `main` in z-order without
 /// needing an explicit always-on-top flag. Also disable `main` so clicking it
@@ -1104,8 +1117,10 @@ fn hide_to_tray(app: &tauri::AppHandle) {
     if let Some(w) = app.get_webview_window("add") {
         let _ = w.hide();
     }
-    if let Some(w) = app.get_webview_window("detail") {
-        let _ = w.hide();
+    for (label, w) in app.webview_windows() {
+        if label.starts_with("detail-") {
+            let _ = w.hide();
+        }
     }
     if let Some(m) = app.get_webview_window("main") {
         let _ = m.set_enabled(true);
@@ -1140,6 +1155,41 @@ fn reveal_add_window(app: &tauri::AppHandle) {
     if let Some(m) = app.get_webview_window("main") {
         let _ = m.set_enabled(false);
     }
+}
+
+/// Strip the browser-isms out of a WebView2 host: the find bar (Ctrl+F), reload
+/// (F5/Ctrl+R), print, caret browsing (F7), zoom, the link-hover status bubble,
+/// the default context menu, pinch-zoom and swipe-to-navigate. Without this the
+/// app behaves like a web page in a frame no matter what the JS layer does,
+/// because these are host accelerators, not page key events.
+fn harden_webview(window: &tauri::WebviewWindow) {
+    #[cfg(windows)]
+    {
+        let _ = window.with_webview(|webview| unsafe {
+            use webview2_com::Microsoft::Web::WebView2::Win32::{
+                ICoreWebView2Settings3, ICoreWebView2Settings5, ICoreWebView2Settings6,
+            };
+            use windows::core::Interface;
+            let Ok(core) = webview.controller().CoreWebView2() else { return };
+            let Ok(settings) = core.Settings() else { return };
+            let _ = settings.SetAreDefaultContextMenusEnabled(false);
+            let _ = settings.SetIsStatusBarEnabled(false);
+            let _ = settings.SetIsZoomControlEnabled(false);
+            #[cfg(not(debug_assertions))]
+            let _ = settings.SetAreDevToolsEnabled(false);
+            if let Ok(s) = settings.cast::<ICoreWebView2Settings3>() {
+                let _ = s.SetAreBrowserAcceleratorKeysEnabled(false);
+            }
+            if let Ok(s) = settings.cast::<ICoreWebView2Settings5>() {
+                let _ = s.SetIsPinchZoomEnabled(false);
+            }
+            if let Ok(s) = settings.cast::<ICoreWebView2Settings6>() {
+                let _ = s.SetIsSwipeNavigationEnabled(false);
+            }
+        });
+    }
+    #[cfg(not(windows))]
+    let _ = window;
 }
 
 /// Reveal the Add window for the "+" button case, and let it know it was
@@ -1186,25 +1236,93 @@ fn close_add_window(app: tauri::AppHandle) {
     }
 }
 
-/// Show + focus the "Download Details" popup. Unlike the Add window, `main`
-/// is never disabled — the popup is a non-modal inspector the user can leave
-/// open while continuing to work in the main table.
+/// Build (or reveal, if it already exists) a "Download Details" popup for one
+/// download, labeled `detail-<id>` — every row gets its own window instead of
+/// all of them fighting over a single reused one. Unlike the Add window,
+/// `main` is never disabled: these are non-modal inspectors the user can
+/// leave open while continuing to work in the main table.
+///
+/// The window is built hidden; `main`'s `detail-ready` handshake (once the
+/// popup's own React tree has mounted and asked for its first snapshot) is
+/// what actually shows it via `show_detail_window`, so there's never a flash
+/// of an empty popup.
+///
+/// Must be `async`: a plain (blocking) command runs inline on the same thread
+/// that pumps WebView2's IPC messages — i.e. the main/UI thread. Creating a
+/// *new* OS window needs to hand off to that same thread's event loop and
+/// wait for it, which can't happen while that thread is busy running us, so
+/// a non-async version of this command deadlocks the whole app the moment it
+/// tries to build the window. Being `async` moves execution onto a tokio
+/// worker thread first, so the handoff to the real UI thread can complete.
 #[tauri::command]
-fn open_detail_window(app: tauri::AppHandle) {
-    if let Some(w) = app.get_webview_window("detail") {
+async fn open_detail_window(app: tauri::AppHandle, id: String) -> Result<(), String> {
+    let label = format!("detail-{id}");
+    if let Some(w) = app.get_webview_window(&label) {
+        let _ = w.show();
+        let _ = w.unminimize();
+        let _ = w.set_focus();
+        return Ok(());
+    }
+
+    let main = app
+        .get_webview_window("main")
+        .ok_or("main window is missing")?;
+
+    // Cascade new popups a little so stacking several isn't pixel-identical.
+    let existing = app
+        .webview_windows()
+        .keys()
+        .filter(|l| l.starts_with("detail-"))
+        .count();
+    let offset = 28.0 * (existing % 6) as f64;
+
+    let mut builder =
+        tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::App("detail.html".into()))
+            .title("Download Details")
+            .inner_size(620.0, 540.0)
+            .min_inner_size(520.0, 420.0)
+            .decorations(false)
+            .visible(false)
+            .shadow(true)
+            .background_color(tauri::window::Color(0x23, 0x1f, 0x18, 0xff))
+            .owner(&main)
+            .map_err(|e| e.to_string())?;
+
+    // `outer_position()` is physical pixels but `position()` takes logical
+    // ones — skipping the conversion would place the popup off-screen on any
+    // scaled display (125%/150%/etc, the Windows default on most laptops).
+    if let (Ok(pos), Ok(scale)) = (main.outer_position(), main.scale_factor()) {
+        let logical = pos.to_logical::<f64>(scale);
+        builder = builder.position(logical.x + offset, logical.y + offset);
+    }
+
+    let w = builder.build().map_err(|e| e.to_string())?;
+    harden_webview(&w);
+    Ok(())
+}
+
+/// Show + focus a detail popup once its frontend has actually rendered the
+/// snapshot `main` handed it (see `detail-ready` in `App.tsx`).
+#[tauri::command]
+fn show_detail_window(app: tauri::AppHandle, id: String) {
+    if let Some(w) = app.get_webview_window(&format!("detail-{id}")) {
         let _ = w.show();
         let _ = w.set_focus();
     }
 }
 
-/// Hide the (reused) detail window and tell `main` it's gone so it stops
-/// emitting `detail-data` snapshots to a hidden webview.
+/// Destroy one detail popup (they're created on demand now, not pooled) and
+/// tell `main` it's gone so it stops pushing snapshots at it.
+///
+/// `async` for the same reason as `open_detail_window`: tearing down an OS
+/// window is thread-affine like creating one, so this can't safely run
+/// inline on the IPC/UI thread either.
 #[tauri::command]
-fn close_detail_window(app: tauri::AppHandle) {
-    if let Some(w) = app.get_webview_window("detail") {
-        let _ = w.hide();
+async fn close_detail_window(app: tauri::AppHandle, id: String) {
+    if let Some(w) = app.get_webview_window(&format!("detail-{id}")) {
+        let _ = w.destroy();
     }
-    let _ = app.emit_to("main", "detail-closed", ());
+    let _ = app.emit_to("main", "detail-closed", id);
 }
 
 /// Parse an `adm://add?url=...&filename=...&referrer=...&cookie=...` deep
@@ -1502,6 +1620,10 @@ async fn download_inner(
         }
         let meta = load_meta(&path).await.ok_or("No resume data found for this file.")?;
         let plan = plan_pieces_from_meta(&meta);
+        // Honor a connection-count change made since this file was paused —
+        // the piece plan and progress are independent of worker count, since
+        // workers just pull the next piece off a shared queue.
+        let conns = choose_connections(connections, true, Some(meta.total));
 
         let done_set: std::collections::HashSet<usize> = meta.done_pieces.iter().copied().collect();
 
@@ -1527,7 +1649,7 @@ async fn download_inner(
 
         let total_downloaded = Arc::new(AtomicU64::new(done_bytes));
         let workers: Vec<Arc<WorkerUi>> =
-            (0..meta.connections).map(|_| Arc::new(WorkerUi::new())).collect();
+            (0..conns).map(|_| Arc::new(WorkerUi::new())).collect();
         let piece_size = plan.piece_size;
         let num_pieces = plan.num_pieces;
         let shared = Arc::new(Shared {
@@ -1550,7 +1672,7 @@ async fn download_inner(
             workers,
             piece_size,
             num_pieces,
-            connections: meta.connections,
+            connections: conns,
             // A resumed download keeps landing in the folder it started in,
             // regardless of what the caller passes this time around.
             save_path: meta.save_path,
@@ -2186,26 +2308,22 @@ pub fn run() {
             let main = app
                 .get_webview_window("main")
                 .expect("main window is declared in tauri.conf.json");
-            tauri::WebviewWindowBuilder::new(app, "add", tauri::WebviewUrl::App("add.html".into()))
+            harden_webview(&main);
+            let add = tauri::WebviewWindowBuilder::new(app, "add", tauri::WebviewUrl::App("add.html".into()))
                 .title("Add Download")
                 .inner_size(610.0, 465.0)
                 .min_inner_size(528.0, 400.0)
                 .decorations(false)
                 .visible(false)
+                .shadow(true)
+                .background_color(tauri::window::Color(0x23, 0x1f, 0x18, 0xff))
                 .owner(&main)?
                 .build()?;
+            harden_webview(&add);
 
-            // The detail popup is a non-modal inspector (unlike `add`): it
-            // never disables `main`, so the user keeps working with the table
-            // while it's open.
-            tauri::WebviewWindowBuilder::new(app, "detail", tauri::WebviewUrl::App("detail.html".into()))
-                .title("Download Details")
-                .inner_size(620.0, 540.0)
-                .min_inner_size(520.0, 420.0)
-                .decorations(false)
-                .visible(false)
-                .owner(&main)?
-                .build()?;
+            // Per-download "Download Details" popups are created on demand by
+            // `open_detail_window` (labeled `detail-<id>`) rather than built
+            // here, so each download can have its own independent popup.
 
             // Tray icon: left-click shows/focuses `main`, the menu offers the
             // same plus a real Quit (closing `main` normally just hides it —
@@ -2295,11 +2413,13 @@ pub fn run() {
             // The detail popup is reused too, and — unlike "add" — never
             // disabled `main`, so there's nothing to re-enable here; just
             // hide and let `main` know so it stops pushing `detail-data`.
-            "detail" => {
-                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                    api.prevent_close();
-                    let _ = window.hide();
-                    let _ = window.emit_to("main", "detail-closed", ());
+            label if label.starts_with("detail-") => {
+                // Per-download popups are created on demand, so let the close
+                // through and just tell `main` to stop pushing snapshots at
+                // this one (unlike "add" above, there's nothing to hide-and-reuse).
+                if let tauri::WindowEvent::CloseRequested { .. } = event {
+                    let id = label.trim_start_matches("detail-").to_string();
+                    let _ = window.emit_to("main", "detail-closed", id);
                 }
             }
             "main" => match event {
@@ -2332,6 +2452,7 @@ pub fn run() {
             pause_download,
             cancel_download,
             set_global_speed_limit,
+            set_download_speed_limit,
             delete_download,
             list_resumable,
             probe_url,
@@ -2343,6 +2464,7 @@ pub fn run() {
             submit_add,
             close_add_window,
             open_detail_window,
+            show_detail_window,
             close_detail_window,
             update_tray_downloads,
             load_settings,

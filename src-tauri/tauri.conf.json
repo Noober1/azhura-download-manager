@@ -18,7 +18,10 @@
         "height": 620,
         "minWidth": 544,
         "minHeight": 368,
-        "decorations": false
+        "decorations": false,
+        "visible": false,
+        "backgroundColor": "#191712",
+        "shadow": true
       }
     ],
     "security": {

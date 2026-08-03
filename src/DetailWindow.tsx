@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { emitTo, listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import type { DownloadItem, DetailAction } from "./types";
@@ -11,29 +12,59 @@ import {
   statusClass,
   statusLabel,
   pctOf,
+  truncate,
 } from "./format";
-import { WindowControls, useSuppressContextMenu } from "./ui";
+import { WindowControls, useNativeShell } from "./ui";
 import "./App.css";
 
-/* The separate native "Download Details" window. A pure view driven by
-   `detail-data` snapshots the main window pushes whenever the targeted row
-   changes; action buttons emit `detail-action` back to main rather than
-   calling any download command directly, since main owns all download state. */
+/* One instance of the separate native "Download Details" popup — each
+   download that's inspected gets its own window (labeled `detail-<id>`), so
+   several can be open at once instead of fighting over a single reused one.
+   A pure view driven by `detail-data` snapshots the main window pushes
+   whenever the targeted row changes; action buttons emit `detail-action`
+   back to main rather than calling any download command directly, since main
+   owns all download state. */
 export function DetailWindow() {
+  const id = useMemo(() => getCurrentWindow().label.replace(/^detail-/, ""), []);
   const [item, setItem] = useState<DownloadItem | null>(null);
   const [ready, setReady] = useState(false);
 
-  useSuppressContextMenu();
+  useNativeShell();
+
+  // Tells `main` this popup exists and is ready for its first snapshot — the
+  // window is built hidden, and `main` shows it (via `show_detail_window`)
+  // only after delivering that snapshot, so there's never a flash of an
+  // empty popup.
+  useEffect(() => {
+    emitTo("main", "detail-ready", id);
+  }, [id]);
 
   useEffect(() => {
-    const unlisten = listen<DownloadItem | null>("detail-data", (e) => {
-      setItem(e.payload);
-      setReady(true);
-    });
+    // `listen()` defaults to target `{ kind: "Any" }` — i.e. it does NOT
+    // filter by which window an `emitTo` was actually addressed to. Every
+    // `detail-<id>` window runs this same bundle, so without scoping this to
+    // its own label, every open popup would update on every other popup's
+    // snapshot too.
+    const unlisten = listen<DownloadItem | null>(
+      "detail-data",
+      (e) => {
+        setItem(e.payload);
+        setReady(true);
+      },
+      { target: getCurrentWindow().label },
+    );
     return () => {
       unlisten.then((f) => f());
     };
   }, []);
+
+  // Distinguishes multiple open popups in the taskbar/alt-tab.
+  useEffect(() => {
+    if (!item) return;
+    getCurrentWindow()
+      .setTitle(`Download Details — ${item.filename}`)
+      .catch(() => {});
+  }, [item?.filename]);
 
   function sendAction(action: DetailAction["action"]) {
     if (!item) return;
@@ -41,7 +72,7 @@ export function DetailWindow() {
   }
 
   function close() {
-    invoke("close_detail_window");
+    invoke("close_detail_window", { id });
   }
 
   if (!ready) {
@@ -93,7 +124,7 @@ export function DetailWindow() {
   return (
     <div className="add-window">
       <div className="dialog-head add-head" data-tauri-drag-region>
-        <span>Download Details</span>
+        <span title={item.filename}>Download Details — {truncate(item.filename, 32)}</span>
         <WindowControls variant="close" />
       </div>
 
