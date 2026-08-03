@@ -1070,12 +1070,30 @@ fn set_global_speed_limit(bytes_per_sec: u64, manager: tauri::State<'_, Manager>
 /// visual stacking).
 /// Bring `main` back from the tray: clear the modal-disable left over from
 /// the Add window trick, undo a minimize, show, and focus.
+///
+/// The disable is only cleared when the Add window isn't actually on screen.
+/// A *visible* Add window holds a real, OS-level modal disable on `main`, and
+/// this function is reachable from the tray (left-click, "Show", and the
+/// per-download entries) while that dialog is open — re-enabling `main` there
+/// would leave both windows interactive at once.
 fn reveal_main_window(app: &tauri::AppHandle) {
+    let add = app
+        .get_webview_window("add")
+        .filter(|w| w.is_visible().unwrap_or(false));
+
     if let Some(m) = app.get_webview_window("main") {
-        let _ = m.set_enabled(true);
+        if add.is_none() {
+            let _ = m.set_enabled(true);
+        }
         let _ = m.unminimize();
         let _ = m.show();
         let _ = m.set_focus();
+    }
+
+    // `main` can't take input while the modal is up, so hand focus to the
+    // dialog that's actually blocking it rather than leaving it ambiguous.
+    if let Some(w) = add {
+        let _ = w.set_focus();
     }
 }
 
@@ -2193,12 +2211,14 @@ pub fn run() {
             // same plus a real Quit (closing `main` normally just hides it —
             // see `on_window_event` below). The download rows in between are
             // pushed live by `update_tray_downloads` once the frontend is up.
-            let tray_show = MenuItem::with_id(app, "show", "Show Azhura Download Manager", true, None::<&str>)?;
-            let tray_quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
-            let tray_menu = Menu::with_items(
-                app,
-                &[&tray_show, &PredefinedMenuItem::separator(app)?, &tray_quit],
-            )?;
+            //
+            // Built through that same helper with an empty list so the initial
+            // menu already carries the "No active downloads" placeholder that
+            // an empty `TrayMenuState` stands for. Hand-rolling a different
+            // menu here would desync the two: the first push is also empty, so
+            // it takes the no-op `same_shape` path and would never replace it.
+            let (tray_menu, _) = rebuild_tray_menu(app.handle(), &[])
+                .map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
             TrayIconBuilder::with_id("main-tray")
                 .icon(app.default_window_icon().cloned().expect("app icon is configured in tauri.conf.json"))
                 .tooltip("Azhura Download Manager")

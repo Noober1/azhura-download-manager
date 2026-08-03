@@ -115,6 +115,8 @@ function App() {
   const downloadsRef = useRef<DownloadItem[]>([]);
   downloadsRef.current = downloads;
   const lastTraySentRef = useRef<string | null>(null);
+  // Guards against piling up pushes if one command outlives the 1s interval.
+  const traySendingRef = useRef(false);
 
   useSuppressContextMenu();
 
@@ -513,8 +515,16 @@ function App() {
   // Opens the "Download Details" popup targeted at `id` — a double-click, a
   // context-menu action, or the tray's per-download menu item all funnel
   // through here.
-  function openDetail(id: string) {
+  //
+  // The snapshot is pushed *before* the window is revealed, and awaited: the
+  // popup's webview is reused rather than recreated, so it still holds the
+  // previously viewed download. Letting the effect below deliver the new one
+  // would race the `open_detail_window` round-trip and flash the old row's
+  // name and progress bars first.
+  async function openDetail(id: string) {
     setDetailId(id);
+    const item = downloadsRef.current.find((d) => d.id === id) ?? null;
+    await emitTo("detail", "detail-data", item).catch(() => {});
     invoke("open_detail_window").catch(() => {});
   }
 
@@ -588,10 +598,23 @@ function App() {
         ? `Azhura Download Manager — ${active.length} active · ${formatSpeed(totalActiveSpeed)}`
         : "Azhura Download Manager";
 
+      // Only record the payload as delivered once the command actually
+      // succeeded. Marking it up front would strand a failed push whenever
+      // the payload is stable — notably the idle `{items: [], …}` one, which
+      // never changes again, leaving the tray listing finished downloads.
       const payload = JSON.stringify({ items, tooltip });
-      if (payload === lastTraySentRef.current) return;
-      lastTraySentRef.current = payload;
-      invoke("update_tray_downloads", { items, tooltip }).catch(() => {});
+      if (payload === lastTraySentRef.current || traySendingRef.current) return;
+      traySendingRef.current = true;
+      invoke("update_tray_downloads", { items, tooltip })
+        .then(() => {
+          lastTraySentRef.current = payload;
+        })
+        .catch(() => {
+          /* leave the ref alone so the next tick retries */
+        })
+        .finally(() => {
+          traySendingRef.current = false;
+        });
     }, 1000);
     return () => clearInterval(t);
   }, []);
