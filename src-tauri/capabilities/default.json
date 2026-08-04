@@ -17,6 +17,7 @@
     "clipboard-manager:allow-read-text",
     "clipboard-manager:allow-write-text",
     "dialog:allow-open",
+    "notification:default",
     "opener:allow-reveal-item-in-dir",
     {
       "identifier": "opener:allow-open-url",

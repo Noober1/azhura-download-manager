@@ -21,6 +21,7 @@ import type {
   HistoryLoad,
   ResumableInfo,
   Category,
+  Theme,
   TrayDownload,
   DetailAction,
 } from "./types";
@@ -35,6 +36,9 @@ import {
   statusLabel,
 } from "./format";
 import { Icon, WindowControls, useNativeShell, isEditable } from "./ui";
+import { FileIcon } from "./fileIcons";
+import { broadcastTheme, normalizeTheme, useTheme } from "./theme";
+import { initNotifications, notify, setNotificationsEnabled } from "./notify";
 import "./App.css";
 
 const TERMINAL_STATES = ["completed", "error", "canceled"] as const;
@@ -127,6 +131,8 @@ function App() {
   const [maxConcurrent, setMaxConcurrent] = useState(3);
   const [globalLimitMbps, setGlobalLimitMbps] = useState(0);
   const [minimizeToTray, setMinimizeToTray] = useState(false);
+  const [theme, setTheme] = useState<Theme>("system");
+  const [notifications, setNotifications] = useState(true);
   const [downloads, setDownloads] = useState<DownloadItem[]>([]);
 
   const [category, setCategory] = useState<Category>("all");
@@ -167,8 +173,12 @@ function App() {
   const lastTraySentRef = useRef<string | null>(null);
   // Guards against piling up pushes if one command outlives the 1s interval.
   const traySendingRef = useRef(false);
+  // Downloads that have completed since the queue was last empty, so draining
+  // it can report "all N complete" instead of just the final filename.
+  const completedBurstRef = useRef(0);
 
   useNativeShell();
+  useTheme();
 
   // The main window starts hidden (`visible: false` in tauri.conf.json) so
   // there's no white flash before React paints; show it right after the
@@ -191,6 +201,9 @@ function App() {
         setMaxConcurrent(s.maxConcurrent);
         setGlobalLimitMbps(s.globalLimitMbps);
         setMinimizeToTray(s.minimizeToTray);
+        setTheme(normalizeTheme(s.theme));
+        setNotifications(s.notifications);
+        setNotificationsEnabled(s.notifications);
         if (s.globalLimitMbps > 0) {
           invoke("set_global_speed_limit", {
             bytesPerSec: Math.round(s.globalLimitMbps * 1024 * 1024),
@@ -198,6 +211,12 @@ function App() {
         }
       })
       .catch(() => {});
+  }, []);
+
+  // Asked for once per launch. A denial silently disables toasts rather than
+  // surfacing an error the user can't act on from here.
+  useEffect(() => {
+    initNotifications();
   }, []);
 
   // Restore a previous session: unfinished downloads from their resume
@@ -278,6 +297,19 @@ function App() {
       .forEach((item) => startRun(item));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [downloads, maxConcurrent]);
+
+  // One summary toast when the queue drains, instead of leaving the user to
+  // count individual "complete" toasts. Only fires past two downloads — a
+  // single one already got its own toast and doesn't need a second.
+  useEffect(() => {
+    const pending = downloads.filter((d) =>
+      ["downloading", "verifying", "queued"].includes(d.state),
+    ).length;
+    if (pending > 0) return;
+    const n = completedBurstRef.current;
+    completedBurstRef.current = 0;
+    if (n > 1) notify("All downloads complete", `${n} downloads finished.`);
+  }, [downloads]);
 
   function historyPayload(items: DownloadItem[]) {
     return items
@@ -368,15 +400,22 @@ function App() {
           fromHistory: false,
           finishedAt: Date.now(),
         });
+        completedBurstRef.current += 1;
+        notify("Download complete", msg.data.filename);
         break;
-      case "error":
+      case "error": {
         patchItem(id, {
           state: "error",
           error: msg.data.message,
           speed: 0,
           finishedAt: Date.now(),
         });
+        // The patch above hasn't landed in `downloads` yet, so read the name
+        // from the ref rather than waiting a render for it.
+        const name = downloadsRef.current.find((d) => d.id === id)?.filename ?? "Download";
+        notify("Download failed", `${name} — ${msg.data.message}`);
         break;
+      }
     }
   }
 
@@ -534,6 +573,10 @@ function App() {
         // resuming again simply reopens the page to retry.
         if (d.needsAuth && d.referer) {
           openUrl(d.referer).catch(() => {});
+          notify(
+            "Waiting for browser",
+            `${d.filename} needs a fresh sign-in — its original page was reopened in your browser.`,
+          );
           return { ...restart, state: "paused" as const, awaitingCapture: true };
         }
         return restart;
@@ -768,6 +811,8 @@ function App() {
         maxConcurrent,
         globalLimitMbps,
         minimizeToTray,
+        theme,
+        notifications,
         ...overrides,
       } as AppSettings,
     });
@@ -789,6 +834,20 @@ function App() {
   function setMinimizeToTraySetting(v: boolean) {
     setMinimizeToTray(v);
     persistSettings({ minimizeToTray: v });
+  }
+
+  // Applies here and pushes the change to the Add / Details windows, which
+  // hold their own copy of the stylesheet.
+  function setThemeSetting(v: Theme) {
+    setTheme(v);
+    broadcastTheme(v);
+    persistSettings({ theme: v });
+  }
+
+  function setNotificationsSetting(v: boolean) {
+    setNotifications(v);
+    setNotificationsEnabled(v);
+    persistSettings({ notifications: v });
   }
 
   // Derived
@@ -1174,6 +1233,18 @@ function App() {
                 />
                 <span className="field-unit">MB/s · 0 = unlimited (live)</span>
               </div>
+              <div className="field-row">
+                <label htmlFor="theme">Color theme</label>
+                <select
+                  id="theme"
+                  value={theme}
+                  onChange={(e) => setThemeSetting(e.currentTarget.value as Theme)}
+                >
+                  <option value="system">Use system setting</option>
+                  <option value="dark">Dark</option>
+                  <option value="light">Light</option>
+                </select>
+              </div>
               <div className="check-row">
                 <input
                   type="checkbox"
@@ -1182,6 +1253,15 @@ function App() {
                   onChange={(e) => setMinimizeToTraySetting(e.currentTarget.checked)}
                 />
                 <label htmlFor="min-tray">Minimize to tray</label>
+              </div>
+              <div className="check-row">
+                <input
+                  type="checkbox"
+                  id="notify"
+                  checked={notifications}
+                  onChange={(e) => setNotificationsSetting(e.currentTarget.checked)}
+                />
+                <label htmlFor="notify">Show desktop notifications</label>
               </div>
             </div>
             <div className="dialog-actions">
@@ -1428,7 +1508,10 @@ function Row({
       }}
     >
       <td className="col-name" title={item.path || item.url}>
-        {item.filename}
+        <span className="name-cell">
+          <FileIcon name={item.filename} />
+          <span className="name-text">{item.filename}</span>
+        </span>
       </td>
       <td className="col-status">
         {/* One state class only — `.mode-tag.missing` and `.mode-tag.completed`

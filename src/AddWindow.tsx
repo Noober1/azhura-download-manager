@@ -6,6 +6,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import type { AddPayload } from "./types";
 import { formatBytes, isInsecureHttp, looksLikeUrl, mergeHeaders } from "./format";
 import { WindowControls, useNativeShell } from "./ui";
+import { useTheme } from "./theme";
 import "./App.css";
 
 type ProbeInfo = { total: number | null; supportsRanges: boolean; filename: string };
@@ -44,6 +45,7 @@ export function AddWindow() {
   const [headersText, setHeadersText] = useState("");
 
   useNativeShell();
+  useTheme();
 
   useEffect(() => {
     invoke<string>("default_download_dir")

@@ -99,10 +99,14 @@ export type DetailAction = { id: string; action: "pause" | "resume" | "cancel" }
 
 export type Category = "all" | "active" | "finished";
 
+export type Theme = "system" | "dark" | "light";
+
 export type AppSettings = {
   maxConcurrent: number;
   globalLimitMbps: number;
   minimizeToTray: boolean;
+  theme: Theme;
+  notifications: boolean;
 };
 
 /** One persisted finished download. `state` is always the real terminal state —

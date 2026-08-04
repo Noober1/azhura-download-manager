@@ -15,6 +15,8 @@ import {
   truncate,
 } from "./format";
 import { WindowControls, useNativeShell } from "./ui";
+import { FileIcon } from "./fileIcons";
+import { useTheme } from "./theme";
 import "./App.css";
 
 /* One instance of the separate native "Download Details" popup — each
@@ -30,6 +32,7 @@ export function DetailWindow() {
   const [ready, setReady] = useState(false);
 
   useNativeShell();
+  useTheme();
 
   // Tells `main` this popup exists and is ready for its first snapshot — the
   // window is built hidden, and `main` shows it (via `show_detail_window`)
@@ -130,8 +133,12 @@ export function DetailWindow() {
 
       <div className="dialog-body detail-window-body">
         <div className="detail-title-row">
+          {/* The filename needs its own element: `.detail-title` is a flex
+              container now, and text-overflow doesn't apply to a bare text
+              node inside one. */}
           <span className="detail-title selectable" title={item.filename}>
-            {item.filename}
+            <FileIcon name={item.filename} size={20} />
+            <span className="name-text">{item.filename}</span>
           </span>
           <span className={`mode-tag ${statusClass(item)}`}>{statusLabel(item)}</span>
         </div>

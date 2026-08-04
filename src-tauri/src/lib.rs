@@ -88,6 +88,10 @@ struct AppSettings {
     max_concurrent: usize,
     global_limit_mbps: f64,
     minimize_to_tray: bool,
+    /// "system" | "dark" | "light". Applied entirely on the frontend (see
+    /// `src/theme.ts`); Rust only persists it.
+    theme: String,
+    notifications: bool,
 }
 
 impl Default for AppSettings {
@@ -96,6 +100,8 @@ impl Default for AppSettings {
             max_concurrent: 3,
             global_limit_mbps: 0.0,
             minimize_to_tray: false,
+            theme: "system".to_string(),
+            notifications: true,
         }
     }
 }
@@ -1284,7 +1290,7 @@ async fn open_detail_window(app: tauri::AppHandle, id: String) -> Result<(), Str
             .decorations(false)
             .visible(false)
             .shadow(true)
-            .background_color(tauri::window::Color(0x23, 0x1f, 0x18, 0xff))
+            .background_color(tauri::window::Color(0x1f, 0x1f, 0x1f, 0xff))
             .owner(&main)
             .map_err(|e| e.to_string())?;
 
@@ -2294,6 +2300,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         .manage(Manager::default())
         .manage(PendingDeepLink::default())
         .manage(SettingsState(Mutex::new(load_settings_from_disk())))
@@ -2316,7 +2323,7 @@ pub fn run() {
                 .decorations(false)
                 .visible(false)
                 .shadow(true)
-                .background_color(tauri::window::Color(0x23, 0x1f, 0x18, 0xff))
+                .background_color(tauri::window::Color(0x1f, 0x1f, 0x1f, 0xff))
                 .owner(&main)?
                 .build()?;
             harden_webview(&add);
