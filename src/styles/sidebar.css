@@ -1,0 +1,79 @@
+/* ---- Body: sidebar + table ---------------------------------------------- */
+
+.body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.sidebar {
+  width: 172px;
+  flex-shrink: 0;
+  padding: 0.6rem 0 0;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow-y: auto;
+}
+
+.side-title {
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--faint);
+  padding: 0 0.75rem 0.5rem;
+}
+
+/* Explorer rows: flat, full-bleed, with the active one marked by VS Code's
+   left accent strip rather than a filled pill. */
+.cat {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  text-align: left;
+  font-weight: 400;
+  font-size: 0.85rem;
+  color: var(--ink);
+  background: transparent;
+  border: none;
+  border-left: 2px solid transparent;
+  border-radius: 0;
+  box-shadow: none;
+  height: 22px;
+  padding: 0 0.75rem 0 calc(0.75rem - 2px);
+  cursor: pointer;
+  transition: background 0.08s ease;
+}
+.cat:hover {
+  background: var(--hover);
+  box-shadow: none;
+}
+.cat:active {
+  transform: none;
+}
+/* The `:hover` variant is not redundant: the base `button:hover:not(:disabled)`
+   rule further down is (0,2,1) and would otherwise outrank a plain
+   `.cat.active` (0,2,0), dropping the selection highlight under the cursor. */
+.cat.active,
+.cat.active:hover {
+  background: var(--accent-wash);
+  border-left-color: var(--accent);
+  color: var(--ink);
+}
+:root[data-theme="dark"] .cat.active {
+  color: #fff;
+}
+.cat-n {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--faint);
+}
+.cat.active .cat-n {
+  color: inherit;
+  opacity: 0.8;
+}

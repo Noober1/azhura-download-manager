@@ -1,0 +1,119 @@
+/* Azhura Download Manager — Visual Studio Code shell:
+   flat title toolbar · explorer sidebar · dense download list · modal dialogs.
+
+   Colors are VS Code's Dark Modern / Light Modern themes. Every token hangs
+   off `data-theme` on <html>, which src/theme.ts stamps (and the inline script
+   in each HTML entry re-stamps before the first paint). Fonts are the ones
+   Windows ships — Segoe UI for chrome, Cascadia Mono for numbers — so nothing
+   here needs the network or a webfont round-trip. */
+
+:root {
+  --bw: 1px;
+  --bw-lg: 1px;
+  --radius-field: 2px;
+  --radius-card: 5px;
+  /* Kept as tokens (rather than deleted) because dozens of rules below still
+     reference them; the neobrutalist offset shadow is simply gone now. */
+  --sh-sm: none;
+  --sh: none;
+  --sh-float: 0 4px 12px rgba(0, 0, 0, 0.36);
+
+  --font-sans: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --font-head: var(--font-sans);
+  --font-mono: "Cascadia Mono", Consolas, "Courier New", monospace;
+
+  font-family: var(--font-sans);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --canvas: #1f1f1f;
+  --surface: #181818;
+  --surface-2: #313131;
+  --hover: #2a2d2e;
+  --border: #2b2b2b;
+  --border-strong: #3c3c3c;
+
+  --ink: #cccccc;
+  --ink-soft: #9d9d9d;
+  --faint: #808080;
+
+  --accent: #0078d4;
+  --accent-strong: #026ec1;
+  --accent-wash: #04395e;
+  --on-accent: #ffffff;
+
+  --positive: #89d185;
+  --danger: #f14c4c;
+  --warn: #cca700;
+
+  --scroll-thumb: rgba(121, 121, 121, 0.4);
+  --scroll-thumb-hover: rgba(153, 153, 153, 0.7);
+  --scrim: rgba(0, 0, 0, 0.5);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --canvas: #ffffff;
+  --surface: #f8f8f8;
+  --surface-2: #ffffff;
+  --hover: #f0f0f0;
+  --border: #e5e5e5;
+  --border-strong: #cecece;
+
+  --ink: #3b3b3b;
+  --ink-soft: #616161;
+  --faint: #808080;
+
+  --accent: #005fb8;
+  --accent-strong: #0258a8;
+  --accent-wash: #cce4f7;
+  --on-accent: #ffffff;
+
+  --positive: #1a7f37;
+  --danger: #e51400;
+  --warn: #bf8803;
+
+  --scroll-thumb: rgba(100, 100, 100, 0.4);
+  --scroll-thumb-hover: rgba(100, 100, 100, 0.7);
+  --scrim: rgba(0, 0, 0, 0.3);
+}
+
+:root {
+  color: var(--ink);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  background: var(--canvas);
+  overflow: hidden;
+}
+
+body {
+  user-select: none;
+  -webkit-user-select: none;
+}
+input,
+textarea,
+.selectable {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.tabular {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}

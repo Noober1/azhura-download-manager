@@ -1,0 +1,134 @@
+/* ---- App shell ----------------------------------------------------------- */
+
+.app {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---- Top toolbar --------------------------------------------------------- */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  height: 35px;
+  padding: 0 0 0 0.35rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.tbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--ink);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-card);
+  box-shadow: none;
+  cursor: pointer;
+  transition: background 0.08s ease;
+}
+.tbtn:hover:not(:disabled) {
+  background: var(--hover);
+  box-shadow: none;
+}
+.tbtn:active:not(:disabled) {
+  transform: none;
+  box-shadow: none;
+}
+.tbtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+.tbtn.primary {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.tbtn.primary:hover:not(:disabled) {
+  background: var(--accent-strong);
+}
+.tbtn.danger {
+  background: transparent;
+  color: var(--danger);
+}
+.tbtn.danger:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.tsep {
+  width: 1px;
+  height: 16px;
+  background: var(--border-strong);
+  margin: 0 0.3rem;
+  border-radius: 0;
+}
+
+.topbar-status {
+  margin-left: auto;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding-right: 0.5rem;
+  line-height: 1;
+}
+.ts-speed {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.ts-counts {
+  font-size: 0.85rem;
+  color: var(--faint);
+}
+
+[data-tauri-drag-region] {
+  cursor: default;
+}
+.win-controls {
+  display: flex;
+  align-items: stretch;
+  align-self: stretch;
+  gap: 0;
+  margin-left: 0.3rem;
+}
+/* Windows 11 caption buttons: full-bleed, square, no chrome until hovered. */
+.win-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 100%;
+  padding: 0;
+  color: var(--ink);
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  cursor: pointer;
+  transition: background 0.08s ease;
+}
+.win-btn:hover {
+  background: var(--hover);
+  box-shadow: none;
+}
+.win-btn:active {
+  transform: none;
+}
+.win-btn.win-close:hover {
+  background: #c42b1b;
+  color: #fff;
+}
+.add-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}

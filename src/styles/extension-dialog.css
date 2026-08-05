@@ -1,0 +1,34 @@
+/* ---- Browser extension dialog --------------------------------------------- */
+
+.ext-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.8rem;
+  padding: 0.7rem 0.8rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+}
+.ext-name {
+  font-family: var(--font-head);
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+.ext-hint {
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--faint);
+}
+.ext-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+.ext-row > button,
+.ext-actions > button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
