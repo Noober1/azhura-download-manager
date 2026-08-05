@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { readText } from "@tauri-apps/plugin-clipboard-manager";
 import { open } from "@tauri-apps/plugin-dialog";
-import type { AddPayload, Prefs } from "./types";
+import type { AddPayload, Prefs, ProxyConfig, ProxyScheme } from "./types";
 import { formatBytes, isInsecureHttp, looksLikeUrl, mergeHeaders } from "./format";
 import { WindowControls, useNativeShell } from "./ui";
 import { useTheme } from "./theme";
@@ -43,6 +43,14 @@ export function AddWindow() {
   const [categoryPaths, setCategoryPaths] = useState<Record<string, string>>({});
   const [rememberPath, setRememberPath] = useState(false);
 
+  // Proxy tab
+  const [proxyEnabled, setProxyEnabled] = useState(false);
+  const [proxyScheme, setProxyScheme] = useState<ProxyScheme>("http");
+  const [proxyHost, setProxyHost] = useState("");
+  const [proxyPort, setProxyPort] = useState(0);
+  const [proxyUsername, setProxyUsername] = useState("");
+  const [proxyPassword, setProxyPassword] = useState("");
+
   // Advanced Options tab
   const [userAgent, setUserAgent] = useState("");
   const [referer, setReferer] = useState("");
@@ -66,6 +74,14 @@ export function AddWindow() {
         if (p.connections > 0) setConnections(p.connections);
         setPerLimitMbps(p.speedLimitMbps);
         setCategoryPaths(p.categoryPaths ?? {});
+        if (p.proxy) {
+          setProxyEnabled(p.proxy.enabled);
+          if (p.proxy.scheme) setProxyScheme(p.proxy.scheme);
+          setProxyHost(p.proxy.host);
+          setProxyPort(p.proxy.port);
+          setProxyUsername(p.proxy.username);
+          setProxyPassword(p.proxy.password);
+        }
       })
       .catch(() => {});
   }, []);
@@ -165,7 +181,7 @@ export function AddWindow() {
     const myId = ++requestIdRef.current;
     setProbeStatus("loading");
     const headers = mergeHeaders(headersText, { userAgent, referer, cookie: cookieText });
-    invoke<ProbeInfo>("probe_url", { url: u, allowInsecure, headers })
+    invoke<ProbeInfo>("probe_url", { url: u, allowInsecure, headers, proxy: probeProxy })
       .then((info) => {
         if (requestIdRef.current !== myId) return;
         setTotal(info.total);
@@ -179,6 +195,31 @@ export function AddWindow() {
       });
   }
 
+  // What actually gets submitted and remembered: the checkbox state as-is, so
+  // an incomplete proxy fails loudly in build_client rather than silently
+  // going out direct.
+  const effectiveProxy: ProxyConfig = useMemo(
+    () => ({
+      enabled: proxyEnabled,
+      scheme: proxyScheme,
+      host: proxyHost.trim(),
+      port: proxyPort,
+      username: proxyUsername.trim(),
+      password: proxyPassword,
+    }),
+    [proxyEnabled, proxyScheme, proxyHost, proxyPort, proxyUsername, proxyPassword],
+  );
+
+  // The size probe is speculative and fires while the user is still typing, so
+  // it stays direct until host and port are both complete.
+  const probeProxy: ProxyConfig = useMemo(
+    () => ({
+      ...effectiveProxy,
+      enabled: proxyEnabled && proxyHost.trim() !== "" && proxyPort > 0,
+    }),
+    [effectiveProxy, proxyEnabled, proxyHost, proxyPort],
+  );
+
   // Debounced auto-probe — https only. An insecure http:// link never fires a
   // request on its own; the user must hit "Check size" to opt in explicitly.
   useEffect(() => {
@@ -190,7 +231,7 @@ export function AddWindow() {
     const t = window.setTimeout(() => runProbe(false), 600);
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [url, headersText, userAgent, referer, cookieText]);
+  }, [url, headersText, userAgent, referer, cookieText, proxyEnabled, proxyScheme, proxyHost, proxyPort]);
 
   const headerCount = useMemo(
     () => mergeHeaders(headersText, { userAgent, referer, cookie: cookieText }).length,
@@ -239,9 +280,14 @@ export function AddWindow() {
       later,
       filename: filenameEnabled ? filenameText.trim() : "",
       savePath: savePath.trim(),
+      proxy: effectiveProxy,
     };
     invoke("submit_add", { payload }); // Rust emits to main + hides this window
-    invoke("save_add_defaults", { connections, speedLimitMbps: perLimitMbps }).catch(() => {});
+    invoke("save_add_defaults", {
+      connections,
+      speedLimitMbps: perLimitMbps,
+      proxy: effectiveProxy,
+    }).catch(() => {});
     if (rememberPath && savePath.trim()) {
       const path = savePath.trim();
       invoke("set_category_path", { category: currentCategory, path }).catch(() => {});
@@ -307,7 +353,7 @@ export function AddWindow() {
           className={`tab ${tab === "proxy" ? "active" : ""}`}
           onClick={() => setTab("proxy")}
         >
-          Proxy
+          Proxy{effectiveProxy.enabled ? " · on" : ""}
         </button>
         <button
           type="button"
@@ -382,8 +428,74 @@ export function AddWindow() {
           </div>
         </div>
 
-        <div className={`tab-panel tab-empty ${tab === "proxy" ? "" : "tab-hidden"}`}>
-          <p>Proxy support is not implemented yet.</p>
+        <div className={`tab-panel ${tab === "proxy" ? "" : "tab-hidden"}`}>
+          <div className="check-row">
+            <input
+              type="checkbox"
+              id="proxy-enabled"
+              checked={proxyEnabled}
+              onChange={(e) => setProxyEnabled(e.currentTarget.checked)}
+            />
+            <label htmlFor="proxy-enabled">Use a proxy</label>
+          </div>
+          <div className="field-row">
+            <label htmlFor="proxy-scheme">Type</label>
+            <select
+              id="proxy-scheme"
+              className="conn-select"
+              disabled={!proxyEnabled}
+              value={proxyScheme}
+              onChange={(e) => setProxyScheme(e.currentTarget.value as ProxyScheme)}
+            >
+              <option value="http">HTTP</option>
+              <option value="https">HTTPS</option>
+              <option value="socks5h">SOCKS5</option>
+            </select>
+            <label htmlFor="proxy-host">Host</label>
+            <input
+              id="proxy-host"
+              className="proxy-field"
+              disabled={!proxyEnabled}
+              value={proxyHost}
+              onChange={(e) => setProxyHost(e.currentTarget.value)}
+              spellCheck={false}
+              placeholder="proxy.example.com"
+            />
+            <label htmlFor="proxy-port">Port</label>
+            <input
+              id="proxy-port"
+              type="number"
+              min={0}
+              max={65535}
+              disabled={!proxyEnabled}
+              value={proxyPort || ""}
+              onChange={(e) =>
+                setProxyPort(Math.max(0, Math.min(65535, Number(e.currentTarget.value) || 0)))
+              }
+            />
+          </div>
+          <div className="field-row">
+            <label htmlFor="proxy-user">Username</label>
+            <input
+              id="proxy-user"
+              className="proxy-field"
+              disabled={!proxyEnabled}
+              value={proxyUsername}
+              onChange={(e) => setProxyUsername(e.currentTarget.value)}
+              spellCheck={false}
+              placeholder="optional"
+            />
+            <label htmlFor="proxy-pass">Password</label>
+            <input
+              id="proxy-pass"
+              className="proxy-field"
+              type="password"
+              disabled={!proxyEnabled}
+              value={proxyPassword}
+              onChange={(e) => setProxyPassword(e.currentTarget.value)}
+              placeholder="optional"
+            />
+          </div>
         </div>
 
         <div className={`tab-panel ${tab === "more" ? "" : "tab-hidden"}`}>

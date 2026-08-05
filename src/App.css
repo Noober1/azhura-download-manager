@@ -1027,6 +1027,10 @@ button.danger:hover:not(:disabled) {
   font-family: var(--font-mono);
   font-size: 0.8rem;
 }
+.proxy-field {
+  flex: 1;
+  min-width: 7rem;
+}
 .tab-panel textarea {
   font-family: var(--font-mono);
   font-size: 0.8rem;

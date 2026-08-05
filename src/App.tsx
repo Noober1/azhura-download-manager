@@ -26,6 +26,7 @@ import type {
   TrayDownload,
   DetailAction,
 } from "./types";
+import { DEFAULT_PROXY } from "./types";
 import {
   isInsecureHttp,
   formatBytes,
@@ -87,6 +88,7 @@ function toHistoryEntry(d: DownloadItem): HistoryEntry {
     filenameOverride: d.filenameOverride,
     path: d.path,
     savePath: d.savePath,
+    proxy: { ...d.proxy, password: "" },
     total: d.total,
     downloaded: d.downloaded,
     connections: d.connections,
@@ -115,6 +117,7 @@ function fromHistoryEntry(e: HistoryEntry): DownloadItem {
     filenameOverride: e.filenameOverride,
     path: e.path,
     savePath: e.savePath,
+    proxy: e.proxy ?? DEFAULT_PROXY,
     total: e.total,
     downloaded: e.downloaded,
     speed: 0,
@@ -273,6 +276,7 @@ function App() {
           filenameOverride: "",
           path: it.path,
           savePath: it.savePath ?? "",
+          proxy: DEFAULT_PROXY,
           total: it.total,
           downloaded: it.downloaded,
           speed: 0,
@@ -471,6 +475,7 @@ function App() {
         speedLimit: item.speedLimit > 0 ? item.speedLimit : null,
         filename: !resume && item.filenameOverride ? item.filenameOverride : null,
         savePath: item.savePath || null,
+        proxy: item.proxy,
         onEvent,
       });
     } catch (e) {
@@ -498,6 +503,7 @@ function App() {
       filenameOverride: p.filename.trim(),
       path: "",
       savePath: p.savePath.trim(),
+      proxy: p.proxy ?? DEFAULT_PROXY,
       total: null,
       downloaded: 0,
       speed: 0,

@@ -180,6 +180,31 @@ async fn save_settings(
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase", default)]
+struct ProxyConfig {
+    enabled: bool,
+    /// "http" | "https" | "socks5h"
+    scheme: String,
+    host: String,
+    port: u16,
+    username: String,
+    password: String,
+}
+
+impl Default for ProxyConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            scheme: "http".to_string(),
+            host: String::new(),
+            port: 0,
+            username: String::new(),
+            password: String::new(),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase", default)]
 struct Prefs {
     /// Add-window defaults, remembered across sessions.
     connections: usize,
@@ -187,6 +212,7 @@ struct Prefs {
     /// category id ("video" | "audio" | …) → absolute folder override.
     /// Absent or empty = the built-in `<base>/<Category>` folder.
     category_paths: HashMap<String, String>,
+    proxy: ProxyConfig,
 }
 
 impl Default for Prefs {
@@ -195,6 +221,7 @@ impl Default for Prefs {
             connections: 8,
             speed_limit_mbps: 0.0,
             category_paths: HashMap::new(),
+            proxy: ProxyConfig::default(),
         }
     }
 }
@@ -222,12 +249,14 @@ fn load_prefs(state: tauri::State<'_, PrefsState>) -> Prefs {
 async fn save_add_defaults(
     connections: usize,
     speed_limit_mbps: f64,
+    proxy: ProxyConfig,
     state: tauri::State<'_, PrefsState>,
 ) -> Result<(), String> {
     let prefs = {
         let mut guard = state.0.lock().unwrap();
         guard.connections = connections;
         guard.speed_limit_mbps = speed_limit_mbps;
+        guard.proxy = proxy;
         guard.clone()
     };
     write_json_atomic(&prefs_path()?, &prefs).await
@@ -282,6 +311,7 @@ struct HistoryEntry {
     /// that produced it and wait for the extension to capture a fresh request.
     referer: String,
     needs_auth: bool,
+    proxy: ProxyConfig,
     finished_at: i64,
     /// When this download first entered the list; 0 for rows persisted before
     /// this field existed (the frontend falls back to `finished_at` then).
@@ -920,7 +950,7 @@ fn choose_connections(requested: usize, supports_ranges: bool, total: Option<u64
     requested.clamp(1, MAX_CONNECTIONS).min(by_size).max(1)
 }
 
-fn build_client(allow_insecure: bool) -> Result<reqwest::Client, String> {
+fn build_client(allow_insecure: bool, proxy: &ProxyConfig) -> Result<reqwest::Client, String> {
     let redirect_allow = allow_insecure;
     let policy = reqwest::redirect::Policy::custom(move |attempt| {
         if attempt.previous().len() >= 10 {
@@ -931,8 +961,23 @@ fn build_client(allow_insecure: bool) -> Result<reqwest::Client, String> {
             attempt.follow()
         }
     });
-    reqwest::Client::builder()
-        .redirect(policy)
+    let mut builder = reqwest::Client::builder().redirect(policy);
+
+    if proxy.enabled {
+        let host = proxy.host.trim();
+        if host.is_empty() || proxy.port == 0 {
+            return Err("Proxy is enabled but its host or port is missing.".to_string());
+        }
+        let scheme = if proxy.scheme.is_empty() { "http" } else { proxy.scheme.as_str() };
+        let url = format!("{scheme}://{host}:{}", proxy.port);
+        let mut p = reqwest::Proxy::all(url).map_err(|e| format!("Invalid proxy: {e}"))?;
+        if !proxy.username.is_empty() {
+            p = p.basic_auth(&proxy.username, &proxy.password);
+        }
+        builder = builder.proxy(p);
+    }
+
+    builder
         .build()
         .map_err(|e| format!("Failed to build HTTP client: {e}"))
 }
@@ -1150,6 +1195,7 @@ async fn start_download(
     speed_limit: Option<u64>,
     filename: Option<String>,
     save_path: Option<String>,
+    proxy: Option<ProxyConfig>,
     on_event: Channel<DownloadEvent>,
     manager: tauri::State<'_, Manager>,
     prefs_state: tauri::State<'_, PrefsState>,
@@ -1168,6 +1214,19 @@ async fn start_download(
     // Cloned out of the mutex before the first `.await` below — the guard
     // itself isn't `Send`, so it can't be held across an await point.
     let prefs = prefs_state.0.lock().unwrap().clone();
+    let mut proxy = proxy.unwrap_or_default();
+    // A history row persists without the proxy password (stripped like the
+    // credential headers), and the Add dialog — the only place to edit proxy
+    // settings — can't be reached for an existing row, so a redownload would
+    // 407 forever. Refill from the remembered default when it's the same proxy.
+    if proxy.enabled
+        && proxy.password.is_empty()
+        && prefs.proxy.host == proxy.host
+        && prefs.proxy.port == proxy.port
+        && prefs.proxy.username == proxy.username
+    {
+        proxy.password = prefs.proxy.password.clone();
+    }
 
     let result = download_inner(
         &url,
@@ -1183,6 +1242,7 @@ async fn start_download(
         on_event.clone(),
         control,
         &prefs,
+        &proxy,
     )
     .await;
 
@@ -1529,6 +1589,16 @@ fn build_deep_link_payload(link: &str) -> Option<serde_json::Value> {
         "later": false,
         "filename": filename,
         "savePath": "",
+        // The extension capture carries no proxy info; the Add window keeps
+        // whatever the user has remembered rather than reading this.
+        "proxy": {
+            "enabled": false,
+            "scheme": "http",
+            "host": "",
+            "port": 0,
+            "username": "",
+            "password": ""
+        },
     }))
 }
 
@@ -1599,14 +1669,16 @@ async fn probe_url(
     url: String,
     allow_insecure: bool,
     headers: Vec<(String, String)>,
+    proxy: Option<ProxyConfig>,
 ) -> Result<ProbeInfo, String> {
+    let proxy = proxy.unwrap_or_default();
     if is_insecure_http(&url) && !allow_insecure {
         return Err(
             "This is an insecure http:// connection and was not allowed.".to_string(),
         );
     }
     let built_headers = build_headers(&headers)?;
-    let client = build_client(allow_insecure)?;
+    let client = build_client(allow_insecure, &proxy)?;
     let info = probe(&client, &url, &built_headers).await?;
     Ok(ProbeInfo {
         total: info.total,
@@ -1746,6 +1818,7 @@ async fn download_inner(
     on_event: Channel<DownloadEvent>,
     control: Arc<Control>,
     prefs: &Prefs,
+    proxy: &ProxyConfig,
 ) -> Result<(), String> {
     if is_insecure_http(url) && !allow_insecure {
         return Err(
@@ -1755,7 +1828,7 @@ async fn download_inner(
     }
 
     let headers = Arc::new(build_headers(headers_raw)?);
-    let client = build_client(allow_insecure)?;
+    let client = build_client(allow_insecure, proxy)?;
 
     // ------- Resolve setup (path, plan, parallel/single, fresh/resume) -------
     struct Plan {

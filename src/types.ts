@@ -1,5 +1,25 @@
 import type { FileCategory } from "./categories";
 
+export type ProxyScheme = "http" | "https" | "socks5h";
+
+export type ProxyConfig = {
+  enabled: boolean;
+  scheme: ProxyScheme;
+  host: string;
+  port: number; // 0 = unset
+  username: string; // "" = no auth
+  password: string;
+};
+
+export const DEFAULT_PROXY: ProxyConfig = {
+  enabled: false,
+  scheme: "http",
+  host: "",
+  port: 0,
+  username: "",
+  password: "",
+};
+
 export type AddPayload = {
   url: string;
   allowInsecure: boolean;
@@ -10,6 +30,7 @@ export type AddPayload = {
   later: boolean;
   filename: string; // "" = derive from server / URL
   savePath: string; // "" = default downloads folder
+  proxy: ProxyConfig;
 };
 
 export type ConnInfo = { downloaded: number; total: number; pieces: number };
@@ -69,6 +90,7 @@ export type DownloadItem = {
   filenameOverride: string;
   path: string;
   savePath: string;
+  proxy: ProxyConfig;
   total: number | null;
   downloaded: number;
   speed: number;
@@ -120,6 +142,7 @@ export type Prefs = {
   connections: number;
   speedLimitMbps: number;
   categoryPaths: Record<string, string>;
+  proxy: ProxyConfig;
 };
 
 /** One persisted finished download. `state` is always the real terminal state —
@@ -135,6 +158,7 @@ export type HistoryEntry = {
   filenameOverride: string;
   path: string;
   savePath: string;
+  proxy: ProxyConfig;
   total: number | null;
   downloaded: number;
   connections: number;
