@@ -13,6 +13,7 @@ import {
   statusLabel,
   pctOf,
   truncate,
+  isResumable,
 } from "./format";
 import { WindowControls, useNativeShell } from "./ui";
 import { FileIcon } from "./fileIcons";
@@ -117,11 +118,7 @@ export function DetailWindow() {
 
   const pausable = item.state === "downloading";
   const cancelable = pausable;
-  const resumable =
-    !!item.missing ||
-    !!item.fromHistory ||
-    !!item.awaitingCapture ||
-    ["paused", "error", "canceled"].includes(item.state);
+  const resumable = isResumable(item);
   const canReveal = item.state === "completed" && !!item.path && !item.missing;
 
   return (

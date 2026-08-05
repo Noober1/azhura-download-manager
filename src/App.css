@@ -342,6 +342,33 @@ textarea,
   padding: 0;
 }
 
+/* ---- Marquee (drag) selection ---------------------------------------------- */
+
+.marquee {
+  position: fixed;
+  z-index: 40;
+  pointer-events: none;
+  border: 1px solid var(--accent);
+  /* `--accent-wash` is a solid opaque color (used elsewhere for selected-row
+     backgrounds) — mix it down to a light translucent fill here so rows
+     underneath the drag box stay visible. */
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+}
+
+/* ---- Status bar ----------------------------------------------------------- */
+
+.statusbar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 0.75rem;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  font-size: 0.72rem;
+  color: var(--faint);
+}
+
 .dtable {
   width: 100%;
   table-layout: fixed;
@@ -373,12 +400,12 @@ textarea,
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  width: 10%;
+  width: 11%;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .col-speed {
-  width: 14%;
+  width: 13%;
 }
 .col-status {
   width: 12%;
@@ -387,12 +414,25 @@ textarea,
   white-space: nowrap;
 }
 .col-pct {
-  width: 24%;
+  width: 8%;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 .col-name {
   max-width: 0;
-  width: 30%;
+  width: 28%;
   overflow: hidden;
+}
+.col-added {
+  width: 15%;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Filename cell: icon pinned, text takes the remaining width and ellipsizes.
@@ -1193,19 +1233,28 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Native apps show the arrow cursor over controls, not the web "hand". */
+/* Clickable controls get the web "hand" cursor so it's obvious what can be
+   clicked; the title bar's drag region is the one exception that keeps the
+   plain arrow, since it isn't a button. */
 button,
+select,
+input[type="checkbox"],
 .tbtn,
 .win-btn,
 .cat,
 .tab,
 .ctx-item,
+.ctx-sub,
 .drow,
 .check-row,
+.link-btn {
+  cursor: pointer;
+}
 [data-tauri-drag-region] {
   cursor: default;
 }
-button:disabled {
+button:disabled,
+.ctx-item:disabled {
   cursor: not-allowed;
 }
 input:not([type="checkbox"]),
@@ -1217,7 +1266,7 @@ textarea,
 /* ---- Sortable table headers ------------------------------------------------ */
 
 .dtable thead th.sortable {
-  cursor: default;
+  cursor: pointer;
   user-select: none;
 }
 .dtable thead th.sortable:hover {
@@ -1240,7 +1289,7 @@ textarea,
   color: var(--ink);
   border-radius: var(--radius-field);
   padding: 0.35em 0.65em;
-  cursor: default;
+  cursor: pointer;
 }
 .ctx-sub:hover:not(.disabled) {
   background: var(--accent);

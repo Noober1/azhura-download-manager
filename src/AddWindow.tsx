@@ -3,10 +3,11 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { readText } from "@tauri-apps/plugin-clipboard-manager";
 import { open } from "@tauri-apps/plugin-dialog";
-import type { AddPayload } from "./types";
+import type { AddPayload, Prefs } from "./types";
 import { formatBytes, isInsecureHttp, looksLikeUrl, mergeHeaders } from "./format";
 import { WindowControls, useNativeShell } from "./ui";
 import { useTheme } from "./theme";
+import { categoryOf, categoryOfUrl, CATEGORY_LABEL, CATEGORY_FOLDER, type FileCategory } from "./categories";
 import "./App.css";
 
 type ProbeInfo = { total: number | null; supportsRanges: boolean; filename: string };
@@ -37,6 +38,10 @@ export function AddWindow() {
   const [connections, setConnections] = useState(8);
   const [perLimitMbps, setPerLimitMbps] = useState(0);
   const [checksumText, setChecksumText] = useState("");
+  // Remembered per-category save-path overrides, loaded from prefs.json; the
+  // checkbox below writes a new one back via `set_category_path`.
+  const [categoryPaths, setCategoryPaths] = useState<Record<string, string>>({});
+  const [rememberPath, setRememberPath] = useState(false);
 
   // Advanced Options tab
   const [userAgent, setUserAgent] = useState("");
@@ -52,6 +57,24 @@ export function AddWindow() {
       .then(setDefaultDir)
       .catch(() => {});
   }, []);
+
+  // Remembered Connections / Speed cap defaults, and any per-category save
+  // paths set from a previous session's "Remember this path" checkbox.
+  useEffect(() => {
+    invoke<Prefs>("load_prefs")
+      .then((p) => {
+        if (p.connections > 0) setConnections(p.connections);
+        setPerLimitMbps(p.speedLimitMbps);
+        setCategoryPaths(p.categoryPaths ?? {});
+      })
+      .catch(() => {});
+  }, []);
+
+  // A disabled checkbox left checked (from before the path was cleared) would
+  // read as "will remember" when it can't actually fire on submit.
+  useEffect(() => {
+    if (!savePath.trim()) setRememberPath(false);
+  }, [savePath]);
 
   // Fired by the Rust side each time this (reused) window is opened via the
   // "+" button. Always refill the link field from the clipboard when it
@@ -174,6 +197,26 @@ export function AddWindow() {
     [headersText, userAgent, referer, cookieText],
   );
 
+  // Best guess at the file's category before it's actually downloaded: the
+  // user's own filename override wins, then the probed server filename,
+  // then whatever the URL itself implies. Drives the Save-path placeholder
+  // and the "Remember this path for …" checkbox label below.
+  const currentCategory: FileCategory = useMemo(() => {
+    if (filenameEnabled && filenameText.trim()) return categoryOf(filenameText.trim());
+    if (probedFilename) return categoryOf(probedFilename);
+    return categoryOfUrl(url);
+  }, [filenameEnabled, filenameText, probedFilename, url]);
+
+  // Where a blank Save path will actually land: the remembered override for
+  // this category if one is set, otherwise the built-in per-category folder.
+  const savePathPlaceholder = useMemo(() => {
+    const override = categoryPaths[currentCategory]?.trim();
+    if (override) return override;
+    if (!defaultDir) return "default downloads folder";
+    const sep = defaultDir.includes("\\") ? "\\" : "/";
+    return `${defaultDir}${sep}${CATEGORY_FOLDER[currentCategory]}`;
+  }, [categoryPaths, currentCategory, defaultDir]);
+
   async function browseSavePath() {
     try {
       const dir = await open({ directory: true, defaultPath: savePath || defaultDir || undefined });
@@ -198,6 +241,12 @@ export function AddWindow() {
       savePath: savePath.trim(),
     };
     invoke("submit_add", { payload }); // Rust emits to main + hides this window
+    invoke("save_add_defaults", { connections, speedLimitMbps: perLimitMbps }).catch(() => {});
+    if (rememberPath && savePath.trim()) {
+      const path = savePath.trim();
+      invoke("set_category_path", { category: currentCategory, path }).catch(() => {});
+      setCategoryPaths((prev) => ({ ...prev, [currentCategory]: path }));
+    }
     setUrl("");
     setChecksumText("");
     setPendingInsecure(false);
@@ -206,6 +255,7 @@ export function AddWindow() {
     setProbedFilename("");
     setTotal(null);
     setProbeStatus("idle");
+    setRememberPath(false);
   }
 
   function act(later: boolean) {
@@ -344,11 +394,23 @@ export function AddWindow() {
               value={savePath}
               onChange={(e) => setSavePath(e.currentTarget.value)}
               spellCheck={false}
-              placeholder={defaultDir || "default downloads folder"}
+              placeholder={savePathPlaceholder}
             />
             <button type="button" onClick={browseSavePath}>
               Browse…
             </button>
+          </div>
+          <div className="check-row">
+            <input
+              type="checkbox"
+              id="remember-path"
+              checked={rememberPath}
+              disabled={!savePath.trim()}
+              onChange={(e) => setRememberPath(e.currentTarget.checked)}
+            />
+            <label htmlFor="remember-path">
+              Remember this path for {CATEGORY_LABEL[currentCategory]}
+            </label>
           </div>
           <div className="field-row">
             <label htmlFor="conn">Connections</label>

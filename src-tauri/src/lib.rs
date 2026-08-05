@@ -10,7 +10,7 @@ use std::io::SeekFrom;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, UNIX_EPOCH};
 
 use futures_util::future::join_all;
 use futures_util::StreamExt;
@@ -170,6 +170,88 @@ async fn save_settings(
 }
 
 // ---------------------------------------------------------------------------
+// Add-window preferences (remembered connections/speed-cap defaults + a
+// per-category save-path override). Kept in their own file rather than
+// folded into `AppSettings`: the main window's `save_settings` call always
+// rewrites the *entire* settings object from its own state, so any field
+// only the Add window knows about would get reset to its default on the
+// next settings save.
+// ---------------------------------------------------------------------------
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase", default)]
+struct Prefs {
+    /// Add-window defaults, remembered across sessions.
+    connections: usize,
+    speed_limit_mbps: f64,
+    /// category id ("video" | "audio" | …) → absolute folder override.
+    /// Absent or empty = the built-in `<base>/<Category>` folder.
+    category_paths: HashMap<String, String>,
+}
+
+impl Default for Prefs {
+    fn default() -> Self {
+        Self {
+            connections: 8,
+            speed_limit_mbps: 0.0,
+            category_paths: HashMap::new(),
+        }
+    }
+}
+
+struct PrefsState(Mutex<Prefs>);
+
+fn prefs_path() -> Result<PathBuf, String> {
+    Ok(config_dir()?.join("prefs.json"))
+}
+
+fn load_prefs_from_disk() -> Prefs {
+    prefs_path()
+        .ok()
+        .and_then(|p| std::fs::read(p).ok())
+        .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+        .unwrap_or_default()
+}
+
+#[tauri::command]
+fn load_prefs(state: tauri::State<'_, PrefsState>) -> Prefs {
+    state.0.lock().unwrap().clone()
+}
+
+#[tauri::command]
+async fn save_add_defaults(
+    connections: usize,
+    speed_limit_mbps: f64,
+    state: tauri::State<'_, PrefsState>,
+) -> Result<(), String> {
+    let prefs = {
+        let mut guard = state.0.lock().unwrap();
+        guard.connections = connections;
+        guard.speed_limit_mbps = speed_limit_mbps;
+        guard.clone()
+    };
+    write_json_atomic(&prefs_path()?, &prefs).await
+}
+
+#[tauri::command]
+async fn set_category_path(
+    category: String,
+    path: String,
+    state: tauri::State<'_, PrefsState>,
+) -> Result<(), String> {
+    let prefs = {
+        let mut guard = state.0.lock().unwrap();
+        if path.trim().is_empty() {
+            guard.category_paths.remove(&category);
+        } else {
+            guard.category_paths.insert(category, path.trim().to_string());
+        }
+        guard.clone()
+    };
+    write_json_atomic(&prefs_path()?, &prefs).await
+}
+
+// ---------------------------------------------------------------------------
 // Download history (completed / error / canceled rows, persisted across runs)
 // ---------------------------------------------------------------------------
 
@@ -201,6 +283,9 @@ struct HistoryEntry {
     referer: String,
     needs_auth: bool,
     finished_at: i64,
+    /// When this download first entered the list; 0 for rows persisted before
+    /// this field existed (the frontend falls back to `finished_at` then).
+    added_at: i64,
     #[serde(skip_deserializing)]
     missing: bool,
 }
@@ -570,6 +655,7 @@ struct ResumableInfo {
     connections: usize,
     downloaded: u64,
     save_path: Option<String>,
+    added_at: Option<i64>,
 }
 
 fn meta_path_for(path: &Path) -> PathBuf {
@@ -696,6 +782,58 @@ fn downloads_base() -> Result<PathBuf, String> {
     Ok(dirs::download_dir()
         .ok_or("Could not locate the Downloads directory")?
         .join("AzhuraDownloadManager"))
+}
+
+/// File-type category id for `filename`'s extension, or "other". Extension
+/// lists MUST stay in sync with `src/categories.ts` (`EXT_CATEGORY`) — the
+/// frontend uses the same classification for its sidebar filters.
+fn category_id(filename: &str) -> &'static str {
+    let ext = match filename.rsplit_once('.') {
+        Some((_, e)) if !e.is_empty() => e.to_ascii_lowercase(),
+        _ => return "other",
+    };
+    match ext.as_str() {
+        "mp4" | "mkv" | "avi" | "mov" | "wmv" | "flv" | "webm" | "m4v" | "mpg" | "mpeg" | "ts"
+        | "3gp" | "m2ts" | "ogv" => "video",
+        "mp3" | "flac" | "wav" | "aac" | "ogg" | "m4a" | "wma" | "opus" | "mid" | "aiff" => "audio",
+        "exe" | "msi" | "appx" | "msix" | "apk" | "aab" | "jar" | "dll" | "sys" | "deb" | "rpm"
+        | "dmg" | "pkg" | "appimage" | "bat" | "cmd" | "sh" | "ps1" => "program",
+        "pdf" | "doc" | "docx" | "odt" | "rtf" | "txt" | "md" | "xls" | "xlsx" | "ods" | "csv"
+        | "tsv" | "ppt" | "pptx" | "odp" | "epub" | "mobi" | "azw3" | "nfo" | "log" => "docs",
+        "zip" | "rar" | "7z" | "tar" | "gz" | "tgz" | "bz2" | "xz" | "zst" | "cab" | "arj"
+        | "iso" | "img" => "archive",
+        _ => "other",
+    }
+}
+
+/// Folder name under `downloads_base()` for a category id. MUST match
+/// `CATEGORY_FOLDER` in `src/categories.ts`.
+fn category_folder(id: &str) -> &'static str {
+    match id {
+        "video" => "Video",
+        "audio" => "Audio",
+        "program" => "Program",
+        "docs" => "Docs",
+        "archive" => "Archive",
+        _ => "Other",
+    }
+}
+
+/// The six category folder names, for creating them once at launch.
+const CATEGORY_FOLDERS: [&str; 6] = ["Video", "Audio", "Program", "Docs", "Archive", "Other"];
+
+/// Destination directory for `filename` when the user hasn't picked an
+/// explicit save path: the remembered override for its category if one is
+/// set (and absolute), otherwise `<base>/<CategoryFolder>`.
+fn category_dir(filename: &str, prefs: &Prefs) -> Result<PathBuf, String> {
+    let id = category_id(filename);
+    if let Some(custom) = prefs.category_paths.get(id) {
+        let p = PathBuf::from(custom);
+        if p.is_absolute() {
+            return Ok(p);
+        }
+    }
+    Ok(downloads_base()?.join(category_folder(id)))
 }
 
 fn volume_prefix(p: &Path) -> Option<OsString> {
@@ -906,6 +1044,7 @@ async fn move_to_destination(
     temp_path: &Path,
     filename: &str,
     save_path: Option<&str>,
+    prefs: &Prefs,
 ) -> Result<PathBuf, String> {
     let base = match save_path.map(str::trim).filter(|s| !s.is_empty()) {
         Some(s) => {
@@ -915,7 +1054,7 @@ async fn move_to_destination(
             }
             p
         }
-        None => downloads_base()?,
+        None => category_dir(filename, prefs)?,
     };
     tokio::fs::create_dir_all(&base)
         .await
@@ -1013,6 +1152,7 @@ async fn start_download(
     save_path: Option<String>,
     on_event: Channel<DownloadEvent>,
     manager: tauri::State<'_, Manager>,
+    prefs_state: tauri::State<'_, PrefsState>,
 ) -> Result<(), String> {
     let control = Arc::new(Control::new(speed_limit.unwrap_or(0)));
     manager
@@ -1025,6 +1165,9 @@ async fn start_download(
         global: manager.global.clone(),
         per: control.limiter.clone(),
     });
+    // Cloned out of the mutex before the first `.await` below — the guard
+    // itself isn't `Send`, so it can't be held across an await point.
+    let prefs = prefs_state.0.lock().unwrap().clone();
 
     let result = download_inner(
         &url,
@@ -1039,6 +1182,7 @@ async fn start_download(
         limits,
         on_event.clone(),
         control,
+        &prefs,
     )
     .await;
 
@@ -1507,6 +1651,15 @@ fn extension_dir(app: tauri::AppHandle, flavor: Option<String>) -> Result<String
     }
 }
 
+/// Epoch-ms creation time of `path` (falling back to modified time on
+/// filesystems that don't track creation), or `None` if either call fails.
+async fn file_added_at(path: &Path) -> Option<i64> {
+    let metadata = tokio::fs::metadata(path).await.ok()?;
+    let time = metadata.created().or_else(|_| metadata.modified()).ok()?;
+    let ms = time.duration_since(UNIX_EPOCH).ok()?.as_millis();
+    Some(ms as i64)
+}
+
 #[tauri::command]
 async fn list_resumable() -> Result<Vec<ResumableInfo>, String> {
     let dir = temp_download_dir()?;
@@ -1547,6 +1700,7 @@ async fn list_resumable() -> Result<Vec<ResumableInfo>, String> {
         if downloaded >= meta.total {
             continue;
         }
+        let added_at = file_added_at(&meta_path).await;
         out.push(ResumableInfo {
             path: data_path.to_string_lossy().to_string(),
             url: meta.url,
@@ -1555,6 +1709,7 @@ async fn list_resumable() -> Result<Vec<ResumableInfo>, String> {
             connections: meta.connections,
             downloaded,
             save_path: meta.save_path,
+            added_at,
         });
     }
     Ok(out)
@@ -1590,6 +1745,7 @@ async fn download_inner(
     limits: Arc<Limits>,
     on_event: Channel<DownloadEvent>,
     control: Arc<Control>,
+    prefs: &Prefs,
 ) -> Result<(), String> {
     if is_insecure_http(url) && !allow_insecure {
         return Err(
@@ -1863,9 +2019,13 @@ async fn download_inner(
                 }
             }
 
-            let dest =
-                move_to_destination(&setup.path, &setup.filename, setup.save_path.as_deref())
-                    .await?;
+            let dest = move_to_destination(
+                &setup.path,
+                &setup.filename,
+                setup.save_path.as_deref(),
+                prefs,
+            )
+            .await?;
             let _ = tokio::fs::remove_file(&meta_path).await;
 
             let elapsed = started.elapsed().as_secs_f64();
@@ -2304,6 +2464,7 @@ pub fn run() {
         .manage(Manager::default())
         .manage(PendingDeepLink::default())
         .manage(SettingsState(Mutex::new(load_settings_from_disk())))
+        .manage(PrefsState(Mutex::new(load_prefs_from_disk())))
         .manage(Quitting(AtomicBool::new(false)))
         .manage(TrayMenuState::default())
         .setup(|app| {
@@ -2400,6 +2561,16 @@ pub fn run() {
                 handle_deep_link_cold_start(&app.handle().clone(), &link);
             }
 
+            // Pre-create the category folders so they show up (even empty) as
+            // soon as the app is installed. Best-effort: `move_to_destination`
+            // creates whichever one it actually needs anyway, so a failure
+            // here just means the folder appears a bit later.
+            if let Ok(base) = downloads_base() {
+                for name in CATEGORY_FOLDERS {
+                    let _ = std::fs::create_dir_all(base.join(name));
+                }
+            }
+
             Ok(())
         })
         .on_window_event(|window, event| match window.label() {
@@ -2476,6 +2647,9 @@ pub fn run() {
             update_tray_downloads,
             load_settings,
             save_settings,
+            load_prefs,
+            save_add_defaults,
+            set_category_path,
             load_history,
             save_history
         ])

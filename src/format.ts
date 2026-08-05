@@ -63,6 +63,17 @@ export function formatSpeed(bps: number): string {
   return `${formatBytes(bps)}/s`;
 }
 
+export function formatDateAdded(ms: number): string {
+  if (!ms) return "—";
+  return new Date(ms).toLocaleString(undefined, {
+    year: "2-digit",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 export function formatEta(seconds: number): string {
   if (!isFinite(seconds) || seconds <= 0) return "—";
   const s = Math.round(seconds);
@@ -88,6 +99,18 @@ export function truncate(s: string, max: number): string {
   if (s.length <= max) return s;
   const half = Math.floor((max - 1) / 2);
   return `${s.slice(0, half)}…${s.slice(s.length - (max - 1 - half))}`;
+}
+
+/** A completed download whose file is still on disk has nothing to resume.
+ *  `missing` rows stay resumable on purpose — that's the redownload path. */
+export function isResumable(item: DownloadItem): boolean {
+  if (item.state === "completed" && !item.missing) return false;
+  return (
+    !!item.missing ||
+    !!item.fromHistory ||
+    !!item.awaitingCapture ||
+    ["paused", "error", "canceled"].includes(item.state)
+  );
 }
 
 export function statusClass(item: DownloadItem): string {

@@ -19,6 +19,7 @@
     "dialog:allow-open",
     "notification:default",
     "opener:allow-reveal-item-in-dir",
+    "opener:allow-open-path",
     {
       "identifier": "opener:allow-open-url",
       "allow": [{ "url": "chrome://*", "app": "chrome.exe" }]

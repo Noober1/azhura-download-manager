@@ -9,7 +9,8 @@ import {
 import { invoke, Channel } from "@tauri-apps/api/core";
 import { emitTo, listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
+import { getVersion } from "@tauri-apps/api/app";
+import { openPath, openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import type {
   AddPayload,
@@ -34,9 +35,12 @@ import {
   truncate,
   statusClass,
   statusLabel,
+  isResumable,
+  formatDateAdded,
 } from "./format";
 import { Icon, WindowControls, useNativeShell, isEditable } from "./ui";
 import { FileIcon } from "./fileIcons";
+import { FILE_CATEGORIES, CATEGORY_LABEL, categoryOf } from "./categories";
 import { broadcastTheme, normalizeTheme, useTheme } from "./theme";
 import { initNotifications, notify, setNotificationsEnabled } from "./notify";
 import "./App.css";
@@ -45,7 +49,7 @@ const TERMINAL_STATES = ["completed", "error", "canceled"] as const;
 /** Sent by the browser extension; re-captured on demand rather than stored. */
 const CREDENTIAL_HEADERS = ["cookie", "authorization", "proxy-authorization"];
 
-type SortKey = "name" | "status" | "size" | "downloaded" | "pct" | "speed";
+type SortKey = "name" | "added" | "status" | "size" | "downloaded" | "pct" | "speed";
 /** Sort order for the Status column: what needs attention floats to the top. */
 const STATUS_RANK: Record<DlState, number> = {
   downloading: 0,
@@ -94,6 +98,7 @@ function toHistoryEntry(d: DownloadItem): HistoryEntry {
     // request — it has to wait for the extension to capture a fresh one.
     needsAuth: d.needsAuth || headers.length !== d.headers.length,
     finishedAt: d.finishedAt ?? 0,
+    addedAt: d.addedAt,
   };
 }
 
@@ -124,6 +129,7 @@ function fromHistoryEntry(e: HistoryEntry): DownloadItem {
     referer: e.referer,
     needsAuth: e.needsAuth,
     finishedAt: e.finishedAt,
+    addedAt: e.addedAt || e.finishedAt || Date.now(),
   };
 }
 
@@ -134,10 +140,25 @@ function App() {
   const [theme, setTheme] = useState<Theme>("system");
   const [notifications, setNotifications] = useState(true);
   const [downloads, setDownloads] = useState<DownloadItem[]>([]);
+  const [version, setVersion] = useState("");
 
   const [category, setCategory] = useState<Category>("all");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const anchorRef = useRef<string | null>(null); // shift-range anchor
+  const tableWrapRef = useRef<HTMLElement>(null);
+  // Rubber-band drag-select over the table: `dragStart` arms the window
+  // mouse listeners below, `marquee` is the visible rectangle. `didDragRef`
+  // distinguishes an actual drag from a plain click (mouseup always fires
+  // right before click, so the click handlers check it to skip re-selecting).
+  const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
+  const [marquee, setMarquee] = useState<{
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  } | null>(null);
+  const dragBaseSelRef = useRef<Set<string>>(new Set());
+  const didDragRef = useRef(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showExtensions, setShowExtensions] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
@@ -147,8 +168,12 @@ function App() {
   // to each one as long as its id is in this set.
   const [detailIds, setDetailIds] = useState<Set<string>>(new Set());
   const lastDetailSentRef = useRef<Map<string, string>>(new Map());
-  // Column sort for the table; null = default order (newest row first).
-  const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" } | null>(null);
+  // Column sort for the table; defaults to Date Added (newest first). null
+  // (reachable by cycling a column's sort back off) falls back to insertion order.
+  const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" } | null>({
+    key: "added",
+    dir: "desc",
+  });
   // Custom… speed-cap dialog, opened from the context menu's submenu.
   const [speedCapDialog, setSpeedCapDialog] = useState<{ items: DownloadItem[]; mbps: number } | null>(
     null,
@@ -219,6 +244,12 @@ function App() {
     initNotifications();
   }, []);
 
+  useEffect(() => {
+    getVersion()
+      .then(setVersion)
+      .catch(() => {});
+  }, []);
+
   // Restore a previous session: unfinished downloads from their resume
   // sidecars, plus finished ones from the persisted history. Loaded together
   // so the merge happens in a single state update — a row whose sidecar is
@@ -250,6 +281,7 @@ function App() {
           pieceSize: 0,
           conns: [],
           state: "paused",
+          addedAt: it.addedAt ?? Date.now(),
         }));
 
         const livePaths = new Set(resumable.map((r) => r.path));
@@ -474,6 +506,7 @@ function App() {
       pieceSize: 0,
       conns: [],
       state: p.later ? "paused" : "queued",
+      addedAt: Date.now(),
     };
     setDownloads((ds) => [item, ...ds]);
     anchorRef.current = id;
@@ -858,7 +891,24 @@ function App() {
     ["completed", "error", "canceled"].includes(d.state),
   );
   const shown =
-    category === "active" ? activeItems : category === "finished" ? finishedItems : downloads;
+    category === "active"
+      ? activeItems
+      : category === "finished"
+        ? finishedItems
+        : category === "all"
+          ? downloads
+          : downloads.filter((d) => categoryOf(d.filename) === category);
+
+  // Counts for the sidebar's "File type" section, tallied once per downloads
+  // change rather than filtering the whole list six times.
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const d of downloads) {
+      const c = categoryOf(d.filename);
+      counts[c] = (counts[c] ?? 0) + 1;
+    }
+    return counts;
+  }, [downloads]);
 
   // `shown` ordered by the active column sort, or left as-is (newest first)
   // when `sort` is null. `Array.prototype.sort` is stable, so ties keep
@@ -871,6 +921,8 @@ function App() {
       switch (key) {
         case "name":
           return d.filename;
+        case "added":
+          return d.addedAt;
         case "status":
           return STATUS_RANK[d.state];
         case "size":
@@ -911,16 +963,7 @@ function App() {
   const queuedCount = downloads.filter((d) => d.state === "queued").length;
 
   const selectedItems = downloads.filter((d) => selectedIds.has(d.id));
-  // `missing` and `fromHistory` have to be in the union explicitly: a
-  // completed-but-missing row matches none of the three states below, and
-  // without it the redownload path would be unreachable.
-  const resumableSel = selectedItems.filter(
-    (d) =>
-      d.missing ||
-      d.fromHistory ||
-      d.awaitingCapture ||
-      ["paused", "error", "canceled"].includes(d.state),
-  );
+  const resumableSel = selectedItems.filter(isResumable);
   const pausableSel = selectedItems.filter((d) => d.state === "downloading");
   const cancelableSel = pausableSel;
   const deletableSel = selectedItems.filter(
@@ -934,6 +977,10 @@ function App() {
     !singleSelected.missing;
 
   function selectRow(id: string, e: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }) {
+    if (didDragRef.current) {
+      didDragRef.current = false;
+      return;
+    }
     if (e.shiftKey && anchorRef.current) {
       const ids = rows.map((d) => d.id);
       const a = ids.indexOf(anchorRef.current);
@@ -961,6 +1008,85 @@ function App() {
   function scrollRowIntoView(id: string) {
     document.querySelector(`.drow[data-id="${id}"]`)?.scrollIntoView({ block: "nearest" });
   }
+
+  // Arms a rubber-band drag: only for the primary button, and not when the
+  // mousedown started on the header (sorting owns that click). Ctrl/Shift
+  // held at drag start adds to the existing selection instead of replacing it.
+  function handleTableMouseDown(e: ReactMouseEvent) {
+    if (e.button !== 0) return;
+    const t = e.target as HTMLElement;
+    if (t.closest("thead")) return;
+    didDragRef.current = false;
+    dragBaseSelRef.current =
+      e.ctrlKey || e.metaKey || e.shiftKey ? new Set(selectedIds) : new Set();
+    setDragStart({ x: e.clientX, y: e.clientY });
+  }
+
+  // Tracks an armed drag across the window (the cursor can leave the table
+  // mid-drag) until mouseup. A plain click never moves past the 4px
+  // threshold, so it never marks `didDragRef` and never touches selection —
+  // `selectRow` and the table's onClick handle that case normally.
+  useEffect(() => {
+    if (!dragStart) return;
+    const startX = dragStart.x;
+    const startY = dragStart.y;
+
+    function onMouseMove(e: MouseEvent) {
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      if (!didDragRef.current && Math.hypot(dx, dy) < 4) return;
+      didDragRef.current = true;
+
+      const wrap = tableWrapRef.current;
+      const wrapRect = wrap?.getBoundingClientRect();
+
+      const boxLeft = Math.min(startX, e.clientX);
+      const boxTop = Math.min(startY, e.clientY);
+      const boxRight = Math.max(startX, e.clientX);
+      const boxBottom = Math.max(startY, e.clientY);
+
+      if (wrapRect) {
+        const clampedLeft = Math.max(boxLeft, wrapRect.left);
+        const clampedTop = Math.max(boxTop, wrapRect.top);
+        const clampedRight = Math.min(boxRight, wrapRect.right);
+        const clampedBottom = Math.min(boxBottom, wrapRect.bottom);
+        setMarquee({
+          left: clampedLeft,
+          top: clampedTop,
+          width: Math.max(0, clampedRight - clampedLeft),
+          height: Math.max(0, clampedBottom - clampedTop),
+        });
+      }
+
+      const hits = new Set(dragBaseSelRef.current);
+      document.querySelectorAll<HTMLElement>(".drow").forEach((el) => {
+        const r = el.getBoundingClientRect();
+        if (r.bottom > boxTop && r.top < boxBottom) {
+          const id = el.dataset.id;
+          if (id) hits.add(id);
+        }
+      });
+      setSelectedIds(hits);
+
+      if (wrap && wrapRect) {
+        const edge = 20;
+        if (e.clientY < wrapRect.top + edge) wrap.scrollTop -= 16;
+        else if (e.clientY > wrapRect.bottom - edge) wrap.scrollTop += 16;
+      }
+    }
+
+    function onMouseUp() {
+      setDragStart(null);
+      setMarquee(null);
+    }
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+  }, [dragStart]);
 
   // Keyboard shortcuts for the selection: Ctrl/Cmd+A selects everything shown,
   // Escape clears, Delete opens the confirmation dialog for the current
@@ -1129,11 +1255,28 @@ function App() {
           >
             Finished <span className="cat-n">{finishedItems.length}</span>
           </button>
+
+          <div className="side-title">File type</div>
+          {FILE_CATEGORIES.map((c) => (
+            <button
+              key={c}
+              className={`cat ${category === c ? "active" : ""}`}
+              onClick={() => setCategory(c)}
+            >
+              {CATEGORY_LABEL[c]} <span className="cat-n">{categoryCounts[c] ?? 0}</span>
+            </button>
+          ))}
         </aside>
 
         <main
           className="table-wrap"
+          ref={tableWrapRef}
+          onMouseDown={handleTableMouseDown}
           onClick={(e) => {
+            if (didDragRef.current) {
+              didDragRef.current = false;
+              return;
+            }
             const t = e.target as HTMLElement;
             if (!t.closest(".drow")) setSelectedIds(new Set());
           }}
@@ -1142,6 +1285,13 @@ function App() {
             <thead>
               <tr>
                 <SortTh className="col-name" label="Name" sortKey="name" sort={sort} onSort={toggleSort} />
+                <SortTh
+                  className="col-added"
+                  label="Date Added"
+                  sortKey="added"
+                  sort={sort}
+                  onSort={toggleSort}
+                />
                 <SortTh
                   className="col-status"
                   label="Status"
@@ -1176,7 +1326,7 @@ function App() {
             <tbody>
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="empty-cell">
+                  <td colSpan={7} className="empty-cell">
                     No downloads here — click <strong>+</strong> to add one.
                   </td>
                 </tr>
@@ -1199,6 +1349,13 @@ function App() {
             </tbody>
           </table>
         </main>
+      </div>
+
+      {marquee && <div className="marquee" style={marquee} />}
+
+      {/* ---- Status bar ---- */}
+      <div className="statusbar">
+        <span>Azhura Download Manager{version ? ` v${version}` : ""}</span>
       </div>
 
       {/* ---- Settings dialog ---- */}
@@ -1337,6 +1494,7 @@ function App() {
           pausableCount={pausableSel.length}
           cancelableCount={cancelableSel.length}
           canReveal={canReveal}
+          canOpen={canReveal}
           canCopy={selectedItems.length > 0}
           canDelete={deletableSel.length > 0}
           canShowDetail={!!singleSelected}
@@ -1346,6 +1504,7 @@ function App() {
           onResume={() => resumeMany(resumableSel)}
           onPause={() => pauseMany(pausableSel)}
           onCancel={() => cancelMany(cancelableSel)}
+          onOpen={() => singleSelected && openPath(singleSelected.path).catch(() => {})}
           onReveal={() =>
             singleSelected && revealItemInDir(singleSelected.path).catch(() => {})
           }
@@ -1513,6 +1672,7 @@ function Row({
           <span className="name-text">{item.filename}</span>
         </span>
       </td>
+      <td className="col-added">{formatDateAdded(item.addedAt)}</td>
       <td className="col-status">
         {/* One state class only — `.mode-tag.missing` and `.mode-tag.completed`
             have equal specificity, so both applying would be order-dependent. */}
@@ -1520,21 +1680,7 @@ function Row({
       </td>
       <td className="col-num">{item.total ? formatBytes(item.total) : "—"}</td>
       <td className="col-num">{formatBytes(item.downloaded)}</td>
-      <td className="col-pct">
-        <div className="cell-pct">
-          <div className="mini-track">
-            <div
-              className={`mini-bar ${
-                item.state === "completed" && !item.missing ? "done" : ""
-              } ${item.state === "error" || item.state === "canceled" ? "error" : ""} ${
-                pct === null && item.state === "downloading" ? "indeterminate" : ""
-              }`}
-              style={pct !== null ? { width: `${pct}%` } : undefined}
-            />
-          </div>
-          <span className="pct-num">{pct !== null ? `${pct.toFixed(0)}%` : "—"}</span>
-        </div>
-      </td>
+      <td className="col-pct">{pct !== null ? `${pct.toFixed(0)}%` : "—"}</td>
       <td className="col-num col-speed">
         {item.state === "downloading" ? formatSpeed(item.speed) : "—"}
       </td>
@@ -1552,6 +1698,7 @@ function ContextMenu({
   pausableCount,
   cancelableCount,
   canReveal,
+  canOpen,
   canCopy,
   canDelete,
   canShowDetail,
@@ -1561,6 +1708,7 @@ function ContextMenu({
   onResume,
   onPause,
   onCancel,
+  onOpen,
   onReveal,
   onCopyLink,
   onShowDetail,
@@ -1576,6 +1724,7 @@ function ContextMenu({
   pausableCount: number;
   cancelableCount: number;
   canReveal: boolean;
+  canOpen: boolean;
   canCopy: boolean;
   canDelete: boolean;
   canShowDetail: boolean;
@@ -1585,6 +1734,7 @@ function ContextMenu({
   onResume: () => void;
   onPause: () => void;
   onCancel: () => void;
+  onOpen: () => void;
   onReveal: () => void;
   onCopyLink: () => void;
   onShowDetail: () => void;
@@ -1669,6 +1819,9 @@ function ContextMenu({
         onClick={() => run(onShowDetail)}
       >
         Show detail
+      </button>
+      <button type="button" className="ctx-item" disabled={!canOpen} onClick={() => run(onOpen)}>
+        Open
       </button>
       <button type="button" className="ctx-item" disabled={!canReveal} onClick={() => run(onReveal)}>
         Open containing folder

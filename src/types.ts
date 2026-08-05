@@ -1,3 +1,5 @@
+import type { FileCategory } from "./categories";
+
 export type AddPayload = {
   url: string;
   allowInsecure: boolean;
@@ -42,6 +44,7 @@ export type ResumableInfo = {
   connections: number;
   downloaded: number;
   savePath: string | null;
+  addedAt: number | null;
 };
 
 export type DlState =
@@ -89,6 +92,8 @@ export type DownloadItem = {
   finishedAt?: number;
   /** Timestamp the current run started; used for the detail popup's elapsed-time readout. */
   startedAt?: number;
+  /** When this row first entered the list — drives the "Date Added" column and default sort. */
+  addedAt: number;
 };
 
 /** One row in the tray's dropdown menu — Rust just renders the label verbatim. */
@@ -97,7 +102,7 @@ export type TrayDownload = { id: string; label: string };
 /** Emitted by the detail popup when the user clicks an action button there. */
 export type DetailAction = { id: string; action: "pause" | "resume" | "cancel" };
 
-export type Category = "all" | "active" | "finished";
+export type Category = "all" | "active" | "finished" | FileCategory;
 
 export type Theme = "system" | "dark" | "light";
 
@@ -107,6 +112,14 @@ export type AppSettings = {
   minimizeToTray: boolean;
   theme: Theme;
   notifications: boolean;
+};
+
+/** Add-window defaults + per-category save-path overrides, persisted to
+ *  `prefs.json` separately from `AppSettings` (see lib.rs for why). */
+export type Prefs = {
+  connections: number;
+  speedLimitMbps: number;
+  categoryPaths: Record<string, string>;
 };
 
 /** One persisted finished download. `state` is always the real terminal state —
@@ -131,6 +144,7 @@ export type HistoryEntry = {
   referer: string;
   needsAuth: boolean;
   finishedAt: number;
+  addedAt: number;
   missing?: boolean;
 };
 
