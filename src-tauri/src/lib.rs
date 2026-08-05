@@ -388,7 +388,7 @@ async fn load_history() -> Result<HistoryLoad, String> {
 
 #[tauri::command]
 async fn save_history(mut entries: Vec<HistoryEntry>) -> Result<(), String> {
-    entries.sort_by(|a, b| b.finished_at.cmp(&a.finished_at));
+    entries.sort_by_key(|e| std::cmp::Reverse(e.finished_at));
     entries.truncate(HISTORY_MAX);
 
     let entries = entries
@@ -767,19 +767,28 @@ fn sanitize(name: &str) -> String {
     }
 }
 
+/// Pull a sanitized filename out of a raw `Content-Disposition` header value,
+/// or `None` if it has no (non-empty) `filename=` parameter.
+fn filename_from_content_disposition(header: &str) -> Option<String> {
+    let idx = header.to_ascii_lowercase().find("filename=")?;
+    let raw = header[idx + "filename=".len()..]
+        .split(';')
+        .next()
+        .unwrap_or("")
+        .trim()
+        .trim_matches('"');
+    if raw.is_empty() {
+        None
+    } else {
+        Some(sanitize(raw))
+    }
+}
+
 fn filename_from(resp: &reqwest::Response, url: &str) -> String {
     if let Some(cd) = resp.headers().get(reqwest::header::CONTENT_DISPOSITION) {
         if let Ok(s) = cd.to_str() {
-            if let Some(idx) = s.to_ascii_lowercase().find("filename=") {
-                let raw = s[idx + "filename=".len()..]
-                    .split(';')
-                    .next()
-                    .unwrap_or("")
-                    .trim()
-                    .trim_matches('"');
-                if !raw.is_empty() {
-                    return sanitize(raw);
-                }
+            if let Some(name) = filename_from_content_disposition(s) {
+                return name;
             }
         }
     }
@@ -1141,7 +1150,7 @@ impl PiecePlan {
 fn plan_pieces(total: u64, conns: usize) -> PiecePlan {
     let target = (total / (conns as u64 * 4).max(1)).max(1);
     let piece_size = target.clamp(PIECE_MIN, PIECE_MAX);
-    let num_pieces = ((total + piece_size - 1) / piece_size).max(1) as usize;
+    let num_pieces = total.div_ceil(piece_size).max(1) as usize;
     PiecePlan {
         piece_size,
         num_pieces,
@@ -1710,7 +1719,7 @@ fn extension_dir(app: tauri::AppHandle, flavor: Option<String>) -> Result<String
     {
         let _ = &app;
         let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join(folder);
-        return Ok(dir.to_string_lossy().to_string());
+        Ok(dir.to_string_lossy().to_string())
     }
     #[cfg(not(debug_assertions))]
     {
@@ -1764,7 +1773,7 @@ async fn list_resumable() -> Result<Vec<ResumableInfo>, String> {
         }
         let plan = PiecePlan {
             piece_size: meta.piece_size,
-            num_pieces: ((meta.total + meta.piece_size - 1) / meta.piece_size).max(1) as usize,
+            num_pieces: meta.total.div_ceil(meta.piece_size).max(1) as usize,
             total: meta.total,
         };
         let downloaded: u64 = meta.done_pieces.iter().map(|&k| plan.size(k)).sum::<u64>()
@@ -2157,7 +2166,7 @@ async fn download_inner(
 fn plan_pieces_from_meta(meta: &Meta) -> PiecePlan {
     PiecePlan {
         piece_size: meta.piece_size,
-        num_pieces: ((meta.total + meta.piece_size - 1) / meta.piece_size).max(1) as usize,
+        num_pieces: meta.total.div_ceil(meta.piece_size).max(1) as usize,
         total: meta.total,
     }
 }
@@ -2289,6 +2298,7 @@ async fn download_single(
 // Parallel piece-queue download
 // ---------------------------------------------------------------------------
 
+#[allow(clippy::too_many_arguments)]
 async fn download_parallel(
     client: reqwest::Client,
     url: String,
@@ -2345,6 +2355,7 @@ async fn download_parallel(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn worker_loop(
     idx: usize,
     client: reqwest::Client,
@@ -2394,7 +2405,6 @@ async fn worker_loop(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 #[allow(clippy::too_many_arguments)]
 async fn download_piece(
     client: &reqwest::Client,
@@ -2728,4 +2738,463 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // --- sanitize -----------------------------------------------------------
+
+    #[test]
+    fn sanitize_strips_illegal_characters() {
+        assert_eq!(sanitize("a/b\\c:d*e?f\"g<h>i|j"), "abcdefghij");
+    }
+
+    #[test]
+    fn sanitize_trims_and_falls_back() {
+        assert_eq!(sanitize("  ...  "), "download.bin");
+        assert_eq!(sanitize(""), "download.bin");
+        assert_eq!(sanitize("file.txt..."), "file.txt");
+    }
+
+    // --- category_id / category_folder ---------------------------------------
+
+    #[test]
+    fn category_id_covers_all_buckets() {
+        assert_eq!(category_id("movie.mp4"), "video");
+        assert_eq!(category_id("song.mp3"), "audio");
+        assert_eq!(category_id("setup.exe"), "program");
+        assert_eq!(category_id("report.pdf"), "docs");
+        assert_eq!(category_id("bundle.zip"), "archive");
+        assert_eq!(category_id("unknown.xyz"), "other");
+        assert_eq!(category_id("noext"), "other");
+        assert_eq!(category_id("archive.tar.gz"), "archive");
+    }
+
+    #[test]
+    fn category_folder_matches_every_id() {
+        assert_eq!(category_folder("video"), "Video");
+        assert_eq!(category_folder("audio"), "Audio");
+        assert_eq!(category_folder("program"), "Program");
+        assert_eq!(category_folder("docs"), "Docs");
+        assert_eq!(category_folder("archive"), "Archive");
+        assert_eq!(category_folder("other"), "Other");
+        assert_eq!(category_folder("bogus"), "Other");
+    }
+
+    // --- Rust↔TS category contract guard --------------------------------------
+    //
+    // `category_id`/`category_folder` here and `EXT_CATEGORY`/`CATEGORY_FOLDER`
+    // in `src/categories.ts` are hand-duplicated on purpose (see the "MUST stay
+    // in sync" comments at both definitions) — the frontend needs the same
+    // classification client-side for its sidebar filters, without a round trip.
+    // These tests parse both sources as text and fail loudly on any drift,
+    // instead of silently sending a file to the wrong category folder.
+    //
+    // NOTE for Phase 1 (lib.rs → modules): once `category_id` moves out of
+    // lib.rs, update the `include_str!("lib.rs")` calls below to point at its
+    // new file.
+
+    /// Extracts `(extensions, category)` pairs from `category_id`'s `match
+    /// ext.as_str() { "a" | "b" => "cat", ... }` block, by scanning for each
+    /// `=>` and taking the quoted literals on either side of it.
+    fn parse_rust_category_arms(source: &str) -> Vec<(Vec<String>, String)> {
+        let marker = "match ext.as_str() {";
+        let start = source
+            .find(marker)
+            .expect("category_id's match arm not found in lib.rs — did its shape change?");
+        let after_match = &source[start + marker.len()..];
+        let end = after_match
+            .find("_ => \"other\",")
+            .expect("category_id's fallback arm not found");
+        let body = &after_match[..end];
+
+        let mut arms = Vec::new();
+        let mut rest = body;
+        while let Some(arrow) = rest.find("=>") {
+            let lhs = &rest[..arrow];
+            let after_arrow = &rest[arrow + 2..];
+            let comma = after_arrow
+                .find(',')
+                .expect("category_id arm is missing its trailing comma");
+            let rhs = after_arrow[..comma].trim().trim_matches('"').to_string();
+            let exts: Vec<String> = lhs
+                .split('|')
+                .map(|s| s.trim().trim_matches('"').to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
+            if !exts.is_empty() {
+                arms.push((exts, rhs));
+            }
+            rest = &after_arrow[comma + 1..];
+        }
+        arms
+    }
+
+    /// Extracts `(category, extensions)` pairs from `categories.ts`'s
+    /// `register("cat", ["a", "b", ...]);` calls, one per source line.
+    fn parse_ts_categories(source: &str) -> Vec<(String, Vec<String>)> {
+        let mut out = Vec::new();
+        for line in source.lines() {
+            let line = line.trim();
+            let Some(rest) = line.strip_prefix("register(\"") else {
+                continue;
+            };
+            let Some(quote_end) = rest.find('"') else {
+                continue;
+            };
+            let category = rest[..quote_end].to_string();
+            let Some(bracket_start) = rest.find('[') else {
+                continue;
+            };
+            let Some(bracket_end) = rest.find(']') else {
+                continue;
+            };
+            let exts: Vec<String> = rest[bracket_start + 1..bracket_end]
+                .split(',')
+                .map(|s| s.trim().trim_matches('"').to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
+            out.push((category, exts));
+        }
+        out
+    }
+
+    /// Extracts a `["a", "b", ...]` string array assigned to `const_name`
+    /// (used for `FILE_CATEGORIES`).
+    fn parse_ts_string_array(source: &str, const_name: &str) -> Vec<String> {
+        let start = source
+            .find(const_name)
+            .unwrap_or_else(|| panic!("`{const_name}` not found in categories.ts"));
+        // Anchor on the `=` sign, not just the next `[` — a type annotation
+        // like `FileCategory[]` between the name and the real array literal
+        // has its own (empty) bracket pair that would otherwise match first.
+        let after_eq = &source[start..]
+            .split_once('=')
+            .map(|(_, rest)| rest)
+            .unwrap_or_else(|| panic!("no `=` found after `{const_name}` in categories.ts"));
+        let bracket_start = after_eq.find('[').unwrap();
+        let bracket_end = after_eq.find(']').unwrap();
+        after_eq[bracket_start + 1..bracket_end]
+            .split(',')
+            .map(|s| s.trim().trim_matches('"').to_string())
+            .filter(|s| !s.is_empty())
+            .collect()
+    }
+
+    /// Extracts `key: "value"` pairs from a `Record<...>` object literal
+    /// assigned to `const_name` (used for `CATEGORY_FOLDER`).
+    fn parse_ts_record_block(source: &str, const_name: &str) -> Vec<(String, String)> {
+        let start = source
+            .find(const_name)
+            .unwrap_or_else(|| panic!("`{const_name}` not found in categories.ts"));
+        let after = &source[start..];
+        let brace_start = after.find('{').unwrap();
+        let brace_end = after[brace_start..].find('}').unwrap() + brace_start;
+        let body = &after[brace_start + 1..brace_end];
+        body.lines()
+            .filter_map(|line| {
+                let line = line.trim().trim_end_matches(',');
+                let (k, v) = line.split_once(':')?;
+                let k = k.trim().to_string();
+                let v = v.trim().trim_matches('"').to_string();
+                if k.is_empty() || v.is_empty() {
+                    None
+                } else {
+                    Some((k, v))
+                }
+            })
+            .collect()
+    }
+
+    fn read_categories_ts() -> String {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../src/categories.ts");
+        std::fs::read_to_string(&path)
+            .unwrap_or_else(|e| panic!("could not read {}: {e}", path.display()))
+    }
+
+    #[test]
+    fn category_id_matches_categories_ts() {
+        let rust_arms = parse_rust_category_arms(include_str!("lib.rs"));
+        let ts_regs = parse_ts_categories(&read_categories_ts());
+
+        assert!(
+            !rust_arms.is_empty(),
+            "failed to parse any extensions out of category_id's match arms"
+        );
+        assert!(
+            !ts_regs.is_empty(),
+            "failed to parse any register(...) calls out of categories.ts"
+        );
+
+        let mut rust_map: HashMap<String, String> = HashMap::new();
+        for (exts, category) in &rust_arms {
+            for ext in exts {
+                rust_map.insert(ext.clone(), category.clone());
+            }
+        }
+        let mut ts_map: HashMap<String, String> = HashMap::new();
+        for (category, exts) in &ts_regs {
+            for ext in exts {
+                ts_map.insert(ext.clone(), category.clone());
+            }
+        }
+
+        for (ext, category) in &ts_map {
+            assert_eq!(
+                rust_map.get(ext).map(String::as_str),
+                Some(category.as_str()),
+                "extension `.{ext}` is registered as `{category}` in src/categories.ts but \
+                 category_id() in lib.rs classifies it differently (or not at all)"
+            );
+        }
+        for (ext, category) in &rust_map {
+            assert_eq!(
+                ts_map.get(ext).map(String::as_str),
+                Some(category.as_str()),
+                "extension `.{ext}` is classified as `{category}` by category_id() in lib.rs \
+                 but is not registered in src/categories.ts"
+            );
+        }
+    }
+
+    #[test]
+    fn category_folder_matches_categories_ts() {
+        let ts_source = read_categories_ts();
+        let ids = parse_ts_string_array(&ts_source, "FILE_CATEGORIES");
+        let folder_map: HashMap<String, String> =
+            parse_ts_record_block(&ts_source, "CATEGORY_FOLDER").into_iter().collect();
+
+        assert!(!ids.is_empty(), "failed to parse FILE_CATEGORIES out of categories.ts");
+        assert_eq!(
+            ids.len(),
+            folder_map.len(),
+            "FILE_CATEGORIES and CATEGORY_FOLDER in categories.ts list a different number of ids"
+        );
+
+        for id in &ids {
+            let expected = folder_map
+                .get(id)
+                .unwrap_or_else(|| panic!("CATEGORY_FOLDER has no entry for \"{id}\""));
+            assert_eq!(
+                category_folder(id),
+                expected.as_str(),
+                "category_folder(\"{id}\") in lib.rs disagrees with CATEGORY_FOLDER[\"{id}\"] \
+                 in src/categories.ts"
+            );
+        }
+
+        // Anything category_folder() doesn't explicitly recognize falls back to
+        // "Other" — check that fallback still agrees with categories.ts's own
+        // "other" entry.
+        assert_eq!(
+            category_folder("not-a-real-category-id"),
+            folder_map["other"],
+            "category_folder()'s fallback disagrees with CATEGORY_FOLDER[\"other\"] in \
+             src/categories.ts"
+        );
+    }
+
+    // --- choose_connections ---------------------------------------------------
+
+    #[test]
+    fn choose_connections_single_stream_without_ranges() {
+        assert_eq!(choose_connections(8, false, Some(100 * MIN_SEGMENT)), 1);
+    }
+
+    #[test]
+    fn choose_connections_unknown_total() {
+        assert_eq!(choose_connections(8, true, None), 1);
+    }
+
+    #[test]
+    fn choose_connections_small_file_stays_single() {
+        assert_eq!(choose_connections(8, true, Some(2 * MIN_SEGMENT - 1)), 1);
+    }
+
+    #[test]
+    fn choose_connections_clamps_to_max() {
+        assert_eq!(
+            choose_connections(64, true, Some(1000 * MIN_SEGMENT)),
+            MAX_CONNECTIONS
+        );
+    }
+
+    #[test]
+    fn choose_connections_limited_by_file_size() {
+        assert_eq!(choose_connections(8, true, Some(3 * MIN_SEGMENT)), 3);
+    }
+
+    // --- detect_algo ------------------------------------------------------
+
+    #[test]
+    fn detect_algo_picks_by_hex_length() {
+        assert!(matches!(detect_algo(&"a".repeat(32)), Some(Algo::Md5)));
+        assert!(matches!(detect_algo(&"a".repeat(40)), Some(Algo::Sha1)));
+        assert!(matches!(detect_algo(&"a".repeat(64)), Some(Algo::Sha256)));
+        assert!(matches!(detect_algo(&"a".repeat(128)), Some(Algo::Sha512)));
+        assert!(detect_algo(&"a".repeat(10)).is_none());
+    }
+
+    // --- plan_pieces / PiecePlan ------------------------------------------
+
+    #[test]
+    fn plan_pieces_last_piece_is_shorter_and_sums_to_total() {
+        let total = 10 * 1024 * 1024 + 123; // not an even multiple of any piece size
+        let plan = plan_pieces(total, 4);
+        let sum: u64 = (0..plan.num_pieces).map(|k| plan.size(k)).sum();
+        assert_eq!(sum, total);
+        for k in 0..plan.num_pieces - 1 {
+            assert_eq!(plan.size(k), plan.piece_size);
+        }
+        assert!(plan.size(plan.num_pieces - 1) <= plan.piece_size);
+    }
+
+    #[test]
+    fn plan_pieces_clamps_piece_size_to_bounds() {
+        let tiny = plan_pieces(100, 4);
+        assert_eq!(tiny.piece_size, PIECE_MIN);
+
+        let huge = plan_pieces(4 * 1024 * 1024 * 1024, 1);
+        assert_eq!(huge.piece_size, PIECE_MAX);
+    }
+
+    // --- build_headers ------------------------------------------------------
+
+    #[test]
+    fn build_headers_accepts_valid_pairs() {
+        let raw = vec![("X-Test".to_string(), "value".to_string())];
+        let built = build_headers(&raw).unwrap();
+        assert_eq!(built.len(), 1);
+    }
+
+    #[test]
+    fn build_headers_rejects_illegal_name() {
+        let raw = vec![("Invalid Header".to_string(), "value".to_string())];
+        assert!(build_headers(&raw).is_err());
+    }
+
+    // --- is_insecure_http -----------------------------------------------
+
+    #[test]
+    fn is_insecure_http_matches_http_scheme_only() {
+        assert!(is_insecure_http("http://example.com"));
+        assert!(is_insecure_http("HTTP://example.com"));
+        assert!(is_insecure_http("  http://example.com"));
+        assert!(!is_insecure_http("https://example.com"));
+    }
+
+    // --- build_deep_link_payload -------------------------------------------
+
+    #[test]
+    fn deep_link_payload_rejects_non_adm_scheme() {
+        assert!(build_deep_link_payload("https://example.com").is_none());
+    }
+
+    #[test]
+    fn deep_link_payload_rejects_non_http_target() {
+        assert!(build_deep_link_payload("adm://add?url=ftp://example.com/file").is_none());
+        assert!(build_deep_link_payload("adm://add").is_none());
+    }
+
+    #[test]
+    fn deep_link_payload_carries_referrer_and_cookie_as_headers() {
+        let payload = build_deep_link_payload(
+            "adm://add?url=https://example.com/file.zip&referrer=https://ref.example&cookie=a=b",
+        )
+        .expect("well-formed adm link should parse");
+        assert_eq!(payload["url"], "https://example.com/file.zip");
+        let headers = payload["headers"].as_array().unwrap();
+        assert!(headers
+            .iter()
+            .any(|h| h[0] == "Referer" && h[1] == "https://ref.example"));
+        assert!(headers.iter().any(|h| h[0] == "Cookie" && h[1] == "a=b"));
+    }
+
+    // --- deep_link_from_args -------------------------------------------
+
+    #[test]
+    fn deep_link_from_args_finds_adm_url() {
+        let args = vec!["program".to_string(), "adm://add?url=https://x".to_string()];
+        assert_eq!(
+            deep_link_from_args(args),
+            Some("adm://add?url=https://x".to_string())
+        );
+    }
+
+    #[test]
+    fn deep_link_from_args_none_when_absent() {
+        let args = vec!["program".to_string(), "--flag".to_string()];
+        assert_eq!(deep_link_from_args(args), None);
+    }
+
+    // --- unique_path ---------------------------------------------------
+
+    #[test]
+    fn unique_path_appends_counter_on_collision() {
+        let dir = tempfile::tempdir().unwrap();
+        let first = unique_path(dir.path(), "file.txt");
+        assert_eq!(first, dir.path().join("file.txt"));
+        std::fs::write(&first, b"x").unwrap();
+        let second = unique_path(dir.path(), "file.txt");
+        assert_eq!(second, dir.path().join("file (1).txt"));
+    }
+
+    // --- filename_from_content_disposition --------------------------------
+
+    #[test]
+    fn content_disposition_extracts_quoted_filename() {
+        assert_eq!(
+            filename_from_content_disposition(r#"attachment; filename="report.pdf""#),
+            Some("report.pdf".to_string())
+        );
+    }
+
+    #[test]
+    fn content_disposition_ignores_trailing_params() {
+        assert_eq!(
+            filename_from_content_disposition("attachment; filename=data.zip; foo=bar"),
+            Some("data.zip".to_string())
+        );
+    }
+
+    #[test]
+    fn content_disposition_none_without_filename() {
+        assert_eq!(filename_from_content_disposition("attachment"), None);
+    }
+
+    // --- compute_checksum -------------------------------------------------
+
+    #[tokio::test]
+    async fn checksum_matches_known_sha256() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("data.bin");
+        std::fs::write(&path, b"hello world").unwrap();
+        let hash = compute_checksum(path, Algo::Sha256).await.unwrap();
+        assert_eq!(
+            hash,
+            "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
+        );
+    }
+
+    // --- RateLimiter --------------------------------------------------------
+
+    #[tokio::test]
+    async fn rate_limiter_unlimited_returns_immediately() {
+        let limiter = RateLimiter::new(0);
+        let start = Instant::now();
+        limiter.acquire(50_000_000).await;
+        assert!(start.elapsed() < Duration::from_millis(50));
+    }
+
+    #[tokio::test]
+    async fn rate_limiter_limited_rate_delays_roughly_as_expected() {
+        let limiter = RateLimiter::new(2000); // 2000 bytes/sec
+        let start = Instant::now();
+        limiter.acquire(500).await; // ~0.25s worth of tokens at this rate
+        let elapsed = start.elapsed();
+        assert!(elapsed >= Duration::from_millis(150), "elapsed too short: {elapsed:?}");
+        assert!(elapsed <= Duration::from_millis(800), "elapsed too long: {elapsed:?}");
+    }
 }
