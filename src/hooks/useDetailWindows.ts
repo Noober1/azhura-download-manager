@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { emitTo, listen } from "@tauri-apps/api/event";
+import { commands } from "../bindings";
 import type { DetailAction, DownloadItem } from "../types";
 
 /** Owns every open "Download Details" popup window: which ids are open, and
@@ -25,7 +25,7 @@ export function useDetailWindows(
   // React tree has mounted; that's what actually seeds and shows it (below),
   // so there's no race with the window-creation round-trip.
   function openDetail(id: string) {
-    invoke("open_detail_window", { id }).catch(() => {});
+    commands.openDetailWindow(id).catch(() => {});
   }
 
   // A popup announces itself once it's mounted and ready for its first
@@ -38,7 +38,7 @@ export function useDetailWindows(
       const item = downloadsRef.current.find((d) => d.id === id) ?? null;
       lastDetailSentRef.current.set(id, JSON.stringify(item));
       await emitTo(`detail-${id}`, "detail-data", item).catch(() => {});
-      invoke("show_detail_window", { id }).catch(() => {});
+      commands.showDetailWindow(id).catch(() => {});
     });
     return () => {
       unlisten.then((f) => f());

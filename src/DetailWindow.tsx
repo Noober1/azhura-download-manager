@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { emitTo, listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { commands } from "./bindings";
 import type { DownloadItem, DetailAction } from "./types";
 import {
   formatBytes,
@@ -76,7 +76,7 @@ export function DetailWindow() {
   }
 
   function close() {
-    invoke("close_detail_window", { id });
+    commands.closeDetailWindow(id);
   }
 
   if (!ready) {
