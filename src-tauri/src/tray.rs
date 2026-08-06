@@ -19,7 +19,7 @@ pub(crate) struct TrayEntry {
 #[derive(Default)]
 pub(crate) struct TrayMenuState(Mutex<Vec<TrayEntry>>);
 
-#[derive(Deserialize)]
+#[derive(Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct TrayDownload {
     id: String,
@@ -77,6 +77,7 @@ pub(crate) fn rebuild_tray_menu(
 /// same set of ids is still showing (by far the common case) so the menu
 /// doesn't visibly flicker; otherwise rebuilds it.
 #[tauri::command]
+#[specta::specta]
 pub(crate) fn update_tray_downloads(
     app: tauri::AppHandle,
     items: Vec<TrayDownload>,

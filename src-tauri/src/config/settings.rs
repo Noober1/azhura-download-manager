@@ -9,9 +9,10 @@ use serde::{Deserialize, Serialize};
 
 use super::{config_dir, write_json_atomic};
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase", default)]
 pub(crate) struct AppSettings {
+    #[specta(type = specta_typescript::Number)]
     max_concurrent: usize,
     global_limit_mbps: f64,
     pub(crate) minimize_to_tray: bool,
@@ -48,11 +49,13 @@ pub(crate) fn load_settings_from_disk() -> AppSettings {
 }
 
 #[tauri::command]
+#[specta::specta]
 pub(crate) fn load_settings(state: tauri::State<'_, SettingsState>) -> AppSettings {
     state.0.lock().unwrap().clone()
 }
 
 #[tauri::command]
+#[specta::specta]
 pub(crate) async fn save_settings(
     settings: AppSettings,
     state: tauri::State<'_, SettingsState>,

@@ -39,16 +39,20 @@ pub(crate) struct MetaCtx {
     pub(crate) save_path: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ResumableInfo {
     pub(crate) path: String,
     pub(crate) url: String,
     pub(crate) filename: String,
+    #[specta(type = specta_typescript::Number)]
     pub(crate) total: u64,
+    #[specta(type = specta_typescript::Number)]
     pub(crate) connections: usize,
+    #[specta(type = specta_typescript::Number)]
     pub(crate) downloaded: u64,
     pub(crate) save_path: Option<String>,
+    #[specta(type = Option<specta_typescript::Number>)]
     pub(crate) added_at: Option<i64>,
 }
 

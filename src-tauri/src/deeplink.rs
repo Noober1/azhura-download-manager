@@ -100,6 +100,9 @@ pub(crate) fn handle_deep_link_cold_start(app: &tauri::AppHandle, link: &str) {
     app.state::<PendingDeepLink>().0.lock().unwrap().replace(payload);
 }
 
+// Deliberately plain `#[tauri::command]` — see `submit_add` in
+// `windows/add.rs` for why: this crate's `specta` (rc.25) overflows the
+// stack trying to export a `serde_json::Value`-shaped command.
 #[tauri::command]
 pub(crate) fn take_pending_deep_link(state: tauri::State<'_, PendingDeepLink>) -> Option<serde_json::Value> {
     state.0.lock().unwrap().take()

@@ -12,7 +12,7 @@ use crate::config::prefs::ProxyConfig;
 /// One finished download. `state` always holds the real terminal state —
 /// "missing" is never stored, it is recomputed from disk on every load so a
 /// file that reappears recovers its original status.
-#[derive(Serialize, Deserialize, Clone, Default)]
+#[derive(Serialize, Deserialize, Clone, Default, specta::Type)]
 #[serde(rename_all = "camelCase", default)]
 pub(crate) struct HistoryEntry {
     pub(crate) id: String,
@@ -21,14 +21,19 @@ pub(crate) struct HistoryEntry {
     pub(crate) headers: Vec<(String, String)>,
     pub(crate) allow_insecure: bool,
     pub(crate) checksum: String,
+    #[specta(type = specta_typescript::Number)]
     pub(crate) speed_limit: u64,
     pub(crate) filename: String,
     pub(crate) filename_override: String,
     pub(crate) path: String,
     pub(crate) save_path: String,
+    #[specta(type = Option<specta_typescript::Number>)]
     pub(crate) total: Option<u64>,
+    #[specta(type = specta_typescript::Number)]
     pub(crate) downloaded: u64,
+    #[specta(type = specta_typescript::Number)]
     pub(crate) connections: usize,
+    #[specta(type = specta_typescript::Number)]
     pub(crate) used_connections: usize,
     pub(crate) state: String,
     pub(crate) error: Option<String>,
@@ -37,9 +42,11 @@ pub(crate) struct HistoryEntry {
     pub(crate) referer: String,
     pub(crate) needs_auth: bool,
     pub(crate) proxy: ProxyConfig,
+    #[specta(type = specta_typescript::Number)]
     pub(crate) finished_at: i64,
     /// When this download first entered the list; 0 for rows persisted before
     /// this field existed (the frontend falls back to `finished_at` then).
+    #[specta(type = specta_typescript::Number)]
     pub(crate) added_at: i64,
     #[serde(skip_deserializing)]
     pub(crate) missing: bool,
@@ -55,7 +62,7 @@ struct HistoryFile {
     entries: Vec<serde_json::Value>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct HistoryLoad {
     entries: Vec<HistoryEntry>,
@@ -70,6 +77,7 @@ fn history_path() -> Result<PathBuf, String> {
 }
 
 #[tauri::command]
+#[specta::specta]
 pub(crate) async fn load_history() -> Result<HistoryLoad, String> {
     let path = history_path()?;
     let Ok(bytes) = tokio::fs::read(&path).await else {
@@ -112,6 +120,7 @@ pub(crate) async fn load_history() -> Result<HistoryLoad, String> {
 }
 
 #[tauri::command]
+#[specta::specta]
 pub(crate) async fn save_history(mut entries: Vec<HistoryEntry>) -> Result<(), String> {
     entries.sort_by_key(|e| std::cmp::Reverse(e.finished_at));
     entries.truncate(HISTORY_MAX);

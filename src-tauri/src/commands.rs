@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use serde::Deserialize;
 use tauri::ipc::Channel;
 
 use crate::config::prefs::{PrefsState, ProxyConfig};
@@ -18,25 +19,54 @@ use crate::engine::progress::DownloadEvent;
 use crate::engine::{client::is_insecure_http, download_inner};
 use crate::paths::temp_download_dir;
 
-#[allow(clippy::too_many_arguments)]
-#[tauri::command]
-pub(crate) async fn start_download(
+/// `start_download`'s own arguments, bundled into one struct rather than left
+/// as separate parameters: specta's `#[specta::specta]` macro (used to
+/// generate `../src/bindings.ts`) only implements its `SpectaFn` trait for
+/// functions of up to 10 parameters, and this command's domain arguments
+/// alone numbered 12. Grouping them costs nothing at the call site — Tauri's
+/// `invoke()` already sends named args as a single JSON object either way.
+#[derive(Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct StartDownloadArgs {
     id: String,
     url: String,
     allow_insecure: bool,
     headers: Vec<(String, String)>,
+    #[specta(type = specta_typescript::Number)]
     connections: usize,
     resume: bool,
     resume_path: Option<String>,
     expected_checksum: Option<String>,
+    #[specta(type = Option<specta_typescript::Number>)]
     speed_limit: Option<u64>,
     filename: Option<String>,
     save_path: Option<String>,
     proxy: Option<ProxyConfig>,
+}
+
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn start_download(
+    args: StartDownloadArgs,
     on_event: Channel<DownloadEvent>,
     manager: tauri::State<'_, Manager>,
     prefs_state: tauri::State<'_, PrefsState>,
 ) -> Result<(), String> {
+    let StartDownloadArgs {
+        id,
+        url,
+        allow_insecure,
+        headers,
+        connections,
+        resume,
+        resume_path,
+        expected_checksum,
+        speed_limit,
+        filename,
+        save_path,
+        proxy,
+    } = args;
+
     let control = Arc::new(Control::new(speed_limit.unwrap_or(0)));
     manager
         .downloads
@@ -94,6 +124,7 @@ pub(crate) async fn start_download(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub(crate) fn pause_download(id: String, manager: tauri::State<'_, Manager>) {
     if let Some(c) = manager.downloads.lock().unwrap().get(&id) {
         c.paused.store(true, Ordering::Relaxed);
@@ -101,23 +132,43 @@ pub(crate) fn pause_download(id: String, manager: tauri::State<'_, Manager>) {
 }
 
 #[tauri::command]
+#[specta::specta]
 pub(crate) fn cancel_download(id: String, manager: tauri::State<'_, Manager>) {
     if let Some(c) = manager.downloads.lock().unwrap().get(&id) {
         c.canceled.store(true, Ordering::Relaxed);
     }
 }
 
+/// A bare `u64`/`usize` command parameter can't carry the
+/// `#[specta(type = Number)]` override needed to export it as `number`
+/// rather than `bigint` — that attribute only works on `#[derive(Type)]`
+/// struct fields (see `StartDownloadArgs` above). Shared by the two
+/// speed-limit commands below, both of which take just this one value.
+#[derive(Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct SpeedLimitArgs {
+    #[specta(type = specta_typescript::Number)]
+    bytes_per_sec: u64,
+}
+
 /// Set the global download speed cap in bytes/sec (0 = unlimited). Live —
 /// affects all active downloads immediately since they share this bucket.
 #[tauri::command]
-pub(crate) fn set_global_speed_limit(bytes_per_sec: u64, manager: tauri::State<'_, Manager>) {
-    manager.global.set_rate(bytes_per_sec);
+#[specta::specta]
+pub(crate) fn set_global_speed_limit(args: SpeedLimitArgs, manager: tauri::State<'_, Manager>) {
+    manager.global.set_rate(args.bytes_per_sec);
 }
 
 /// Set one download's own speed cap in bytes/sec (0 = unlimited). Live — the
 /// running workers share this bucket, so it takes effect on the next chunk.
 #[tauri::command]
-pub(crate) fn set_download_speed_limit(id: String, bytes_per_sec: u64, manager: tauri::State<'_, Manager>) {
+#[specta::specta]
+pub(crate) fn set_download_speed_limit(
+    id: String,
+    args: SpeedLimitArgs,
+    manager: tauri::State<'_, Manager>,
+) {
+    let bytes_per_sec = args.bytes_per_sec;
     if let Some(c) = manager.downloads.lock().unwrap().get(&id) {
         c.limiter.set_rate(bytes_per_sec);
     }
@@ -127,6 +178,7 @@ pub(crate) fn set_download_speed_limit(id: String, bytes_per_sec: u64, manager: 
 /// Save folders are now user-chosen, so this only sanity-checks the path
 /// instead of confining it to the default downloads/temp roots.
 #[tauri::command]
+#[specta::specta]
 pub(crate) async fn delete_download(path: String, delete_file: bool) -> Result<(), String> {
     let p = PathBuf::from(&path);
     if !p.is_absolute() {
@@ -150,6 +202,7 @@ pub(crate) async fn delete_download(path: String, delete_file: bool) -> Result<(
 /// Add window's live "Size:" readout. Reuses the same client/probe path as an
 /// actual download so the reported size matches what a real run would see.
 #[tauri::command]
+#[specta::specta]
 pub(crate) async fn probe_url(
     url: String,
     allow_insecure: bool,
@@ -174,6 +227,7 @@ pub(crate) async fn probe_url(
 
 /// The default destination folder, for the Add window's "Save path" field.
 #[tauri::command]
+#[specta::specta]
 pub(crate) fn default_download_dir() -> Result<String, String> {
     Ok(crate::paths::downloads_base()?.to_string_lossy().to_string())
 }
@@ -186,6 +240,7 @@ pub(crate) fn default_download_dir() -> Result<String, String> {
 /// (Firefox/Zen/LibreWolf), which ship as separate folders because Chrome and
 /// Gecko disagree on the MV3 background key.
 #[tauri::command]
+#[specta::specta]
 pub(crate) fn extension_dir(app: tauri::AppHandle, flavor: Option<String>) -> Result<String, String> {
     let folder = match flavor.as_deref() {
         Some("firefox") => "extension-firefox",
@@ -210,6 +265,7 @@ pub(crate) fn extension_dir(app: tauri::AppHandle, flavor: Option<String>) -> Re
 }
 
 #[tauri::command]
+#[specta::specta]
 pub(crate) async fn list_resumable() -> Result<Vec<ResumableInfo>, String> {
     let dir = temp_download_dir()?;
     let mut out = Vec::new();

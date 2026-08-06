@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{config_dir, write_json_atomic};
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase", default)]
 pub(crate) struct ProxyConfig {
     pub(crate) enabled: bool,
@@ -40,10 +40,11 @@ impl Default for ProxyConfig {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase", default)]
 pub(crate) struct Prefs {
     /// Add-window defaults, remembered across sessions.
+    #[specta(type = specta_typescript::Number)]
     connections: usize,
     speed_limit_mbps: f64,
     /// category id ("video" | "audio" | …) → absolute folder override.
@@ -78,17 +79,37 @@ pub(crate) fn load_prefs_from_disk() -> Prefs {
 }
 
 #[tauri::command]
+#[specta::specta]
 pub(crate) fn load_prefs(state: tauri::State<'_, PrefsState>) -> Prefs {
     state.0.lock().unwrap().clone()
 }
 
-#[tauri::command]
-pub(crate) async fn save_add_defaults(
+/// `save_add_defaults`'s own arguments, bundled into one struct so
+/// `connections` (a bare `usize`) can carry the `#[specta(type = Number)]`
+/// override needed to export it as `number` rather than `bigint` — that
+/// attribute is only available on `#[derive(Type)]` struct fields, not on
+/// raw `#[specta::specta]` command parameters. See `StartDownloadArgs` in
+/// `commands.rs` for the same pattern.
+#[derive(Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct SaveAddDefaultsArgs {
+    #[specta(type = specta_typescript::Number)]
     connections: usize,
     speed_limit_mbps: f64,
     proxy: ProxyConfig,
+}
+
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn save_add_defaults(
+    args: SaveAddDefaultsArgs,
     state: tauri::State<'_, PrefsState>,
 ) -> Result<(), String> {
+    let SaveAddDefaultsArgs {
+        connections,
+        speed_limit_mbps,
+        proxy,
+    } = args;
     let prefs = {
         let mut guard = state.0.lock().unwrap();
         guard.connections = connections;
@@ -100,6 +121,7 @@ pub(crate) async fn save_add_defaults(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub(crate) async fn set_category_path(
     category: String,
     path: String,

@@ -28,8 +28,84 @@ use paths::downloads_base;
 use tray::{rebuild_tray_menu, TrayMenuState};
 use windows::{harden_webview, quit_app, reveal_main_window, Quitting};
 
+/// 24 of the app's 26 IPC-crossing commands, collected once here so both the
+/// runtime invoke handler and (in debug builds) the generated
+/// `../src/bindings.ts` stay derived from the same list — order matches the
+/// old `tauri::generate_handler!` list it replaced.
+///
+/// `submit_add` and `take_pending_deep_link` are the missing two: this
+/// crate's `specta` (pinned to `2.0.0-rc.25`) overflows the stack while
+/// exporting a `serde_json::Value`-shaped command — confirmed by isolating
+/// each of them in turn. Both stay on a plain `tauri::generate_handler!`,
+/// merged into the specta-generated one in `run()` below.
+fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
+    tauri_specta::Builder::<tauri::Wry>::new()
+        // Default mode wraps every `Result`-returning command's binding in a
+        // `{status: "ok"|"error", ...}` object instead of rejecting the
+        // promise. `Throw` instead matches plain `invoke()`'s existing
+        // reject-on-`Err` behavior, so callers being migrated onto these
+        // bindings can keep their existing `.catch(...)` handling as-is.
+        .error_handling(tauri_specta::ErrorHandlingMode::Throw)
+        .commands(tauri_specta::collect_commands![
+        commands::start_download,
+        commands::pause_download,
+        commands::cancel_download,
+        commands::set_global_speed_limit,
+        commands::set_download_speed_limit,
+        commands::delete_download,
+        commands::list_resumable,
+        commands::probe_url,
+        commands::default_download_dir,
+        commands::extension_dir,
+        windows::add::open_add_window,
+        windows::add::reveal_add_window_cmd,
+        windows::add::close_add_window,
+        windows::detail::open_detail_window,
+        windows::detail::show_detail_window,
+        windows::detail::close_detail_window,
+        tray::update_tray_downloads,
+        config::settings::load_settings,
+        config::settings::save_settings,
+        config::prefs::load_prefs,
+        config::prefs::save_add_defaults,
+        config::prefs::set_category_path,
+        config::history::load_history,
+        config::history::save_history
+    ])
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let specta_builder = specta_builder();
+
+    #[cfg(debug_assertions)]
+    specta_builder
+        .export(specta_typescript::Typescript::default(), "../src/bindings.ts")
+        .expect("failed to export typescript bindings");
+
+    // Computed up front (rather than inline in `.invoke_handler(...)` below)
+    // because `specta_builder` itself is moved into the `.setup()` closure
+    // further down the chain, and a method chain's arguments are evaluated in
+    // source order — inline would move it out from under this call.
+    //
+    // Boxed as `dyn Fn`: `generate_handler!`'s own expansion needs an
+    // expected type to resolve its internal generics against, which it
+    // normally gets for free from `.invoke_handler()`'s signature — here it
+    // has to come from this binding's declared type instead.
+    type BoxedInvokeHandler = Box<dyn Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send + Sync>;
+    let specta_invoke_handler: BoxedInvokeHandler = Box::new(specta_builder.invoke_handler());
+    // The two commands specta can't export (see `specta_builder` above) still
+    // need a normal Tauri dispatch path. `Invoke` isn't `Clone`, so the two
+    // handlers can't just be tried in sequence — check the command name
+    // first (a borrow) and route the one owned `invoke` to whichever handler
+    // actually owns that command.
+    let plain_invoke_handler: BoxedInvokeHandler =
+        Box::new(tauri::generate_handler![windows::add::submit_add, deeplink::take_pending_deep_link]);
+    let invoke_handler = move |invoke: tauri::ipc::Invoke<tauri::Wry>| match invoke.message.command() {
+        "submit_add" | "take_pending_deep_link" => plain_invoke_handler(invoke),
+        _ => specta_invoke_handler(invoke),
+    };
+
     let mut builder = tauri::Builder::default();
 
     // Must be registered before other plugins: routes an `adm://` URL passed
@@ -61,7 +137,9 @@ pub fn run() {
         .manage(PrefsState(Mutex::new(config::prefs::load_prefs_from_disk())))
         .manage(Quitting(AtomicBool::new(false)))
         .manage(TrayMenuState::default())
-        .setup(|app| {
+        .setup(move |app| {
+            specta_builder.mount_events(app);
+
             // Built here (rather than declared in tauri.conf.json) so it can be
             // given `main` as its OS-level owner: an owned window is always
             // above its owner in z-order, but — unlike always-on-top — it has
@@ -219,34 +297,7 @@ pub fn run() {
             },
             _ => {}
         })
-        .invoke_handler(tauri::generate_handler![
-            commands::start_download,
-            commands::pause_download,
-            commands::cancel_download,
-            commands::set_global_speed_limit,
-            commands::set_download_speed_limit,
-            commands::delete_download,
-            commands::list_resumable,
-            commands::probe_url,
-            commands::default_download_dir,
-            commands::extension_dir,
-            deeplink::take_pending_deep_link,
-            windows::add::open_add_window,
-            windows::add::reveal_add_window_cmd,
-            windows::add::submit_add,
-            windows::add::close_add_window,
-            windows::detail::open_detail_window,
-            windows::detail::show_detail_window,
-            windows::detail::close_detail_window,
-            tray::update_tray_downloads,
-            config::settings::load_settings,
-            config::settings::save_settings,
-            config::prefs::load_prefs,
-            config::prefs::save_add_defaults,
-            config::prefs::set_category_path,
-            config::history::load_history,
-            config::history::save_history
-        ])
+        .invoke_handler(invoke_handler)
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

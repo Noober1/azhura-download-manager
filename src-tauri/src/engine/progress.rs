@@ -12,37 +12,48 @@ use tauri::ipc::Channel;
 use super::meta::MetaCtx;
 use super::pieces::{Shared, WorkerUi};
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ConnInfo {
+    #[specta(type = specta_typescript::Number)]
     downloaded: u64, // bytes into the current piece
-    total: u64,      // size of the current piece (0 = idle)
-    pieces: u64,     // pieces this connection has completed
+    #[specta(type = specta_typescript::Number)]
+    total: u64, // size of the current piece (0 = idle)
+    #[specta(type = specta_typescript::Number)]
+    pieces: u64, // pieces this connection has completed
 }
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase", tag = "event", content = "data")]
 pub(crate) enum DownloadEvent {
     #[serde(rename_all = "camelCase")]
     Started {
         filename: String,
         path: String,
+        #[specta(type = Option<specta_typescript::Number>)]
         total: Option<u64>,
+        #[specta(type = specta_typescript::Number)]
         connections: usize,
+        #[specta(type = specta_typescript::Number)]
         piece_size: u64,
+        #[specta(type = specta_typescript::Number)]
         num_pieces: usize,
     },
     #[serde(rename_all = "camelCase")]
     Progress {
+        #[specta(type = specta_typescript::Number)]
         downloaded: u64,
+        #[specta(type = Option<specta_typescript::Number>)]
         total: Option<u64>,
         speed_bps: f64,
         connections: Vec<ConnInfo>,
     },
     Paused {
+        #[specta(type = specta_typescript::Number)]
         downloaded: u64,
     },
     Canceled {
+        #[specta(type = specta_typescript::Number)]
         downloaded: u64,
     },
     Verifying,

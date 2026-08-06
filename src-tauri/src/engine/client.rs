@@ -102,9 +102,10 @@ pub(crate) struct Probe {
     pub(crate) filename: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ProbeInfo {
+    #[specta(type = Option<specta_typescript::Number>)]
     pub(crate) total: Option<u64>,
     pub(crate) supports_ranges: bool,
     pub(crate) filename: String,

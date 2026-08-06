@@ -19,6 +19,7 @@ use tauri::{Emitter, Manager as _};
 /// tries to build the window. Being `async` moves execution onto a tokio
 /// worker thread first, so the handoff to the real UI thread can complete.
 #[tauri::command]
+#[specta::specta]
 pub(crate) async fn open_detail_window(app: tauri::AppHandle, id: String) -> Result<(), String> {
     let label = format!("detail-{id}");
     if let Some(w) = app.get_webview_window(&label) {
@@ -68,6 +69,7 @@ pub(crate) async fn open_detail_window(app: tauri::AppHandle, id: String) -> Res
 /// Show + focus a detail popup once its frontend has actually rendered the
 /// snapshot `main` handed it (see `detail-ready` in `App.tsx`).
 #[tauri::command]
+#[specta::specta]
 pub(crate) fn show_detail_window(app: tauri::AppHandle, id: String) {
     if let Some(w) = app.get_webview_window(&format!("detail-{id}")) {
         let _ = w.show();
@@ -82,6 +84,7 @@ pub(crate) fn show_detail_window(app: tauri::AppHandle, id: String) {
 /// window is thread-affine like creating one, so this can't safely run
 /// inline on the IPC/UI thread either.
 #[tauri::command]
+#[specta::specta]
 pub(crate) async fn close_detail_window(app: tauri::AppHandle, id: String) {
     if let Some(w) = app.get_webview_window(&format!("detail-{id}")) {
         let _ = w.destroy();
