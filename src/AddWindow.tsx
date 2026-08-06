@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { commands } from "./bindings";
 import { WindowControls, useNativeShell } from "./ui";
 import { useTheme } from "./theme";
 import { useAddForm } from "./hooks/useAddForm";
@@ -94,7 +94,7 @@ export function AddWindow() {
         <button onClick={() => form.act(true)} disabled={!state.url.trim()}>
           Download Later
         </button>
-        <button onClick={() => invoke("close_add_window")}>Cancel</button>
+        <button onClick={() => commands.closeAddWindow()}>Cancel</button>
         <button className="primary-btn" onClick={() => form.act(false)} disabled={!state.url.trim()}>
           Download
         </button>

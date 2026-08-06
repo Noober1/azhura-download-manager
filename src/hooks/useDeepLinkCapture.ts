@@ -1,6 +1,6 @@
 import { useEffect, type RefObject } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { emitTo, listen } from "@tauri-apps/api/event";
+import { commands } from "../bindings";
 import type { AddPayload, DownloadItem } from "../types";
 
 /** Listens for the two ways a browser-extension capture (or the Add
@@ -41,7 +41,7 @@ export function useDeepLinkCapture(
         });
         return;
       }
-      invoke("reveal_add_window_cmd").catch(() => {});
+      commands.revealAddWindowCmd().catch(() => {});
       emitTo("add", "prefill-add", p).catch(() => {});
     });
     return () => {

@@ -3,7 +3,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { readText } from "@tauri-apps/plugin-clipboard-manager";
 import { open } from "@tauri-apps/plugin-dialog";
-import type { AddPayload, Prefs, ProxyConfig, ProxyScheme } from "../types";
+import { commands } from "../bindings";
+import type { AddPayload, ProxyConfig, ProxyScheme } from "../types";
 import { formatBytes, isInsecureHttp, looksLikeUrl, mergeHeaders } from "../format";
 import { categoryOf, categoryOfUrl, CATEGORY_FOLDER, type FileCategory } from "../categories";
 
@@ -91,7 +92,8 @@ export function useAddForm() {
   const requestIdRef = useRef(0);
 
   useEffect(() => {
-    invoke<string>("default_download_dir")
+    commands
+      .defaultDownloadDir()
       .then((defaultDir) => patch({ defaultDir }))
       .catch(() => {});
   }, []);
@@ -99,14 +101,17 @@ export function useAddForm() {
   // Remembered Connections / Speed cap defaults, and any per-category save
   // paths set from a previous session's "Remember this path" checkbox.
   useEffect(() => {
-    invoke<Prefs>("load_prefs")
+    commands
+      .loadPrefs()
       .then((p) => {
         const upd: Partial<AddFormState> = { categoryPaths: p.categoryPaths ?? {} };
-        if (p.connections > 0) upd.connections = p.connections;
-        upd.perLimitMbps = p.speedLimitMbps;
+        if (p.connections && p.connections > 0) upd.connections = p.connections;
+        upd.perLimitMbps = p.speedLimitMbps ?? 0;
         if (p.proxy) {
           upd.proxyEnabled = p.proxy.enabled;
-          if (p.proxy.scheme) upd.proxyScheme = p.proxy.scheme;
+          // The generated binding types `scheme` as plain `string` — the
+          // value itself is still always one of the three ProxyScheme literals.
+          if (p.proxy.scheme) upd.proxyScheme = p.proxy.scheme as ProxyScheme;
           upd.proxyHost = p.proxy.host;
           upd.proxyPort = p.proxy.port;
           upd.proxyUsername = p.proxy.username;
@@ -197,11 +202,13 @@ export function useAddForm() {
   // the Rust side stashed it — collect it now and reveal the window, since
   // it starts hidden.
   useEffect(() => {
+    // take_pending_deep_link stays on plain invoke() — see specta_builder in
+    // lib.rs: this crate's specta can't export a serde_json::Value command.
     invoke<AddPayload | null>("take_pending_deep_link")
       .then((p) => {
         if (!p) return;
         applyCapturedPayload(p);
-        invoke("reveal_add_window_cmd").catch(() => {});
+        commands.revealAddWindowCmd().catch(() => {});
       })
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -217,7 +224,8 @@ export function useAddForm() {
       referer: state.referer,
       cookie: state.cookieText,
     });
-    invoke<ProbeInfo>("probe_url", { url: u, allowInsecure, headers, proxy: probeProxy })
+    commands
+      .probeUrl(u, allowInsecure, headers, probeProxy)
       .then((info) => {
         if (requestIdRef.current !== myId) return;
         const upd: Partial<AddFormState> = {
@@ -340,15 +348,18 @@ export function useAddForm() {
       savePath: state.savePath.trim(),
       proxy: effectiveProxy,
     };
+    // submit_add stays on plain invoke() — see specta_builder in lib.rs.
     invoke("submit_add", { payload }); // Rust emits to main + hides this window
-    invoke("save_add_defaults", {
-      connections: state.connections,
-      speedLimitMbps: state.perLimitMbps,
-      proxy: effectiveProxy,
-    }).catch(() => {});
+    commands
+      .saveAddDefaults({
+        connections: state.connections,
+        speedLimitMbps: state.perLimitMbps,
+        proxy: effectiveProxy,
+      })
+      .catch(() => {});
     if (state.rememberPath && state.savePath.trim()) {
       const path = state.savePath.trim();
-      invoke("set_category_path", { category: currentCategory, path }).catch(() => {});
+      commands.setCategoryPath(currentCategory, path).catch(() => {});
       patch({ categoryPaths: { ...state.categoryPaths, [currentCategory]: path } });
     }
     patch({

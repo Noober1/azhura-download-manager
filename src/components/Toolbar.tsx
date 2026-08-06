@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { commands } from "../bindings";
 import type { DownloadItem } from "../types";
 import { formatSpeed } from "../format";
 import { Icon, WindowControls } from "../ui";
@@ -41,7 +41,7 @@ export function Toolbar({
       <button
         className="tbtn primary"
         title="Add download"
-        onClick={() => invoke("open_add_window")}
+        onClick={() => commands.openAddWindow()}
       >
         <Icon name="add" />
       </button>
