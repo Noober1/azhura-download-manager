@@ -1,5 +1,5 @@
 import { useEffect, useRef, type RefObject } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { commands } from "../bindings";
 import type { DownloadItem, TrayDownload } from "../types";
 import { formatSpeed, pctOf, truncate } from "../format";
 
@@ -40,7 +40,8 @@ export function useTrayPush(downloadsRef: RefObject<DownloadItem[]>) {
       const payload = JSON.stringify({ items, tooltip });
       if (payload === lastTraySentRef.current || traySendingRef.current) return;
       traySendingRef.current = true;
-      invoke("update_tray_downloads", { items, tooltip })
+      commands
+        .updateTrayDownloads(items, tooltip)
         .then(() => {
           lastTraySentRef.current = payload;
         })
