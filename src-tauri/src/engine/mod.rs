@@ -19,7 +19,7 @@ use std::time::Instant;
 use tauri::ipc::Channel;
 
 use crate::config::prefs::{Prefs, ProxyConfig};
-use crate::paths::{move_to_destination, sanitize, temp_download_dir, unique_path};
+use crate::paths::{move_to_destination, sanitize, temp_download_dir, unique_path, write_mark_of_the_web};
 
 use checksum::{compute_checksum, detect_algo};
 use client::{build_client, build_headers, choose_connections, is_insecure_http, probe};
@@ -134,6 +134,7 @@ pub(crate) async fn download_inner(
             total_downloaded: total_downloaded.clone(),
             workers: workers.clone(),
             resume_offsets,
+            validator: meta.validator,
         });
         Plan {
             path,
@@ -183,6 +184,7 @@ pub(crate) async fn download_inner(
                 total_downloaded: total_downloaded.clone(),
                 workers: workers.clone(),
                 resume_offsets: HashMap::new(),
+                validator: info.validator,
             });
             Plan {
                 path,
@@ -235,7 +237,7 @@ pub(crate) async fn download_inner(
         num_pieces: setup.num_pieces,
     });
 
-    let meta_ctx = setup.shared.as_ref().map(|_| MetaCtx {
+    let meta_ctx = setup.shared.as_ref().map(|shared| MetaCtx {
         meta_path: meta_path.clone(),
         url: url.to_string(),
         filename: setup.filename.clone(),
@@ -243,6 +245,7 @@ pub(crate) async fn download_inner(
         piece_size: setup.piece_size,
         connections: setup.connections,
         save_path: setup.save_path.clone(),
+        validator: shared.validator.clone(),
     });
 
     let started = Instant::now();
@@ -277,6 +280,7 @@ pub(crate) async fn download_inner(
             &setup.total_downloaded,
             &control,
             &limits,
+            setup.total,
         )
         .await
     };
@@ -340,6 +344,17 @@ pub(crate) async fn download_inner(
             )
             .await?;
             let _ = tokio::fs::remove_file(&meta_path).await;
+
+            // Must run after the move, not before: `move_to_destination` falls
+            // back to a plain copy when the temp file and destination are on
+            // different volumes, and a copy does not carry the source's
+            // alternate data streams — tagging `setup.path` first would leave
+            // the actual saved file with no Mark-of-the-Web at all.
+            let referrer = headers_raw
+                .iter()
+                .find(|(k, _)| k.eq_ignore_ascii_case("referer"))
+                .map(|(_, v)| v.as_str());
+            write_mark_of_the_web(&dest, url, referrer).await;
 
             let elapsed = started.elapsed().as_secs_f64();
             let avg = if elapsed > 0.0 && downloaded_now > 0 {

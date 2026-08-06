@@ -8,6 +8,7 @@ use serde::Serialize;
 
 pub(crate) mod history;
 pub(crate) mod prefs;
+pub(crate) mod secret;
 pub(crate) mod settings;
 
 pub(crate) fn config_dir() -> Result<PathBuf, String> {

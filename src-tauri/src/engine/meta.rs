@@ -26,6 +26,13 @@ pub(crate) struct Meta {
     /// User-chosen destination folder; `None` means the default downloads folder.
     #[serde(default)]
     pub(crate) save_path: Option<String>,
+    /// `ETag`/`Last-Modified` captured at probe time — sent back as
+    /// `If-Range` on resume so a resource that changed while this download
+    /// was paused is detected instead of silently splicing old and new
+    /// bytes into one file. `#[serde(default)]` so a sidecar written before
+    /// this field existed still resumes (just without that protection).
+    #[serde(default)]
+    pub(crate) validator: Option<String>,
 }
 
 #[derive(Clone)]
@@ -37,6 +44,7 @@ pub(crate) struct MetaCtx {
     pub(crate) piece_size: u64,
     pub(crate) connections: usize,
     pub(crate) save_path: Option<String>,
+    pub(crate) validator: Option<String>,
 }
 
 #[derive(Serialize, specta::Type)]
@@ -107,6 +115,7 @@ pub(crate) async fn write_meta(ctx: &MetaCtx, shared: &Shared, include_partials:
         done_pieces: done,
         partial,
         save_path: ctx.save_path.clone(),
+        validator: ctx.validator.clone(),
     };
     if let Ok(json) = serde_json::to_vec_pretty(&meta) {
         let mut tmp: OsString = ctx.meta_path.as_os_str().to_owned();
