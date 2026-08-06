@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { invoke, Channel } from "@tauri-apps/api/core";
+import { Channel } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import type { AddPayload, DownloadEvent, DownloadItem } from "../types";
+import { commands } from "../bindings";
+import type { DownloadEvent } from "../bindings";
+import type { AddPayload, DownloadItem } from "../types";
 import { DEFAULT_PROXY } from "../types";
 import { fallbackName } from "../format";
 import { notify } from "../notify";
@@ -70,7 +72,10 @@ export function useDownloads(callbacks: {
         const patch: Partial<DownloadItem> = {
           downloaded: msg.data.downloaded,
           total: msg.data.total,
-          speed: msg.data.speedBps,
+          // speedBps is `number | null` in the generated binding because specta
+          // conservatively widens every f64 for NaN-safety; the backend never
+          // actually sends null here.
+          speed: msg.data.speedBps ?? 0,
         };
         if (msg.data.connections.length > 0) patch.conns = msg.data.connections;
         patchItem(id, patch);
@@ -129,21 +134,23 @@ export function useDownloads(callbacks: {
     onEvent.onmessage = (msg) => handleEvent(item.id, msg);
 
     try {
-      await invoke("start_download", {
-        id: item.id,
-        url: item.url,
-        allowInsecure: item.allowInsecure,
-        headers: item.headers,
-        connections: item.connections,
-        resume,
-        resumePath: resume ? item.path : null,
-        expectedChecksum: item.checksum || null,
-        speedLimit: item.speedLimit > 0 ? item.speedLimit : null,
-        filename: !resume && item.filenameOverride ? item.filenameOverride : null,
-        savePath: item.savePath || null,
-        proxy: item.proxy,
+      await commands.startDownload(
+        {
+          id: item.id,
+          url: item.url,
+          allowInsecure: item.allowInsecure,
+          headers: item.headers,
+          connections: item.connections,
+          resume,
+          resumePath: resume ? item.path : null,
+          expectedChecksum: item.checksum || null,
+          speedLimit: item.speedLimit > 0 ? item.speedLimit : null,
+          filename: !resume && item.filenameOverride ? item.filenameOverride : null,
+          savePath: item.savePath || null,
+          proxy: item.proxy,
+        },
         onEvent,
-      });
+      );
     } catch (e) {
       patchItem(item.id, { state: "error", error: String(e) });
     }
@@ -185,10 +192,10 @@ export function useDownloads(callbacks: {
   }
 
   function pauseMany(items: DownloadItem[]) {
-    items.forEach((i) => invoke("pause_download", { id: i.id }));
+    items.forEach((i) => commands.pauseDownload(i.id));
   }
   function cancelMany(items: DownloadItem[]) {
-    items.forEach((i) => invoke("cancel_download", { id: i.id }));
+    items.forEach((i) => commands.cancelDownload(i.id));
   }
   function resumeMany(items: DownloadItem[]) {
     const ids = new Set(items.map((i) => i.id));
@@ -242,9 +249,7 @@ export function useDownloads(callbacks: {
     setDownloads((ds) => ds.map((d) => (ids.has(d.id) ? { ...d, speedLimit: bytes } : d)));
     items
       .filter((i) => i.state === "downloading" || i.state === "verifying")
-      .forEach((i) =>
-        invoke("set_download_speed_limit", { id: i.id, bytesPerSec: bytes }).catch(() => {}),
-      );
+      .forEach((i) => commands.setDownloadSpeedLimit(i.id, { bytesPerSec: bytes }).catch(() => {}));
   }
 
   // Context menu "Connections": the worker pool is fixed for the life of a
@@ -265,7 +270,7 @@ export function useDownloads(callbacks: {
     if (!connRestart) return;
     connRestart.items.forEach((i) => {
       pendingRestartRef.current.add(i.id);
-      invoke("pause_download", { id: i.id }).catch(() => {});
+      commands.pauseDownload(i.id).catch(() => {});
     });
     setConnRestart(null);
   }
@@ -284,7 +289,7 @@ export function useDownloads(callbacks: {
           // more, so deleting it could only hit a file that later took over
           // that name.
           const removeFile = i.missing ? false : i.state === "completed" ? deleteFile : true;
-          return invoke("delete_download", { path: i.path, deleteFile: removeFile }).catch(() => {
+          return commands.deleteDownload(i.path, removeFile).catch(() => {
             /* ignore */
           });
         }),

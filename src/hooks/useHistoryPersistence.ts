@@ -1,7 +1,7 @@
 import { useEffect, useRef, type Dispatch, type RefObject, type SetStateAction } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { DownloadItem, HistoryLoad, ResumableInfo } from "../types";
+import { commands } from "../bindings";
+import type { DownloadItem, HistoryEntry } from "../types";
 import { DEFAULT_PROXY } from "../types";
 import { isInsecureHttp } from "../format";
 import { fromHistoryEntry, historyPayload } from "../history";
@@ -27,10 +27,7 @@ export function useHistoryPersistence(
   // still live must win over its history copy, since only the sidecar can
   // actually be resumed.
   useEffect(() => {
-    Promise.all([
-      invoke<HistoryLoad>("load_history"),
-      invoke<ResumableInfo[]>("list_resumable"),
-    ])
+    Promise.all([commands.loadHistory(), commands.listResumable()])
       .then(([history, items]) => {
         const resumable: DownloadItem[] = items.map((it) => ({
           id: crypto.randomUUID(),
@@ -59,7 +56,11 @@ export function useHistoryPersistence(
         const livePaths = new Set(resumable.map((r) => r.path));
         const restoredHistory: DownloadItem[] = history.entries
           .filter((e) => !e.path || !livePaths.has(e.path))
-          .map(fromHistoryEntry);
+          // The generated binding types `state` as plain `string` (specta
+          // doesn't know it's really a DlState union) — the value itself is
+          // still always one of those literals, so this narrows the type
+          // without touching the data.
+          .map((e) => fromHistoryEntry(e as unknown as HistoryEntry));
 
         setDownloads((prev) => {
           // Rows can be added while these promises are in flight (a cold-start
@@ -100,7 +101,7 @@ export function useHistoryPersistence(
     if (json === lastSavedHistoryRef.current) return;
     const t = setTimeout(() => {
       lastSavedHistoryRef.current = json;
-      invoke("save_history", { entries }).catch(() => {});
+      commands.saveHistory(entries).catch(() => {});
     }, 400);
     return () => clearTimeout(t);
   }, [downloads]);
@@ -112,7 +113,7 @@ export function useHistoryPersistence(
       if (!historyReadyRef.current) return;
       const entries = historyPayload(downloadsRef.current);
       lastSavedHistoryRef.current = JSON.stringify(entries);
-      invoke("save_history", { entries }).catch(() => {});
+      commands.saveHistory(entries).catch(() => {});
     });
     return () => {
       un.then((f) => f());
