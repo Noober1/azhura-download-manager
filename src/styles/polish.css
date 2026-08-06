@@ -1,0 +1,74 @@
+/* ---- Native-feel polish --------------------------------------------------- */
+/* Kept at the end of the file so these overrides win the cascade regardless
+   of where the selectors they touch are declared above. */
+
+::-webkit-scrollbar {
+  width: 14px;
+  height: 14px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--scroll-thumb);
+  border: none;
+  border-radius: 0;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scroll-thumb-hover);
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+:focus {
+  outline: none;
+}
+:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+::selection {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+html,
+body {
+  overscroll-behavior: none;
+}
+* {
+  -webkit-user-drag: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Clickable controls get the web "hand" cursor so it's obvious what can be
+   clicked; the title bar's drag region is the one exception that keeps the
+   plain arrow, since it isn't a button. */
+button,
+select,
+input[type="checkbox"],
+.tbtn,
+.win-btn,
+.cat,
+.tab,
+.ctx-item,
+.ctx-sub,
+.drow,
+.check-row,
+.link-btn {
+  cursor: pointer;
+}
+[data-tauri-drag-region] {
+  cursor: default;
+}
+button:disabled,
+.ctx-item:disabled {
+  cursor: not-allowed;
+}
+input:not([type="checkbox"]),
+textarea,
+.selectable {
+  cursor: text;
+}
+

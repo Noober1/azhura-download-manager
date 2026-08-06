@@ -1,15 +1,16 @@
 import type { FileCategory } from "./categories";
+export type {
+  AppSettings,
+  ConnInfo,
+  DownloadEvent,
+  Prefs,
+  ProxyConfig,
+  ResumableInfo,
+  TrayDownload,
+} from "./bindings";
+import type { ConnInfo, ProxyConfig } from "./bindings";
 
 export type ProxyScheme = "http" | "https" | "socks5h";
-
-export type ProxyConfig = {
-  enabled: boolean;
-  scheme: ProxyScheme;
-  host: string;
-  port: number; // 0 = unset
-  username: string; // "" = no auth
-  password: string;
-};
 
 export const DEFAULT_PROXY: ProxyConfig = {
   enabled: false,
@@ -31,41 +32,6 @@ export type AddPayload = {
   filename: string; // "" = derive from server / URL
   savePath: string; // "" = default downloads folder
   proxy: ProxyConfig;
-};
-
-export type ConnInfo = { downloaded: number; total: number; pieces: number };
-
-export type DownloadEvent =
-  | {
-      event: "started";
-      data: {
-        filename: string;
-        path: string;
-        total: number | null;
-        connections: number;
-        pieceSize: number;
-        numPieces: number;
-      };
-    }
-  | {
-      event: "progress";
-      data: { downloaded: number; total: number | null; speedBps: number; connections: ConnInfo[] };
-    }
-  | { event: "paused"; data: { downloaded: number } }
-  | { event: "canceled"; data: { downloaded: number } }
-  | { event: "verifying" }
-  | { event: "finished"; data: { path: string; filename: string } }
-  | { event: "error"; data: { message: string } };
-
-export type ResumableInfo = {
-  path: string;
-  url: string;
-  filename: string;
-  total: number;
-  connections: number;
-  downloaded: number;
-  savePath: string | null;
-  addedAt: number | null;
 };
 
 export type DlState =
@@ -118,9 +84,6 @@ export type DownloadItem = {
   addedAt: number;
 };
 
-/** One row in the tray's dropdown menu — Rust just renders the label verbatim. */
-export type TrayDownload = { id: string; label: string };
-
 /** Emitted by the detail popup when the user clicks an action button there. */
 export type DetailAction = { id: string; action: "pause" | "resume" | "cancel" };
 
@@ -128,25 +91,15 @@ export type Category = "all" | "active" | "finished" | FileCategory;
 
 export type Theme = "system" | "dark" | "light";
 
-export type AppSettings = {
-  maxConcurrent: number;
-  globalLimitMbps: number;
-  minimizeToTray: boolean;
-  theme: Theme;
-  notifications: boolean;
-};
-
-/** Add-window defaults + per-category save-path overrides, persisted to
- *  `prefs.json` separately from `AppSettings` (see lib.rs for why). */
-export type Prefs = {
-  connections: number;
-  speedLimitMbps: number;
-  categoryPaths: Record<string, string>;
-  proxy: ProxyConfig;
-};
-
 /** One persisted finished download. `state` is always the real terminal state —
- *  `missing` is derived from disk by the backend on load and never written. */
+ *  `missing` is derived from disk by the backend on load and never written.
+ *
+ *  Hand-written rather than re-exported from bindings.ts: Rust's
+ *  `#[serde(skip_deserializing)] missing: bool` makes specta generate
+ *  asymmetric HistoryEntry_Serialize/_Deserialize variants (one requires
+ *  `missing`, the other omits it and marks everything optional), but the
+ *  frontend only ever needs one shape — both toHistoryEntry's output and
+ *  fromHistoryEntry's input (history.ts) are always fully populated. */
 export type HistoryEntry = {
   id: string;
   url: string;

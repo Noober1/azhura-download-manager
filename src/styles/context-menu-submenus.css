@@ -1,0 +1,61 @@
+/* ---- Context menu submenus (Speed cap / Connections) ---------------------- */
+
+.ctx-sub {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.82rem;
+  color: var(--ink);
+  border-radius: var(--radius-field);
+  padding: 0.35em 0.65em;
+  cursor: pointer;
+}
+.ctx-sub:hover:not(.disabled) {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.ctx-sub.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.ctx-caret {
+  margin-left: 0.6em;
+  color: var(--faint);
+}
+.ctx-sub:hover:not(.disabled) .ctx-caret {
+  color: inherit;
+}
+.ctx-flyout {
+  display: none;
+  position: absolute;
+  left: 100%;
+  top: -0.25rem;
+  min-width: 11rem;
+  padding: 0.25rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-card);
+  box-shadow: var(--sh-float);
+  flex-direction: column;
+  gap: 0;
+  z-index: 61;
+  /* The flyout is a child of the hovered `.ctx-sub`, which turns accent-blue
+     on hover — reset the inherited color so its own items read normally. */
+  color: var(--ink);
+}
+.ctx-sub:hover:not(.disabled) .ctx-flyout {
+  display: flex;
+}
+.ctx-menu.flip .ctx-flyout {
+  left: auto;
+  right: 100%;
+}
+.ctx-check {
+  display: inline-block;
+  width: 1em;
+  color: var(--accent);
+}
+.ctx-item:hover:not(:disabled):not(.disabled) .ctx-check {
+  color: inherit;
+}

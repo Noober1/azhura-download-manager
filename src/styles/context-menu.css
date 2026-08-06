@@ -1,0 +1,69 @@
+/* ---- Row context menu ----------------------------------------------------- */
+
+.ctx-menu {
+  position: fixed;
+  z-index: 60;
+  min-width: 12rem;
+  padding: 0.25rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-card);
+  box-shadow: var(--sh-float);
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+:root[data-theme="dark"] .ctx-menu,
+:root[data-theme="dark"] .ctx-flyout {
+  background: #1f1f1f;
+  border-color: #454545;
+}
+.ctx-item {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  text-align: left;
+  font-weight: 400;
+  font-size: 0.82rem;
+  color: var(--ink);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-field);
+  box-shadow: none;
+  padding: 0.35em 0.65em;
+  cursor: pointer;
+}
+/* `.ctx-sub` is a <div> that also carries `.ctx-item`, and a div is never
+   `:disabled` — so the `.disabled` class has to be excluded here too, or a
+   greyed-out submenu would still light up blue on hover. */
+.ctx-item:hover:not(:disabled):not(.disabled) {
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: none;
+  transform: none;
+}
+.ctx-item:active:not(:disabled) {
+  transform: none;
+  box-shadow: none;
+}
+.ctx-item:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.ctx-item.danger {
+  /* Beats the global `button.danger` rule (background: var(--danger); color: #fff),
+     which otherwise wins on specificity and paints red text on a red background. */
+  background: transparent;
+  border-color: transparent;
+  color: var(--danger);
+}
+.ctx-item.danger:hover:not(:disabled) {
+  background: var(--danger);
+  color: #fff;
+  opacity: 1;
+}
+.ctx-sep {
+  height: 1px;
+  margin: 0.25rem 0.2rem;
+  background: var(--border-strong);
+}

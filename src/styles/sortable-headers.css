@@ -1,0 +1,15 @@
+/* ---- Sortable table headers ------------------------------------------------ */
+
+.dtable thead th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+.dtable thead th.sortable:hover {
+  background: var(--hover);
+}
+.sort-arrow {
+  margin-left: 0.35em;
+  color: var(--ink-soft);
+  font-size: 0.6em;
+}
+

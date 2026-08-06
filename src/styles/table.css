@@ -1,0 +1,255 @@
+/* ---- Download table ------------------------------------------------------ */
+
+.table-wrap {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  padding: 0;
+}
+
+/* ---- Marquee (drag) selection ---------------------------------------------- */
+
+.marquee {
+  position: fixed;
+  z-index: 40;
+  pointer-events: none;
+  border: 1px solid var(--accent);
+  /* `--accent-wash` is a solid opaque color (used elsewhere for selected-row
+     backgrounds) — mix it down to a light translucent fill here so rows
+     underneath the drag box stay visible. */
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+}
+
+/* ---- Status bar ----------------------------------------------------------- */
+
+.statusbar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 0.75rem;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  font-size: 0.72rem;
+  color: var(--faint);
+}
+
+.dtable {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  border: none;
+  border-radius: 0;
+  background: var(--canvas);
+}
+
+.dtable thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  height: 22px;
+  background: var(--canvas);
+  font-family: var(--font-head);
+  font-weight: 400;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--faint);
+  text-align: left;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.col-num {
+  text-align: right;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  width: 11%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.col-speed {
+  width: 13%;
+}
+.col-status {
+  width: 12%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.col-pct {
+  width: 8%;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.col-name {
+  max-width: 0;
+  width: 28%;
+  overflow: hidden;
+}
+.col-added {
+  width: 15%;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Filename cell: icon pinned, text takes the remaining width and ellipsizes.
+   `min-width: 0` is what lets the flex child actually shrink below its
+   content size — without it the icon gets pushed out by a long name. */
+.name-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.name-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.file-icon {
+  flex-shrink: 0;
+  display: block;
+}
+
+.drow td {
+  height: 24px;
+  padding: 0 8px;
+  border-bottom: none;
+  font-size: 0.85rem;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.drow {
+  cursor: pointer;
+}
+.drow:hover td {
+  background: var(--hover);
+}
+.drow.selected td {
+  background: var(--accent-wash);
+}
+:root[data-theme="dark"] .drow.selected td {
+  color: #fff;
+}
+.drow .col-name {
+  font-weight: 400;
+}
+
+.cell-pct {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.mini-track {
+  flex: 1;
+  height: 4px;
+  border: none;
+  border-radius: 2px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+:root[data-theme="light"] .mini-track {
+  background: var(--border);
+}
+.mini-bar {
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+  transition: width 0.15s ease-out;
+}
+.mini-bar.done {
+  background: var(--positive);
+}
+.mini-bar.error {
+  background: var(--danger);
+}
+.mini-bar.indeterminate {
+  width: 40% !important;
+  background: var(--accent);
+  animation: sweep 1s linear infinite;
+}
+@keyframes sweep {
+  0% {
+    transform: translateX(-60%);
+  }
+  100% {
+    transform: translateX(160%);
+  }
+}
+.pct-num {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+  width: 2.6rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.drow.selected .pct-num {
+  color: inherit;
+}
+
+.empty-cell {
+  padding: 3rem 1rem !important;
+  height: auto !important;
+  text-align: center;
+  white-space: normal !important;
+  color: var(--faint);
+}
+
+/* ---- Status text --------------------------------------------------------- */
+/* VS Code states things in colored text rather than badges, so the pill is
+   gone — but the one-class-per-element contract from App.tsx still holds. */
+
+.mode-tag {
+  display: inline-block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-soft);
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  white-space: nowrap;
+}
+.mode-tag.downloading {
+  color: var(--accent);
+}
+.mode-tag.completed {
+  color: var(--positive);
+}
+.mode-tag.paused {
+  color: var(--warn);
+}
+.mode-tag.error,
+.mode-tag.canceled {
+  color: var(--danger);
+}
+.mode-tag.queued {
+  color: var(--ink-soft);
+}
+.mode-tag.verifying {
+  color: var(--accent);
+}
+/* Declared last: it shares specificity with the state classes above and must
+   win when a completed download's file has gone missing. */
+.mode-tag.missing {
+  color: var(--faint);
+  font-style: italic;
+  font-weight: 400;
+}
+/* On a selected row the accent wash already carries the color signal; keeping
+   the state hue on top of it would be unreadable in the dark theme. */
+:root[data-theme="dark"] .drow.selected .mode-tag {
+  color: #fff;
+}

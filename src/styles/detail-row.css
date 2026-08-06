@@ -1,0 +1,97 @@
+/* ---- Expanded detail row ------------------------------------------------- */
+
+.detail-row td {
+  background: var(--canvas);
+  border-bottom: 1px solid var(--border);
+  padding: 0.9rem 1rem;
+}
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.detail-meta {
+  display: flex;
+  gap: 1.2rem;
+  align-items: baseline;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+  flex-wrap: wrap;
+}
+.detail-note {
+  font-size: 0.78rem;
+  font-weight: 400;
+  color: var(--faint);
+  line-height: 1.5;
+}
+.detail-path {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--faint);
+  word-break: break-all;
+}
+
+.segments {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.seg {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.seg-idx {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--faint);
+  width: 1.8rem;
+}
+.seg-track {
+  flex: 1;
+  height: 4px;
+  border: none;
+  border-radius: 2px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+:root[data-theme="light"] .seg-track {
+  background: var(--border);
+}
+.seg-bar {
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+  transition: width 0.15s ease-out;
+}
+.seg-bar.idle {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--faint) 0,
+    var(--faint) 4px,
+    transparent 4px,
+    transparent 8px
+  );
+}
+.seg-pct {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--faint);
+  width: 3.4rem;
+  text-align: right;
+}
+
+.ok {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--positive);
+}
+.err {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--danger);
+  word-break: break-all;
+}

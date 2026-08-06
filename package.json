@@ -1,13 +1,16 @@
 {
   "name": "azhura-download-manager",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.2.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "test": "vitest run",
+    "lint": "eslint src",
+    "sync:ext": "node scripts/sync-extension.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
@@ -20,11 +23,17 @@
     "react-dom": "^19.1.0"
   },
   "devDependencies": {
+    "@eslint/js": "9",
+    "@tauri-apps/cli": "^2",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
+    "eslint": "9",
+    "eslint-plugin-react-hooks": "5",
+    "globals": "^17.9.0",
     "typescript": "~5.8.3",
+    "typescript-eslint": "^8.66.0",
     "vite": "^7.0.4",
-    "@tauri-apps/cli": "^2"
+    "vitest": "^4.1.10"
   }
 }

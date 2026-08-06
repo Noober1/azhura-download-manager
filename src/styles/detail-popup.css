@@ -1,0 +1,51 @@
+/* ---- Download Details popup window --------------------------------------- */
+
+.detail-window-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  overflow-y: auto;
+}
+.detail-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.detail-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-family: var(--font-head);
+  font-weight: 600;
+  font-size: 0.95rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.detail-overall {
+  width: 100%;
+}
+.detail-overall .mini-track {
+  height: 6px;
+}
+.detail-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 1rem;
+  row-gap: 0.4rem;
+  font-size: 0.78rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.6rem;
+}
+.detail-grid-label {
+  color: var(--faint);
+  font-weight: 400;
+  white-space: nowrap;
+}
+.detail-grid-value {
+  font-family: var(--font-mono);
+  color: var(--ink-soft);
+  word-break: break-all;
+}

@@ -1,6 +1,6 @@
-const MENU_ID = "adm-download";
-const ARM_MENU_ID = "adm-arm-capture";
-const ARMED_KEY = "captureArmed";
+importScripts("common.js");
+const { MENU_ID, ARM_MENU_ID, ARMED_KEY, COOKIE_FORWARD_DOMAINS, matchForwardDomain, buildAdmUrl } =
+  ADM;
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
@@ -20,26 +20,10 @@ chrome.runtime.onInstalled.addListener(() => {
   });
 });
 
-// Some hosts gate their direct download URLs behind a cookie the browser
-// sends automatically (ambient auth on <img>/<a> requests) but a plain HTTP
-// client has no way to obtain — ADM's Rust downloader is exactly that kind
-// of plain client. For a short allow-list of known hosts, look that cookie
-// up via chrome.cookies and forward it as a real `Cookie` header. Needs a
-// matching entry in manifest.json's host_permissions to be readable.
-const COOKIE_FORWARD_DOMAINS = {
-  "gofile.io": ["accountToken"],
-};
-
+// Look the forwarding cookie up via chrome.cookies. Needs a matching entry in
+// manifest.json's host_permissions to be readable.
 async function getForwardCookie(targetUrl) {
-  let host;
-  try {
-    host = new URL(targetUrl).hostname;
-  } catch {
-    return undefined;
-  }
-  const domain = Object.keys(COOKIE_FORWARD_DOMAINS).find(
-    (d) => host === d || host.endsWith(`.${d}`),
-  );
+  const domain = matchForwardDomain(targetUrl);
   if (!domain) return undefined;
 
   const pairs = [];
@@ -51,10 +35,7 @@ async function getForwardCookie(targetUrl) {
 }
 
 function sendToAdm(url, referrer, cookie) {
-  const params = new URLSearchParams({ url });
-  if (referrer) params.set("referrer", referrer);
-  if (cookie) params.set("cookie", cookie);
-  const admUrl = `adm://add?${params.toString()}`;
+  const admUrl = buildAdmUrl(url, referrer, cookie);
 
   // Custom-protocol navigation always leaves the tab that triggered it on a
   // failed/blank page — close it shortly after so nothing sticks around.
@@ -122,11 +103,8 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   // Some "download" links aren't real hrefs at all — e.g. `javascript:void(0)`
   // or a form submit button. There's no URL to hand off in that case; the
   // "arm capture" flow above handles those instead.
-  if (!/^https?:\/\//i.test(info.linkUrl)) {
-    notify(
-      "Can't grab this link",
-      "This link has no real download URL (it's a JavaScript- or form-driven button, not a plain link). Right-click the page and choose \"Arm ADM capture\", then click the download button instead.",
-    );
+  if (!ADM.DOWNLOAD_LINK_RE.test(info.linkUrl)) {
+    notify(ADM.CANT_GRAB_TITLE, ADM.CANT_GRAB_MESSAGE);
     return;
   }
 
