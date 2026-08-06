@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "test": "vitest run",
-    "lint": "eslint src"
+    "lint": "eslint src",
+    "sync:ext": "node scripts/sync-extension.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

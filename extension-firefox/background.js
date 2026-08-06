@@ -10,9 +10,8 @@
 
 const api = globalThis.browser ?? globalThis.chrome;
 
-const MENU_ID = "adm-download";
-const ARM_MENU_ID = "adm-arm-capture";
-const ARMED_KEY = "captureArmed";
+const { MENU_ID, ARM_MENU_ID, ARMED_KEY, COOKIE_FORWARD_DOMAINS, matchForwardDomain, buildAdmUrl } =
+  ADM;
 
 api.runtime.onInstalled.addListener(() => {
   api.contextMenus.create({
@@ -31,27 +30,6 @@ api.runtime.onInstalled.addListener(() => {
     contexts: ["page"],
   });
 });
-
-// Some hosts gate their direct download URLs behind a cookie the browser
-// sends automatically (ambient auth on <img>/<a> requests) but a plain HTTP
-// client has no way to obtain — ADM's Rust downloader is exactly that kind
-// of plain client. For a short allow-list of known hosts, look that cookie
-// up via the cookies API and forward it as a real `Cookie` header.
-const COOKIE_FORWARD_DOMAINS = {
-  "gofile.io": ["accountToken"],
-};
-
-function matchForwardDomain(targetUrl) {
-  let host;
-  try {
-    host = new URL(targetUrl).hostname;
-  } catch {
-    return undefined;
-  }
-  return Object.keys(COOKIE_FORWARD_DOMAINS).find(
-    (d) => host === d || host.endsWith(`.${d}`),
-  );
-}
 
 // Under Firefox MV3 a `host_permissions` entry is only a *request* — the user
 // grants it separately, and until then `cookies.get` returns nothing. Ask for
@@ -83,10 +61,7 @@ async function getForwardCookie(targetUrl) {
 }
 
 async function sendToAdm(url, referrer, cookie) {
-  const params = new URLSearchParams({ url });
-  if (referrer) params.set("referrer", referrer);
-  if (cookie) params.set("cookie", cookie);
-  const admUrl = `adm://add?${params.toString()}`;
+  const admUrl = buildAdmUrl(url, referrer, cookie);
 
   // Gecko refuses to load a non-standard scheme passed straight to
   // `tabs.create`, so bounce through a packaged page that performs the
@@ -158,11 +133,8 @@ api.contextMenus.onClicked.addListener(async (info, tab) => {
   // Some "download" links aren't real hrefs at all — e.g. `javascript:void(0)`
   // or a form submit button. There's no URL to hand off in that case; the
   // "arm capture" flow above handles those instead.
-  if (!/^https?:\/\//i.test(info.linkUrl)) {
-    notify(
-      "Can't grab this link",
-      'This link has no real download URL (it\'s a JavaScript- or form-driven button, not a plain link). Right-click the page and choose "Arm ADM capture", then click the download button instead.',
-    );
+  if (!ADM.DOWNLOAD_LINK_RE.test(info.linkUrl)) {
+    notify(ADM.CANT_GRAB_TITLE, ADM.CANT_GRAB_MESSAGE);
     return;
   }
 
