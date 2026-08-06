@@ -1,10 +1,10 @@
-import { invoke } from "@tauri-apps/api/core";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { commands } from "../../bindings";
 
 async function revealExtension(flavor: "chrome" | "firefox") {
   try {
-    const dir = await invoke<string>("extension_dir", { flavor });
+    const dir = await commands.extensionDir(flavor);
     const sep = dir.includes("\\") ? "\\" : "/";
     await revealItemInDir(`${dir.replace(/[\\/]+$/, "")}${sep}manifest.json`);
     if (flavor === "chrome") {

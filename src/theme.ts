@@ -1,7 +1,7 @@
 import { useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
-import type { AppSettings, Theme } from "./types";
+import { commands } from "./bindings";
+import type { Theme } from "./types";
 
 /* Color theme, applied by stamping `data-theme` on <html> — every color token
    in App.css hangs off that attribute.
@@ -59,7 +59,8 @@ export function broadcastTheme(t: Theme) {
  *  Settings dialog. */
 export function useTheme() {
   useEffect(() => {
-    invoke<AppSettings>("load_settings")
+    commands
+      .loadSettings()
       .then((s) => applyTheme(normalizeTheme(s.theme)))
       .catch(() => {});
     const unlisten = listen<Theme>("theme-changed", (e) => applyTheme(normalizeTheme(e.payload)));

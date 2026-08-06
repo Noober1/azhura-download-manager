@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { commands } from "../bindings";
 import type { AppSettings, Theme } from "../types";
 import { broadcastTheme, normalizeTheme, useTheme } from "../theme";
 import { initNotifications, setNotificationsEnabled } from "../notify";
@@ -19,17 +19,25 @@ export function useSettings() {
   // Restore persisted settings (scheduler knobs + tray behavior) from a
   // previous session; they otherwise reset to defaults every launch.
   useEffect(() => {
-    invoke<AppSettings>("load_settings")
+    commands
+      .loadSettings()
       .then((s) => {
-        setMaxConcurrent(s.maxConcurrent);
-        setGlobalLimitMbps(s.globalLimitMbps);
-        setMinimizeToTray(s.minimizeToTray);
+        // The generated binding types every field optional (it doubles as
+        // save_settings's input type, where a partial settings.json on disk
+        // falls back to `#[serde(default)]`) — load_settings itself always
+        // returns the struct fully populated, so these fallbacks are never
+        // actually exercised; they just match AppSettings::default() in Rust.
+        const globalLimitMbps = s.globalLimitMbps ?? 0;
+        const notifications = s.notifications ?? true;
+        setMaxConcurrent(s.maxConcurrent ?? 3);
+        setGlobalLimitMbps(globalLimitMbps);
+        setMinimizeToTray(s.minimizeToTray ?? false);
         setTheme(normalizeTheme(s.theme));
-        setNotifications(s.notifications);
-        setNotificationsEnabled(s.notifications);
-        if (s.globalLimitMbps > 0) {
-          invoke("set_global_speed_limit", {
-            bytesPerSec: Math.round(s.globalLimitMbps * 1024 * 1024),
+        setNotifications(notifications);
+        setNotificationsEnabled(notifications);
+        if (globalLimitMbps > 0) {
+          commands.setGlobalSpeedLimit({
+            bytesPerSec: Math.round(globalLimitMbps * 1024 * 1024),
           });
         }
       })
@@ -43,16 +51,14 @@ export function useSettings() {
   }, []);
 
   function persistSettings(overrides: Partial<AppSettings> = {}) {
-    invoke("save_settings", {
-      settings: {
-        maxConcurrent,
-        globalLimitMbps,
-        minimizeToTray,
-        theme,
-        notifications,
-        ...overrides,
-      } as AppSettings,
-    });
+    commands.saveSettings({
+      maxConcurrent,
+      globalLimitMbps,
+      minimizeToTray,
+      theme,
+      notifications,
+      ...overrides,
+    } as AppSettings);
   }
 
   function setMaxActive(n: number) {
@@ -64,7 +70,7 @@ export function useSettings() {
   function setGlobalLimit(mbps: number) {
     const v = Math.max(0, mbps || 0);
     setGlobalLimitMbps(v);
-    invoke("set_global_speed_limit", { bytesPerSec: Math.round(v * 1024 * 1024) });
+    commands.setGlobalSpeedLimit({ bytesPerSec: Math.round(v * 1024 * 1024) });
     persistSettings({ globalLimitMbps: v });
   }
 
