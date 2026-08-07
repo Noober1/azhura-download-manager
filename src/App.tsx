@@ -14,6 +14,7 @@ import { useTrayPush } from "./hooks/useTrayPush";
 import { useDetailWindows } from "./hooks/useDetailWindows";
 import { useDeepLinkCapture } from "./hooks/useDeepLinkCapture";
 import { useSortedRows } from "./hooks/useSortedRows";
+import { useColumnWidths } from "./hooks/useColumnWidths";
 import { useSelection } from "./selection/useSelection";
 import { useMarquee } from "./selection/useMarquee";
 import { useTableKeyboard } from "./selection/useTableKeyboard";
@@ -69,6 +70,7 @@ function App() {
   const { selectedIds, setSelectedIds, anchorRef, selectRow, scrollRowIntoView } = selection;
 
   const marquee = useMarquee(didDragRef, tableWrapRef, selectedIds, setSelectedIds);
+  const columnWidths = useColumnWidths();
 
   const { openDetail } = useDetailWindows(
     downloads,
@@ -197,6 +199,10 @@ function App() {
           onRowContext={handleRowContext}
           onOpenDetail={openDetail}
           marquee={marquee.marquee}
+          widths={columnWidths.widths}
+          onResizeStart={columnWidths.startResize}
+          onAutoFit={columnWidths.autoFit}
+          didResizeRef={columnWidths.didResizeRef}
         />
       </div>
 
