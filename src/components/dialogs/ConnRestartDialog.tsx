@@ -1,3 +1,6 @@
+import { motion } from "motion/react";
+import { OVERLAY_FADE, DIALOG_POP } from "../../motion";
+
 export function ConnRestartDialog({
   itemCount,
   onApplyOnNextStart,
@@ -8,8 +11,22 @@ export function ConnRestartDialog({
   onRestartNow: () => void;
 }) {
   return (
-    <div className="overlay" onClick={onApplyOnNextStart}>
-      <div className="dialog dialog-sm" onClick={(e) => e.stopPropagation()}>
+    <motion.div
+      className="overlay"
+      onClick={onApplyOnNextStart}
+      variants={OVERLAY_FADE}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+    >
+      <motion.div
+        className="dialog dialog-sm"
+        onClick={(e) => e.stopPropagation()}
+        variants={DIALOG_POP}
+        initial="initial"
+        animate="animate"
+        exit="exit"
+      >
         <div className="dialog-head">Apply new connection count?</div>
         <div className="dialog-body">
           <p className="detail-note">
@@ -25,8 +42,8 @@ export function ConnRestartDialog({
             Restart now
           </button>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }
 

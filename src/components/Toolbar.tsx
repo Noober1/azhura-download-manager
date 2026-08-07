@@ -1,11 +1,14 @@
 import { useEffect, useRef } from "react";
+import { motion } from "motion/react";
 import { commands } from "../bindings";
 import type { DownloadItem } from "../types";
 import { formatSpeed } from "../format";
 import { Icon, WindowControls } from "../ui";
+import { TAP } from "../motion";
 
 export function Toolbar({
   resumableSel,
+  resumeLabel,
   pausableSel,
   cancelableSel,
   deletableSel,
@@ -25,6 +28,8 @@ export function Toolbar({
   onShowExtensions,
 }: {
   resumableSel: DownloadItem[];
+  /** "Resume" or "Redownload" — see ContextMenu's `resumeLabel` prop. */
+  resumeLabel: string;
   pausableSel: DownloadItem[];
   cancelableSel: DownloadItem[];
   deletableSel: DownloadItem[];
@@ -61,53 +66,63 @@ export function Toolbar({
   }, []);
   return (
     <div className="topbar" data-tauri-drag-region>
-      <button
+      <motion.button
         className="tbtn primary"
         title="Add download"
         onClick={() => commands.openAddWindow()}
+        whileTap={TAP}
       >
         <Icon name="add" />
-      </button>
+      </motion.button>
       <span className="tsep" />
-      <button
+      <motion.button
         className="tbtn"
-        title={`Resume${resumableSel.length > 1 ? ` (${resumableSel.length})` : ""}`}
+        title={`${resumeLabel}${resumableSel.length > 1 ? ` (${resumableSel.length})` : ""}`}
         disabled={resumableSel.length === 0}
         onClick={() => onResume(resumableSel)}
+        whileTap={TAP}
       >
         <Icon name="resume" />
-      </button>
-      <button
+      </motion.button>
+      <motion.button
         className="tbtn"
         title={`Pause${pausableSel.length > 1 ? ` (${pausableSel.length})` : ""}`}
         disabled={pausableSel.length === 0}
         onClick={() => onPause(pausableSel)}
+        whileTap={TAP}
       >
         <Icon name="pause" />
-      </button>
-      <button
+      </motion.button>
+      <motion.button
         className="tbtn"
         title={`Cancel${cancelableSel.length > 1 ? ` (${cancelableSel.length})` : ""}`}
         disabled={cancelableSel.length === 0}
         onClick={() => onCancel(cancelableSel)}
+        whileTap={TAP}
       >
         <Icon name="cancel" />
-      </button>
-      <button
+      </motion.button>
+      <motion.button
         className="tbtn danger"
         title={`Delete${deletableSel.length > 1 ? ` (${deletableSel.length})` : ""}`}
         disabled={deletableSel.length === 0}
         onClick={() => onRequestDelete(selectedItems)}
+        whileTap={TAP}
       >
         <Icon name="trash" />
-      </button>
+      </motion.button>
       <span className="tsep" />
-      <button className="tbtn" title="Settings" onClick={onShowSettings}>
+      <motion.button className="tbtn" title="Settings" onClick={onShowSettings} whileTap={TAP}>
         <Icon name="settings" />
-      </button>
-      <button className="tbtn" title="Refresh file status (F5)" onClick={onRefresh}>
+      </motion.button>
+      <motion.button
+        className="tbtn"
+        title="Refresh file status (F5)"
+        onClick={onRefresh}
+        whileTap={TAP}
+      >
         <Icon name="refresh" />
-      </button>
+      </motion.button>
 
       <input
         ref={searchRef}
@@ -131,13 +146,14 @@ export function Toolbar({
           {selectedCount > 1 ? ` · ${selectedCount} selected` : ""}
         </span>
       </div>
-      <button
+      <motion.button
         className="tbtn"
         title="Install browser extension"
         onClick={onShowExtensions}
+        whileTap={TAP}
       >
         <Icon name="puzzle" />
-      </button>
+      </motion.button>
       <WindowControls variant="full" />
     </div>
   );

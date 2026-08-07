@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { motion } from "motion/react";
 import { SPEED_PRESETS, CONNECTION_PRESETS } from "../constants";
+import { MENU_POP } from "../motion";
 
 /* Fixed-position right-click menu for the selected row(s). Clamps itself to
    stay inside the window and dismisses on outside click, Escape, scroll, or
@@ -8,6 +10,7 @@ export function ContextMenu({
   x,
   y,
   resumableCount,
+  resumeLabel,
   pausableCount,
   cancelableCount,
   canReveal,
@@ -32,6 +35,9 @@ export function ContextMenu({
   x: number;
   y: number;
   resumableCount: number;
+  /** "Resume" or "Redownload" — depends on whether every selected resumable
+   *  row would restart from byte zero (see `isRedownload` in format.ts). */
+  resumeLabel: string;
   pausableCount: number;
   cancelableCount: number;
   canReveal: boolean;
@@ -95,14 +101,22 @@ export function ContextMenu({
   }
 
   return (
-    <div className={`ctx-menu ${flip ? "flip" : ""}`} style={{ left: pos.x, top: pos.y }} ref={ref}>
+    <motion.div
+      className={`ctx-menu ${flip ? "flip" : ""}`}
+      style={{ left: pos.x, top: pos.y }}
+      ref={ref}
+      variants={MENU_POP}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+    >
       <button
         type="button"
         className="ctx-item"
         disabled={resumableCount === 0}
         onClick={() => run(onResume)}
       >
-        Resume{resumableCount > 1 ? ` (${resumableCount})` : ""}
+        {resumeLabel}{resumableCount > 1 ? ` (${resumableCount})` : ""}
       </button>
       <button
         type="button"
@@ -190,7 +204,7 @@ export function ContextMenu({
       >
         Delete…
       </button>
-    </div>
+    </motion.div>
   );
 }
 

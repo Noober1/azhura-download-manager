@@ -1,20 +1,25 @@
-import type { DlState } from "./types";
-
 export const TERMINAL_STATES = ["completed", "error", "canceled"] as const;
 /** Sent by the browser extension; re-captured on demand rather than stored. */
 export const CREDENTIAL_HEADERS = ["cookie", "authorization", "proxy-authorization"];
 
 export type SortKey = "name" | "added" | "status" | "size" | "downloaded" | "pct" | "speed";
-/** Sort order for the Status column: what needs attention floats to the top. */
-export const STATUS_RANK: Record<DlState, number> = {
+
+/** Sort order for the Status column, keyed by *displayed* status (see
+ *  `format.ts`'s `statusRank`) rather than raw `DlState` — a `missing` or
+ *  `awaitingCapture` row shows a different label than its underlying state,
+ *  and the sort must agree with what's on screen. What needs attention
+ *  floats to the top. */
+export const DISPLAY_STATUS_RANK = {
   downloading: 0,
   verifying: 1,
   queued: 2,
-  paused: 3,
-  error: 4,
-  canceled: 5,
-  completed: 6,
-};
+  awaitingCapture: 3,
+  paused: 4,
+  error: 5,
+  missing: 6,
+  canceled: 7,
+  completed: 8,
+} as const;
 
 /** Presets offered in the context menu's "Speed cap" submenu, in bytes/sec. */
 export const SPEED_PRESETS: { label: string; bytes: number }[] = [

@@ -19,6 +19,7 @@
     "@tauri-apps/plugin-notification": "^2",
     "@tauri-apps/plugin-opener": "^2",
     "material-icon-theme": "^5.37.0",
+    "motion": "^13.0.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },

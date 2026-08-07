@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import type { Category, DownloadItem } from "../types";
 import { categoryOf } from "../categories";
-import { pctOf } from "../format";
-import { STATUS_RANK, type SortKey } from "../constants";
+import { pctOf, statusRank } from "../format";
+import type { SortKey } from "../constants";
 
 /** Sidebar category filter + column sort, and the derived row lists both
  *  produce. Defaults to Date Added (newest first); `sort === null` (reachable
@@ -65,7 +65,7 @@ export function useSortedRows(downloads: DownloadItem[]) {
         case "added":
           return d.addedAt;
         case "status":
-          return STATUS_RANK[d.state];
+          return statusRank(d);
         case "size":
           return d.total ?? -1;
         case "downloaded":

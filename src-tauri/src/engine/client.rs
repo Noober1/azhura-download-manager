@@ -148,7 +148,11 @@ pub(crate) async fn probe(
         );
     }
 
-    let filename = crate::paths::filename_from(&resp, url);
+    let referer = headers
+        .iter()
+        .find(|(name, _)| name.as_str().eq_ignore_ascii_case("referer"))
+        .and_then(|(_, v)| v.to_str().ok());
+    let filename = crate::paths::filename_from(&resp, url, referer);
     let validator = extract_validator(&resp);
     if resp.status() == reqwest::StatusCode::PARTIAL_CONTENT {
         Ok(Probe {

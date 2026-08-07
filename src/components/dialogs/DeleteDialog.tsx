@@ -1,5 +1,7 @@
 import { useEffect } from "react";
+import { motion } from "motion/react";
 import type { DownloadItem } from "../../types";
+import { OVERLAY_FADE, DIALOG_POP } from "../../motion";
 
 /* Confirms a single or batch delete, offering to also remove the source
    file(s) from disk (unchecked by default). Running downloads in `items` are
@@ -33,8 +35,22 @@ export function DeleteDialog({
   const hasIncomplete = deletable.some((d) => d.state !== "completed" && !d.missing);
 
   return (
-    <div className="overlay" onClick={onCancel}>
-      <div className="dialog dialog-sm" onClick={(e) => e.stopPropagation()}>
+    <motion.div
+      className="overlay"
+      onClick={onCancel}
+      variants={OVERLAY_FADE}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+    >
+      <motion.div
+        className="dialog dialog-sm"
+        onClick={(e) => e.stopPropagation()}
+        variants={DIALOG_POP}
+        initial="initial"
+        animate="animate"
+        exit="exit"
+      >
         <div className="dialog-head">
           {deletable.length === 1 ? `Delete "${deletable[0].filename}"?` : `Delete ${deletable.length} downloads?`}
         </div>
@@ -81,8 +97,8 @@ export function DeleteDialog({
             Delete
           </button>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }
 

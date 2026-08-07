@@ -1,5 +1,6 @@
 import type { DownloadItem } from "./types";
 import { STATE_LABEL } from "./types";
+import { DISPLAY_STATUS_RANK } from "./constants";
 
 export function isInsecureHttp(url: string): boolean {
   return /^\s*http:\/\//i.test(url);
@@ -84,7 +85,41 @@ export function formatEta(seconds: number): string {
   return `${h}h ${m % 60}m`;
 }
 
+const FILENAME_QUERY_KEYS = ["filename", "file", "name", "fn", "title", "attachment", "download"];
+
+/** Mirrors `has_plausible_extension` in `src-tauri/src/paths.rs`: a `.` past
+ *  position 0 whose tail is 1-8 ASCII alphanumerics. */
+function hasPlausibleExtension(name: string): boolean {
+  const idx = name.lastIndexOf(".");
+  if (idx <= 0) return false;
+  const ext = name.slice(idx + 1);
+  return ext.length >= 1 && ext.length <= 8 && /^[a-zA-Z0-9]+$/.test(ext);
+}
+
+/** Cosmetic pre-start filename for the Add window's readout, before the
+ *  backend's `started` event reports the real name it chose. Mirrors the
+ *  first two URL-only steps of `paths::filename_from` in
+ *  `src-tauri/src/paths.rs`: a query-param filename hint with a plausible
+ *  extension (e.g. `?filename=video.mp4`), then the URL's own last path
+ *  segment, percent-decoded. `Content-Type` isn't available client-side, so
+ *  the extension-rescue steps that need it are backend-only. */
 export function fallbackName(url: string): string {
+  try {
+    const parsed = new URL(url);
+    for (const [key, value] of parsed.searchParams) {
+      if (
+        FILENAME_QUERY_KEYS.includes(key.toLowerCase()) &&
+        value &&
+        hasPlausibleExtension(value)
+      ) {
+        return value;
+      }
+    }
+    const last = parsed.pathname.split("/").filter(Boolean).pop();
+    if (last) return decodeURIComponent(last);
+  } catch {
+    // Not a parseable absolute URL — fall through to the naive split below.
+  }
   const clean = url.split(/[?#]/)[0];
   return clean.split("/").pop() || "download";
 }
@@ -113,6 +148,16 @@ export function isResumable(item: DownloadItem): boolean {
   );
 }
 
+/** A "resume" that can't continue from a resume sidecar restarts from byte
+ *  zero instead — `resumeMany` (useDownloads.ts) clears path/downloaded/total
+ *  for exactly these rows. The UI calls this action "Redownload" instead of
+ *  "Resume" so it doesn't imply the download picks up where it left off.
+ *  `awaitingCapture` deliberately isn't included here: that path reopens the
+ *  browser page to retry credential capture, not a plain restart. */
+export function isRedownload(item: DownloadItem): boolean {
+  return !!item.missing || !!item.fromHistory;
+}
+
 export function statusClass(item: DownloadItem): string {
   if (item.awaitingCapture) return "queued";
   return item.missing ? "missing" : item.state;
@@ -121,4 +166,13 @@ export function statusClass(item: DownloadItem): string {
 export function statusLabel(item: DownloadItem): string {
   if (item.awaitingCapture) return "Waiting for browser";
   return item.missing ? "Moved / deleted" : STATE_LABEL[item.state];
+}
+
+/** Sort rank for the Status column — mirrors the same `awaitingCapture` →
+ *  `missing` → `state` precedence `statusClass`/`statusLabel` use, so the
+ *  sort order always agrees with what's actually rendered in the cell. */
+export function statusRank(item: DownloadItem): number {
+  if (item.awaitingCapture) return DISPLAY_STATUS_RANK.awaitingCapture;
+  if (item.missing) return DISPLAY_STATUS_RANK.missing;
+  return DISPLAY_STATUS_RANK[item.state];
 }

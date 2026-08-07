@@ -1,4 +1,6 @@
+import { motion } from "motion/react";
 import type { Theme } from "../../types";
+import { OVERLAY_FADE, DIALOG_POP } from "../../motion";
 
 export function SettingsDialog({
   maxConcurrent,
@@ -6,11 +8,13 @@ export function SettingsDialog({
   theme,
   minimizeToTray,
   notifications,
+  runAtStartup,
   onSetMaxActive,
   onSetGlobalLimit,
   onSetTheme,
   onSetMinimizeToTray,
   onSetNotifications,
+  onSetRunAtStartup,
   onClose,
 }: {
   maxConcurrent: number;
@@ -18,16 +22,32 @@ export function SettingsDialog({
   theme: Theme;
   minimizeToTray: boolean;
   notifications: boolean;
+  runAtStartup: boolean;
   onSetMaxActive: (n: number) => void;
   onSetGlobalLimit: (mbps: number) => void;
   onSetTheme: (t: Theme) => void;
   onSetMinimizeToTray: (v: boolean) => void;
   onSetNotifications: (v: boolean) => void;
+  onSetRunAtStartup: (v: boolean) => void;
   onClose: () => void;
 }) {
   return (
-    <div className="overlay" onClick={onClose}>
-      <div className="dialog dialog-sm" onClick={(e) => e.stopPropagation()}>
+    <motion.div
+      className="overlay"
+      onClick={onClose}
+      variants={OVERLAY_FADE}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+    >
+      <motion.div
+        className="dialog dialog-sm"
+        onClick={(e) => e.stopPropagation()}
+        variants={DIALOG_POP}
+        initial="initial"
+        animate="animate"
+        exit="exit"
+      >
         <div className="dialog-head">Settings</div>
         <div className="dialog-body">
           <div className="field-row">
@@ -80,6 +100,16 @@ export function SettingsDialog({
           <div className="check-row">
             <input
               type="checkbox"
+              id="run-startup"
+              checked={runAtStartup}
+              onChange={(e) => onSetRunAtStartup(e.currentTarget.checked)}
+            />
+            <label htmlFor="run-startup">Run at startup</label>
+            <span className="field-unit">Starts hidden in the tray</span>
+          </div>
+          <div className="check-row">
+            <input
+              type="checkbox"
               id="notify"
               checked={notifications}
               onChange={(e) => onSetNotifications(e.currentTarget.checked)}
@@ -92,8 +122,8 @@ export function SettingsDialog({
             Done
           </button>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }
 

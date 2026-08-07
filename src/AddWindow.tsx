@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+import { motion } from "motion/react";
 import { commands } from "./bindings";
 import { WindowControls, useNativeShell } from "./ui";
 import { useTheme } from "./theme";
@@ -6,7 +8,30 @@ import { LinkTab } from "./components/add/LinkTab";
 import { ProxyTab } from "./components/add/ProxyTab";
 import { MoreOptionsTab } from "./components/add/MoreOptionsTab";
 import { AdvancedTab } from "./components/add/AdvancedTab";
+import { LAYOUT_SPRING } from "./motion";
 import "./App.css";
+
+/* A single tab button. The active one gets a `motion.div` sharing
+   `layoutId="tab-active"` with every other tab's — motion animates it
+   sliding to the new tab instead of the highlight just jumping. */
+function TabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button type="button" className={`tab ${active ? "active" : ""}`} onClick={onClick}>
+      {active && (
+        <motion.div className="tab-indicator" layoutId="tab-active" transition={LAYOUT_SPRING} />
+      )}
+      <span className="tab-label">{children}</span>
+    </button>
+  );
+}
 
 /* The separate native "Add Download" window (Persepolis-style). Collects the
    form across Link / Proxy / More Options / Advanced Options tabs and hands
@@ -26,34 +51,18 @@ export function AddWindow() {
       </div>
 
       <div className="tabs">
-        <button
-          type="button"
-          className={`tab ${tab === "link" ? "active" : ""}`}
-          onClick={() => setTab("link")}
-        >
+        <TabButton active={tab === "link"} onClick={() => setTab("link")}>
           Link
-        </button>
-        <button
-          type="button"
-          className={`tab ${tab === "proxy" ? "active" : ""}`}
-          onClick={() => setTab("proxy")}
-        >
+        </TabButton>
+        <TabButton active={tab === "proxy"} onClick={() => setTab("proxy")}>
           Proxy{form.effectiveProxy.enabled ? " · on" : ""}
-        </button>
-        <button
-          type="button"
-          className={`tab ${tab === "more" ? "active" : ""}`}
-          onClick={() => setTab("more")}
-        >
+        </TabButton>
+        <TabButton active={tab === "more"} onClick={() => setTab("more")}>
           More Options
-        </button>
-        <button
-          type="button"
-          className={`tab ${tab === "advanced" ? "active" : ""}`}
-          onClick={() => setTab("advanced")}
-        >
+        </TabButton>
+        <TabButton active={tab === "advanced"} onClick={() => setTab("advanced")}>
           Advanced Options{form.headerCount > 0 ? ` · ${form.headerCount}` : ""}
-        </button>
+        </TabButton>
       </div>
 
       <div className="dialog-body">

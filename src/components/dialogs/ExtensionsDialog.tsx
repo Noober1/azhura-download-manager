@@ -1,6 +1,8 @@
+import { motion } from "motion/react";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { commands } from "../../bindings";
+import { OVERLAY_FADE, DIALOG_POP } from "../../motion";
 
 async function revealExtension(flavor: "chrome" | "firefox") {
   try {
@@ -22,8 +24,22 @@ async function revealExtension(flavor: "chrome" | "firefox") {
 
 export function ExtensionsDialog({ onClose }: { onClose: () => void }) {
   return (
-    <div className="overlay" onClick={onClose}>
-      <div className="dialog" onClick={(e) => e.stopPropagation()}>
+    <motion.div
+      className="overlay"
+      onClick={onClose}
+      variants={OVERLAY_FADE}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+    >
+      <motion.div
+        className="dialog"
+        onClick={(e) => e.stopPropagation()}
+        variants={DIALOG_POP}
+        initial="initial"
+        animate="animate"
+        exit="exit"
+      >
         <div className="dialog-head">Browser extension</div>
         <div className="dialog-body">
           <p className="detail-note">
@@ -71,8 +87,8 @@ export function ExtensionsDialog({ onClose }: { onClose: () => void }) {
             Done
           </button>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }
 

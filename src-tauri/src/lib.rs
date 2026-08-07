@@ -19,17 +19,23 @@ use std::sync::Mutex;
 
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{Emitter, Manager as _};
+use tauri_plugin_autostart::MacosLauncher;
 
 use categories::CATEGORY_FOLDERS;
 use config::prefs::PrefsState;
-use config::settings::SettingsState;
+use config::settings::{AutostartLaunch, SettingsState};
 use deeplink::{deep_link_from_args, handle_deep_link, handle_deep_link_cold_start, PendingDeepLink};
 use engine::control::Manager;
 use paths::downloads_base;
 use tray::{rebuild_tray_menu, TrayMenuState};
 use windows::{harden_webview, quit_app, reveal_main_window, Quitting};
 
-/// 24 of the app's 26 IPC-crossing commands, collected once here so both the
+/// Passed to the app by the `autostart` plugin on an OS-launched-at-login
+/// run — the single flag both `tauri_plugin_autostart::init`'s `args` param
+/// and the cold-start detection below have to agree on.
+const AUTOSTART_FLAG: &str = "--autostart";
+
+/// 28 of the app's 30 IPC-crossing commands, collected once here so both the
 /// runtime invoke handler and (in debug builds) the generated
 /// `../src/bindings.ts` stay derived from the same list — order matches the
 /// old `tauri::generate_handler!` list it replaced.
@@ -68,6 +74,9 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         tray::update_tray_downloads,
         config::settings::load_settings,
         config::settings::save_settings,
+        config::settings::get_run_at_startup,
+        config::settings::set_run_at_startup,
+        config::settings::launched_at_startup,
         config::prefs::load_prefs,
         config::prefs::save_add_defaults,
         config::prefs::set_category_path,
@@ -140,12 +149,22 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_autostart::init(
+            MacosLauncher::LaunchAgent,
+            Some(vec![AUTOSTART_FLAG]),
+        ))
         .manage(Manager::default())
         .manage(PendingDeepLink::default())
         .manage(SettingsState(Mutex::new(config::settings::load_settings_from_disk())))
         .manage(PrefsState(Mutex::new(config::prefs::load_prefs_from_disk())))
         .manage(Quitting(AtomicBool::new(false)))
         .manage(TrayMenuState::default())
+        // Set once at startup from argv — `--autostart` is only ever present
+        // when the OS launched us via the autostart entry (see
+        // `AUTOSTART_FLAG`), never on a plain manual launch or a deep-link
+        // relay (`deep_link_from_args` only matches `adm://` args, so the two
+        // checks can't collide).
+        .manage(AutostartLaunch(std::env::args().any(|a| a == AUTOSTART_FLAG)))
         .setup(move |app| {
             specta_builder.mount_events(app);
 

@@ -13,6 +13,7 @@ export function useSettings() {
   const [minimizeToTray, setMinimizeToTray] = useState(false);
   const [theme, setTheme] = useState<Theme>("system");
   const [notifications, setNotifications] = useState(true);
+  const [runAtStartup, setRunAtStartup] = useState(false);
 
   useTheme();
 
@@ -48,6 +49,17 @@ export function useSettings() {
   // surfacing an error the user can't act on from here.
   useEffect(() => {
     initNotifications();
+  }, []);
+
+  // Not part of settings.json / persistSettings below: the OS-level registry
+  // entry (or macOS LaunchAgent) the backend's autostart plugin manages is
+  // the single source of truth, so this is loaded from its own command
+  // instead of `loadSettings`'s snapshot.
+  useEffect(() => {
+    commands
+      .getRunAtStartup()
+      .then(setRunAtStartup)
+      .catch(() => {});
   }, []);
 
   function persistSettings(overrides: Partial<AppSettings> = {}) {
@@ -93,16 +105,25 @@ export function useSettings() {
     persistSettings({ notifications: v });
   }
 
+  // Optimistic: flips the checkbox immediately, then reverts it if the OS
+  // call actually fails (e.g. the registry key is locked down).
+  function setRunAtStartupSetting(v: boolean) {
+    setRunAtStartup(v);
+    commands.setRunAtStartup(v).catch(() => setRunAtStartup(!v));
+  }
+
   return {
     maxConcurrent,
     globalLimitMbps,
     minimizeToTray,
     theme,
     notifications,
+    runAtStartup,
     setMaxActive,
     setGlobalLimit,
     setMinimizeToTraySetting,
     setThemeSetting,
     setNotificationsSetting,
+    setRunAtStartupSetting,
   };
 }
