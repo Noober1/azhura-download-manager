@@ -5,22 +5,9 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Azhura Download Manager</title>
-    <!-- Stamps the color theme before the first paint, so a light-theme user
-         never sees a dark frame while React boots. settings.json stays the
-         source of truth; this reads the mirror src/theme.ts keeps in sync. -->
-    <script>
-      (function () {
-        try {
-          var t = localStorage.getItem("adm-theme") || "system";
-          var dark =
-            t === "dark" ||
-            (t === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
-          document.documentElement.dataset.theme = dark ? "dark" : "light";
-        } catch (e) {
-          document.documentElement.dataset.theme = "dark";
-        }
-      })();
-    </script>
+    <!-- See public/theme-boot.js — pre-paint theme stamp, kept as a separate
+         file (not inlined) so the CSP's script-src can drop 'unsafe-inline'. -->
+    <script src="/theme-boot.js"></script>
   </head>
 
   <body>

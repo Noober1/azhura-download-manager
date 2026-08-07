@@ -1,6 +1,10 @@
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use tauri::{Emitter, Manager as _};
+
+use crate::bridge::HandoffStore;
+#[cfg(test)]
+use crate::bridge::Handoff;
 
 /// Holds an `adm://` link seen before the Add window's frontend had a
 /// chance to mount (i.e. a cold start — see `handle_deep_link_cold_start`
@@ -9,10 +13,25 @@ use tauri::{Emitter, Manager as _};
 #[derive(Default)]
 pub(crate) struct PendingDeepLink(Mutex<Option<serde_json::Value>>);
 
-/// Parse an `adm://add?url=...&filename=...&referrer=...&cookie=...` deep
-/// link into an `AddPayload`-shaped JSON value (see `src/types.ts`), or
-/// `None` if it isn't a well-formed link for this app.
-pub(crate) fn build_deep_link_payload(link: &str) -> Option<serde_json::Value> {
+/// Parse an `adm://add?url=...&filename=...&handoff=...` deep link into an
+/// `AddPayload`-shaped JSON value (see `src/types.ts`), or `None` if it isn't
+/// a well-formed link for this app.
+///
+/// The referrer and cookie never travel in the link itself — the OS delivers
+/// `adm://` links to this process as a plain command-line argument, which is
+/// readable by any other process on the machine and captured verbatim by
+/// process-creation logging. Instead the extension POSTs those over loopback
+/// HTTP first (see `bridge.rs`) and hands this function only a one-time id
+/// to claim them by. `handoffs` is threaded in as a plain argument rather
+/// than reached for as global state, so this stays a pure, easily-tested
+/// function.
+///
+/// `referrer=`/`cookie=` query params are still accepted as a fallback for
+/// an extension build installed before the loopback handoff existed, or for
+/// a session where no bridge port could bind (see `bridge::start`) — that
+/// path still puts the secret on the command line, so it's deliberately
+/// temporary and logged when taken.
+pub(crate) fn build_deep_link_payload(link: &str, handoffs: &HandoffStore) -> Option<serde_json::Value> {
     let parsed = url::Url::parse(link).ok()?;
     if parsed.scheme() != "adm" {
         return None;
@@ -21,6 +40,7 @@ pub(crate) fn build_deep_link_payload(link: &str) -> Option<serde_json::Value> {
     let mut filename = String::new();
     let mut referrer = String::new();
     let mut cookie = String::new();
+    let mut handoff_id = String::new();
     for (key, value) in parsed.query_pairs() {
         match key.as_ref() {
             "url" => target_url = value.into_owned(),
@@ -32,9 +52,36 @@ pub(crate) fn build_deep_link_payload(link: &str) -> Option<serde_json::Value> {
             // `chrome.cookies` for a short allow-list of such hosts and
             // forwards it here so it can ride along as a real header.
             "cookie" => cookie = value.into_owned(),
+            "handoff" => handoff_id = value.into_owned(),
             _ => {}
         }
     }
+
+    if !handoff_id.is_empty() {
+        match handoffs.take(&handoff_id) {
+            Some(h) => {
+                if !h.cookie.is_empty() {
+                    cookie = h.cookie;
+                }
+                if !h.referrer.is_empty() {
+                    referrer = h.referrer;
+                }
+            }
+            None => {
+                eprintln!(
+                    "adm bridge: handoff id was not found (expired, already used, or a stale \
+                     link) — continuing without credentials for this capture"
+                );
+            }
+        }
+    } else if !cookie.is_empty() {
+        eprintln!(
+            "adm: received a deep link with a cookie embedded directly in the URL (legacy \
+             extension build, or no bridge port was available) — update the browser extension \
+             to pick up the loopback handoff"
+        );
+    }
+
     // Reject anything that isn't an actual http(s) target — e.g. a
     // `javascript:` link the extension couldn't resolve to a real URL — so
     // it doesn't show up as a row that just immediately errors.
@@ -86,7 +133,10 @@ pub(crate) fn build_deep_link_payload(link: &str) -> Option<serde_json::Value> {
 /// forwards the prefill for the normal review flow. Routing the decision
 /// through one place avoids both a race and a visible Add-window flash.
 pub(crate) fn handle_deep_link(app: &tauri::AppHandle, link: &str) {
-    let Some(payload) = build_deep_link_payload(link) else { return };
+    let handoffs = app.state::<Arc<HandoffStore>>();
+    let Some(payload) = build_deep_link_payload(link, &handoffs) else {
+        return;
+    };
     crate::windows::reveal_main_window(app);
     let _ = app.emit_to("main", "deep-link-captured", payload);
 }
@@ -96,7 +146,10 @@ pub(crate) fn handle_deep_link(app: &tauri::AppHandle, link: &str) {
 /// immediately would silently drop the event. Stash it instead — the Add
 /// window calls `take_pending_deep_link` right after it starts up.
 pub(crate) fn handle_deep_link_cold_start(app: &tauri::AppHandle, link: &str) {
-    let Some(payload) = build_deep_link_payload(link) else { return };
+    let handoffs = app.state::<Arc<HandoffStore>>();
+    let Some(payload) = build_deep_link_payload(link, &handoffs) else {
+        return;
+    };
     app.state::<PendingDeepLink>().0.lock().unwrap().replace(payload);
 }
 
@@ -121,19 +174,23 @@ mod tests {
 
     #[test]
     fn deep_link_payload_rejects_non_adm_scheme() {
-        assert!(build_deep_link_payload("https://example.com").is_none());
+        let handoffs = HandoffStore::default();
+        assert!(build_deep_link_payload("https://example.com", &handoffs).is_none());
     }
 
     #[test]
     fn deep_link_payload_rejects_non_http_target() {
-        assert!(build_deep_link_payload("adm://add?url=ftp://example.com/file").is_none());
-        assert!(build_deep_link_payload("adm://add").is_none());
+        let handoffs = HandoffStore::default();
+        assert!(build_deep_link_payload("adm://add?url=ftp://example.com/file", &handoffs).is_none());
+        assert!(build_deep_link_payload("adm://add", &handoffs).is_none());
     }
 
     #[test]
-    fn deep_link_payload_carries_referrer_and_cookie_as_headers() {
+    fn deep_link_payload_carries_legacy_referrer_and_cookie_as_headers() {
+        let handoffs = HandoffStore::default();
         let payload = build_deep_link_payload(
             "adm://add?url=https://example.com/file.zip&referrer=https://ref.example&cookie=a=b",
+            &handoffs,
         )
         .expect("well-formed adm link should parse");
         assert_eq!(payload["url"], "https://example.com/file.zip");
@@ -142,6 +199,46 @@ mod tests {
             .iter()
             .any(|h| h[0] == "Referer" && h[1] == "https://ref.example"));
         assert!(headers.iter().any(|h| h[0] == "Cookie" && h[1] == "a=b"));
+    }
+
+    #[test]
+    fn deep_link_payload_resolves_handoff_id_into_headers_without_url_credentials() {
+        let handoffs = HandoffStore::default();
+        handoffs.insert(
+            "tok-1".to_string(),
+            Handoff {
+                cookie: "session=xyz".to_string(),
+                referrer: "https://host.example/page".to_string(),
+            },
+        );
+        let payload = build_deep_link_payload(
+            "adm://add?url=https://example.com/file.zip&handoff=tok-1",
+            &handoffs,
+        )
+        .expect("well-formed adm link should parse");
+        let headers = payload["headers"].as_array().unwrap();
+        assert!(headers
+            .iter()
+            .any(|h| h[0] == "Referer" && h[1] == "https://host.example/page"));
+        assert!(headers.iter().any(|h| h[0] == "Cookie" && h[1] == "session=xyz"));
+        // One-shot: a second parse of a link reusing the same id gets nothing.
+        let second = build_deep_link_payload(
+            "adm://add?url=https://example.com/file.zip&handoff=tok-1",
+            &handoffs,
+        )
+        .expect("still a well-formed link");
+        assert!(second["headers"].as_array().unwrap().is_empty());
+    }
+
+    #[test]
+    fn deep_link_payload_with_unknown_handoff_id_drops_credentials_silently() {
+        let handoffs = HandoffStore::default();
+        let payload = build_deep_link_payload(
+            "adm://add?url=https://example.com/file.zip&handoff=does-not-exist",
+            &handoffs,
+        )
+        .expect("still parses as a valid link");
+        assert!(payload["headers"].as_array().unwrap().is_empty());
     }
 
     #[test]

@@ -37,10 +37,68 @@ globalThis.ADM = {
     );
   },
 
-  buildAdmUrl(url, referrer, cookie) {
+  // ADM listens on one of these loopback ports (see `src-tauri/src/bridge.rs`)
+  // so the extension can hand a captured cookie/referrer off to it directly,
+  // instead of putting them in the `adm://` link — that link is delivered to
+  // the app as a plain OS command-line argument, which any other process on
+  // the machine (and every EDR's process-creation log) can read.
+  BRIDGE_PORTS: Array.from({ length: 10 }, (_, i) => 47600 + i),
+  BRIDGE_PING_BODY: "azhura-download-manager",
+  BRIDGE_PING_TIMEOUT_MS: 300,
+
+  /** Finds the port ADM's loopback bridge is listening on, or `undefined` if
+   *  it isn't running (not installed, not started yet, or every port in the
+   *  range was already taken by something else). Probes ports in parallel so
+   *  the total wait is one timeout, not ten. */
+  async findBridgePort() {
+    const probes = ADM.BRIDGE_PORTS.map(async (port) => {
+      try {
+        const res = await fetch(`http://127.0.0.1:${port}/adm-ping`, {
+          signal: AbortSignal.timeout(ADM.BRIDGE_PING_TIMEOUT_MS),
+        });
+        if (res.ok && (await res.text()) === ADM.BRIDGE_PING_BODY) return port;
+      } catch {
+        // Not this port — no listener, wrong app, or it timed out.
+      }
+      return undefined;
+    });
+    for (const result of await Promise.all(probes)) {
+      if (result !== undefined) return result;
+    }
+    return undefined;
+  },
+
+  /** POSTs the credentials to ADM's bridge under a fresh one-time id and
+   *  returns that id, or `undefined` if the POST failed. Nothing here is
+   *  ever readable back out through the bridge — it's a write-only handoff. */
+  async postHandoff(port, { cookie, referrer }) {
+    const id = crypto.randomUUID();
+    try {
+      const res = await fetch(`http://127.0.0.1:${port}/handoff`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, cookie: cookie ?? "", referrer: referrer ?? "" }),
+        signal: AbortSignal.timeout(ADM.BRIDGE_PING_TIMEOUT_MS),
+      });
+      return res.ok ? id : undefined;
+    } catch {
+      return undefined;
+    }
+  },
+
+  /** Builds the `adm://` link. `handoffId` (from `postHandoff`) is preferred
+   *  — the link then carries no credentials at all. `cookie`/`referrer` are
+   *  a fallback only used when no bridge could be reached (ADM isn't running
+   *  the loopback listener yet), and still put them on the command line as
+   *  this always did before the bridge existed. */
+  buildAdmUrl(url, { referrer, cookie, handoffId } = {}) {
     const params = new URLSearchParams({ url });
-    if (referrer) params.set("referrer", referrer);
-    if (cookie) params.set("cookie", cookie);
+    if (handoffId) {
+      params.set("handoff", handoffId);
+    } else {
+      if (referrer) params.set("referrer", referrer);
+      if (cookie) params.set("cookie", cookie);
+    }
     return `adm://add?${params.toString()}`;
   },
 

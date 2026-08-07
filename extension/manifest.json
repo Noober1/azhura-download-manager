@@ -18,5 +18,5 @@
     "default_title": "Click, then click the page's download button — the next browser download is redirected to ADM"
   },
   "permissions": ["contextMenus", "notifications", "downloads", "storage", "cookies"],
-  "host_permissions": ["*://*.gofile.io/*"]
+  "host_permissions": ["*://*.gofile.io/*", "http://127.0.0.1/*"]
 }

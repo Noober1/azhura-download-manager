@@ -45,6 +45,21 @@ async function ensureHostPermission(domain) {
   }
 }
 
+// Same story as `ensureHostPermission` below, but for ADM's loopback bridge
+// rather than a cookie-forwarding domain: listing it in manifest.json's
+// `host_permissions` isn't enough under Firefox MV3, it still has to be
+// requested at runtime. Checked once per `sendToAdm` call rather than cached,
+// since the user could revoke it from about:addons between captures.
+async function ensureBridgePermission() {
+  const origins = ["http://127.0.0.1/*"];
+  try {
+    if (await api.permissions.contains({ origins })) return true;
+    return await api.permissions.request({ origins });
+  } catch {
+    return false;
+  }
+}
+
 async function getForwardCookie(targetUrl) {
   const domain = matchForwardDomain(targetUrl);
   if (!domain) return undefined;
@@ -61,7 +76,28 @@ async function getForwardCookie(targetUrl) {
 }
 
 async function sendToAdm(url, referrer, cookie) {
-  const admUrl = buildAdmUrl(url, referrer, cookie);
+  // Prefer handing the cookie/referrer to ADM over loopback HTTP so they
+  // never touch the `adm://` link (and therefore never touch the OS command
+  // line — see `ADM.buildAdmUrl`). Only falls back to the old URL-embedded
+  // form when no bridge answers, e.g. right after updating this extension
+  // but before ADM has been restarted.
+  let admUrl;
+  if (await ensureBridgePermission()) {
+    const port = await ADM.findBridgePort();
+    if (port !== undefined) {
+      const handoffId = await ADM.postHandoff(port, { cookie, referrer });
+      if (handoffId) admUrl = buildAdmUrl(url, { handoffId });
+    }
+  }
+  if (!admUrl) {
+    if (cookie || referrer) {
+      notify(
+        "Azhura Download Manager needs a restart",
+        "Couldn't reach ADM's secure hand-off for this link, so it was sent the older way. Restart ADM to use the secure path from now on.",
+      );
+    }
+    admUrl = buildAdmUrl(url, { referrer, cookie });
+  }
 
   // Gecko refuses to load a non-standard scheme passed straight to
   // `tabs.create`, so bounce through a packaged page that performs the

@@ -76,6 +76,8 @@ pub(crate) struct Shared {
     pub(crate) workers: Vec<Arc<WorkerUi>>,
     /// Seed offsets for pieces resumed mid-way: piece index → bytes already on disk.
     pub(crate) resume_offsets: HashMap<usize, u64>,
+    /// `ETag`/`Last-Modified` from the initial probe — see `client::Probe`.
+    pub(crate) validator: Option<String>,
 }
 
 #[cfg(test)]

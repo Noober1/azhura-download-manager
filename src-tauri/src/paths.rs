@@ -99,6 +99,28 @@ pub(crate) fn temp_download_dir() -> Result<PathBuf, String> {
     }
 }
 
+/// Writes a Windows Mark-of-the-Web (`Zone.Identifier` alternate data stream)
+/// on `dest`, the same tag every browser attaches to a download so
+/// SmartScreen, Office Protected View and Explorer's "this file came from
+/// the internet" prompt all still fire for files ADM saves — including the
+/// `.exe`/`.msi`/`.ps1`/`.bat` extensions `categories::category_id` buckets
+/// as "program". Best-effort: swallows every error, since exFAT/FAT32 have
+/// no alternate-data-stream support at all and that must never fail a
+/// download that otherwise completed fine.
+#[cfg(windows)]
+pub(crate) async fn write_mark_of_the_web(dest: &Path, url: &str, referrer: Option<&str>) {
+    let mut ads: OsString = dest.as_os_str().to_owned();
+    ads.push(":Zone.Identifier");
+    let mut body = format!("[ZoneTransfer]\r\nZoneId=3\r\nHostUrl={url}\r\n");
+    if let Some(r) = referrer.filter(|r| !r.is_empty()) {
+        body.push_str(&format!("ReferrerUrl={r}\r\n"));
+    }
+    let _ = tokio::fs::write(PathBuf::from(ads), body).await;
+}
+
+#[cfg(not(windows))]
+pub(crate) async fn write_mark_of_the_web(_dest: &Path, _url: &str, _referrer: Option<&str>) {}
+
 pub(crate) async fn move_to_destination(
     temp_path: &Path,
     filename: &str,

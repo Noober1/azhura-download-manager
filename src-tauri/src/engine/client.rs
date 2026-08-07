@@ -100,6 +100,21 @@ pub(crate) struct Probe {
     pub(crate) total: Option<u64>,
     pub(crate) supports_ranges: bool,
     pub(crate) filename: String,
+    /// `ETag` (preferred) or `Last-Modified`, verbatim as received — sent
+    /// back as `If-Range` on every piece request so a server that changed
+    /// the resource mid-download answers `200` (full body) instead of
+    /// silently honoring a now-stale byte range. See `worker::stream_piece`.
+    pub(crate) validator: Option<String>,
+}
+
+fn extract_validator(resp: &reqwest::Response) -> Option<String> {
+    if let Some(v) = resp.headers().get(reqwest::header::ETAG).and_then(|v| v.to_str().ok()) {
+        return Some(v.to_string());
+    }
+    resp.headers()
+        .get(reqwest::header::LAST_MODIFIED)
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_string)
 }
 
 #[derive(Serialize, specta::Type)]
@@ -134,17 +149,20 @@ pub(crate) async fn probe(
     }
 
     let filename = crate::paths::filename_from(&resp, url);
+    let validator = extract_validator(&resp);
     if resp.status() == reqwest::StatusCode::PARTIAL_CONTENT {
         Ok(Probe {
             total: parse_total_from_content_range(&resp),
             supports_ranges: true,
             filename,
+            validator,
         })
     } else {
         Ok(Probe {
             total: resp.content_length(),
             supports_ranges: false,
             filename,
+            validator,
         })
     }
 }

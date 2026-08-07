@@ -4,6 +4,7 @@
 // one, so fast connections naturally do more work and no connection sits idle
 // while a slow one finishes. Per-piece completion is persisted for resume.
 
+mod bridge;
 mod categories;
 mod commands;
 mod config;
@@ -114,9 +115,16 @@ pub fn run() {
     #[cfg(desktop)]
     {
         builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
-            if let Some(link) = deep_link_from_args(argv) {
-                handle_deep_link(app, &link);
-            } else {
+            // A deep link in `argv` is already handled by
+            // `tauri_plugin_deep_link`'s own `on_open_url` event — this
+            // plugin's "deep-link" feature (see its `Cargo.toml` entry)
+            // triggers that event via `handle_cli_arguments` before this
+            // closure runs. Calling `handle_deep_link` again here would
+            // process the same relay a second time, and since a handoff id
+            // can only be claimed once (see `bridge::HandoffStore::take`),
+            // that second pass would silently build a payload with no
+            // credentials at all instead of just being a harmless no-op.
+            if deep_link_from_args(argv).is_none() {
                 // Plain second launch (no deep link) while we're already
                 // running, possibly hidden in the tray — surface the window
                 // instead of doing nothing.
@@ -139,6 +147,19 @@ pub fn run() {
         .manage(TrayMenuState::default())
         .setup(move |app| {
             specta_builder.mount_events(app);
+
+            // Started here rather than via an eager `.manage(bridge::start())`
+            // on the builder chain above: that form is evaluated immediately,
+            // for *every* launch — including a duplicate launch that's about
+            // to relay its argv to the already-running instance and exit via
+            // `std::process::exit(0)` from inside the single-instance
+            // plugin's own (earlier-registered) setup, before this closure
+            // ever runs. Opening a listening socket on every such short-lived
+            // relay process serves no purpose, and a process spawned by a
+            // browser that immediately starts listening on a port is exactly
+            // the shape of behavior security software watches for — this
+            // ensures only the one surviving instance ever binds the bridge.
+            app.manage(bridge::start());
 
             // Built here (rather than declared in tauri.conf.json) so it can be
             // given `main` as its OS-level owner: an owned window is always

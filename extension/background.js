@@ -34,8 +34,27 @@ async function getForwardCookie(targetUrl) {
   return pairs.length ? pairs.join("; ") : undefined;
 }
 
-function sendToAdm(url, referrer, cookie) {
-  const admUrl = buildAdmUrl(url, referrer, cookie);
+async function sendToAdm(url, referrer, cookie) {
+  // Prefer handing the cookie/referrer to ADM over loopback HTTP so they
+  // never touch the `adm://` link (and therefore never touch the OS command
+  // line — see `ADM.buildAdmUrl`). Only falls back to the old URL-embedded
+  // form when no bridge answers, e.g. right after updating this extension
+  // but before ADM has been restarted.
+  let admUrl;
+  const port = await ADM.findBridgePort();
+  if (port !== undefined) {
+    const handoffId = await ADM.postHandoff(port, { cookie, referrer });
+    if (handoffId) admUrl = buildAdmUrl(url, { handoffId });
+  }
+  if (!admUrl) {
+    if (cookie || referrer) {
+      notify(
+        "Azhura Download Manager needs a restart",
+        "Couldn't reach ADM's secure hand-off for this link, so it was sent the older way. Restart ADM to use the secure path from now on.",
+      );
+    }
+    admUrl = buildAdmUrl(url, { referrer, cookie });
+  }
 
   // Custom-protocol navigation always leaves the tab that triggered it on a
   // failed/blank page — close it shortly after so nothing sticks around.
