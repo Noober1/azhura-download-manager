@@ -2,7 +2,7 @@
 // Top-level Tauri commands that don't belong to a more specific module.
 // ---------------------------------------------------------------------------
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
@@ -318,4 +318,17 @@ pub(crate) async fn list_resumable() -> Result<Vec<ResumableInfo>, String> {
         });
     }
     Ok(out)
+}
+
+/// Re-checks whether each path still exists, in the same order as `paths` —
+/// used by the frontend to refresh a finished row's "missing" status on
+/// demand (window refocus, F5, the toolbar Refresh button) instead of only
+/// once at `load_history` time.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn check_paths_missing(paths: Vec<String>) -> Result<Vec<bool>, String> {
+    Ok(paths
+        .iter()
+        .map(|p| !p.is_empty() && !Path::new(p).exists())
+        .collect())
 }

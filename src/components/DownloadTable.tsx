@@ -59,30 +59,32 @@ function SortTh({
   );
 }
 
-/* A single row in the download table. Double-click (any state) opens the
-   "Download Details" popup — see `onOpenDetail` — which now owns everything
-   that used to expand inline here (per-connection bars, paths, etc). */
+/* A single row in the download table. Double-click reveals the file's
+   containing folder when it's completed and still on disk; otherwise it
+   falls back to opening the "Download Details" popup (the old unconditional
+   behavior) — see `onDoubleClick`, whose fallback logic lives in App.tsx's
+   `handleRowDoubleClick`. */
 function Row({
   item,
   pct,
   selected,
   onSelect,
   onContext,
-  onOpenDetail,
+  onDoubleClick,
 }: {
   item: DownloadItem;
   pct: number | null;
   selected: boolean;
   onSelect: (e: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }) => void;
   onContext: (e: ReactMouseEvent) => void;
-  onOpenDetail: () => void;
+  onDoubleClick: () => void;
 }) {
   return (
     <tr
       className={`drow ${selected ? "selected" : ""}`}
       data-id={item.id}
       onClick={onSelect}
-      onDoubleClick={onOpenDetail}
+      onDoubleClick={onDoubleClick}
       onContextMenu={(e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -121,7 +123,7 @@ export function DownloadTable({
   selectedIds,
   onSelectRow,
   onRowContext,
-  onOpenDetail,
+  onRowDoubleClick,
   marquee,
   widths,
   onResizeStart,
@@ -137,7 +139,7 @@ export function DownloadTable({
   selectedIds: Set<string>;
   onSelectRow: (id: string, e: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }) => void;
   onRowContext: (e: ReactMouseEvent, item: DownloadItem) => void;
-  onOpenDetail: (id: string) => void;
+  onRowDoubleClick: (item: DownloadItem) => void;
   marquee: { left: number; top: number; width: number; height: number } | null;
   widths: ColumnWidths;
   onResizeStart: (key: SortKey, e: ReactMouseEvent) => void;
@@ -189,7 +191,7 @@ export function DownloadTable({
                   selected={selectedRow}
                   onSelect={(e) => onSelectRow(item.id, e)}
                   onContext={(e) => onRowContext(e, item)}
-                  onOpenDetail={() => onOpenDetail(item.id)}
+                  onDoubleClick={() => onRowDoubleClick(item)}
                 />
               );
             })}

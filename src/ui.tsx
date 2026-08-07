@@ -21,6 +21,7 @@ export function Icon({ name }: { name: string }) {
         <circle cx="7" cy="12.5" r="2" fill="var(--surface)" />
       </>
     ),
+    refresh: <path d="M14.5 9a5.5 5.5 0 1 1-1.7-3.97M14.5 2.5v4h-4" />,
     puzzle: (
       <>
         <rect x="3.5" y="3.5" width="11" height="11" />

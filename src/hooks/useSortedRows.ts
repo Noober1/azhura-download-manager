@@ -9,6 +9,7 @@ import { STATUS_RANK, type SortKey } from "../constants";
  *  by cycling a column's sort back off) falls back to insertion order. */
 export function useSortedRows(downloads: DownloadItem[]) {
   const [category, setCategory] = useState<Category>("all");
+  const [searchQuery, setSearchQuery] = useState("");
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" } | null>({
     key: "added",
     dir: "desc",
@@ -29,6 +30,16 @@ export function useSortedRows(downloads: DownloadItem[]) {
           ? downloads
           : downloads.filter((d) => categoryOf(d.filename) === category);
 
+  // Search narrows `shown` further, by filename or referer — composed after
+  // the category filter and before sort.
+  const q = searchQuery.trim().toLowerCase();
+  const searched = q
+    ? shown.filter(
+        (d) =>
+          d.filename.toLowerCase().includes(q) || (d.referer?.toLowerCase().includes(q) ?? false),
+      )
+    : shown;
+
   // Counts for the sidebar's "File type" section, tallied once per downloads
   // change rather than filtering the whole list six times.
   const categoryCounts = useMemo(() => {
@@ -40,11 +51,11 @@ export function useSortedRows(downloads: DownloadItem[]) {
     return counts;
   }, [downloads]);
 
-  // `shown` ordered by the active column sort, or left as-is (newest first)
-  // when `sort` is null. `Array.prototype.sort` is stable, so ties keep
-  // insertion order either way.
+  // `searched` ordered by the active column sort, or left as-is (newest
+  // first) when `sort` is null. `Array.prototype.sort` is stable, so ties
+  // keep insertion order either way.
   const rows = useMemo(() => {
-    if (!sort) return shown;
+    if (!sort) return searched;
     const dir = sort.dir === "asc" ? 1 : -1;
     const key = sort.key;
     function value(d: DownloadItem): number | string {
@@ -65,7 +76,7 @@ export function useSortedRows(downloads: DownloadItem[]) {
           return d.speed;
       }
     }
-    return [...shown].sort((a, b) => {
+    return [...searched].sort((a, b) => {
       const va = value(a);
       const vb = value(b);
       if (typeof va === "string" || typeof vb === "string") {
@@ -74,7 +85,7 @@ export function useSortedRows(downloads: DownloadItem[]) {
       return dir * (va - vb);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shown, sort]);
+  }, [searched, sort]);
 
   function toggleSort(key: SortKey) {
     setSort((prev) => {
@@ -87,6 +98,8 @@ export function useSortedRows(downloads: DownloadItem[]) {
   return {
     category,
     setCategory,
+    searchQuery,
+    setSearchQuery,
     sort,
     toggleSort,
     activeItems,

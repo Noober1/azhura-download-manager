@@ -11,7 +11,6 @@ export function ContextMenu({
   pausableCount,
   cancelableCount,
   canReveal,
-  canOpen,
   canCopy,
   canDelete,
   canShowDetail,
@@ -21,7 +20,6 @@ export function ContextMenu({
   onResume,
   onPause,
   onCancel,
-  onOpen,
   onReveal,
   onCopyLink,
   onShowDetail,
@@ -37,7 +35,6 @@ export function ContextMenu({
   pausableCount: number;
   cancelableCount: number;
   canReveal: boolean;
-  canOpen: boolean;
   canCopy: boolean;
   canDelete: boolean;
   canShowDetail: boolean;
@@ -47,7 +44,6 @@ export function ContextMenu({
   onResume: () => void;
   onPause: () => void;
   onCancel: () => void;
-  onOpen: () => void;
   onReveal: () => void;
   onCopyLink: () => void;
   onShowDetail: () => void;
@@ -132,9 +128,6 @@ export function ContextMenu({
         onClick={() => run(onShowDetail)}
       >
         Show detail
-      </button>
-      <button type="button" className="ctx-item" disabled={!canOpen} onClick={() => run(onOpen)}>
-        Open
       </button>
       <button type="button" className="ctx-item" disabled={!canReveal} onClick={() => run(onReveal)}>
         Open containing folder

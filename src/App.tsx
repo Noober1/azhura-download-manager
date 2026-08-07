@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getVersion } from "@tauri-apps/api/app";
-import { openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import type { DownloadItem } from "./types";
 import { isResumable } from "./format";
@@ -15,6 +15,7 @@ import { useDetailWindows } from "./hooks/useDetailWindows";
 import { useDeepLinkCapture } from "./hooks/useDeepLinkCapture";
 import { useSortedRows } from "./hooks/useSortedRows";
 import { useColumnWidths } from "./hooks/useColumnWidths";
+import { useMissingRefresh } from "./hooks/useMissingRefresh";
 import { useSelection } from "./selection/useSelection";
 import { useMarquee } from "./selection/useMarquee";
 import { useTableKeyboard } from "./selection/useTableKeyboard";
@@ -84,6 +85,7 @@ function App() {
   useHistoryPersistence(downloads, setDownloads, downloadsRef);
   useTrayPush(downloadsRef);
   useDeepLinkCapture(downloadsRef, downloadsApi.addFromPayload, downloadsApi.patchItem);
+  const { refresh: refreshMissing } = useMissingRefresh(downloadsRef, downloadsApi.patchItem);
 
   // The main window starts hidden (`visible: false` in tauri.conf.json) so
   // there's no white flash before React paints; show it right after the
@@ -110,6 +112,15 @@ function App() {
       setSelectedIds(new Set([item.id]));
     }
     setMenu({ x: e.clientX, y: e.clientY });
+  }
+
+  // Completed + still on disk → reveal its folder; otherwise there's nothing
+  // to reveal yet (or the row needs attention), so fall back to the detail
+  // popup — the row's only other way in besides Enter/"Show detail".
+  function handleRowDoubleClick(item: DownloadItem) {
+    const canReveal = item.state === "completed" && !!item.path && !item.missing;
+    if (canReveal) revealItemInDir(item.path).catch(() => {});
+    else openDetail(item.id);
   }
 
   const anyDialogOpen = !!(
@@ -168,10 +179,13 @@ function App() {
         totalSpeed={totalSpeed}
         activeCount={activeCount}
         queuedCount={queuedCount}
+        searchQuery={sorted.searchQuery}
+        onSearchChange={sorted.setSearchQuery}
         onResume={downloadsApi.resumeMany}
         onPause={downloadsApi.pauseMany}
         onCancel={downloadsApi.cancelMany}
         onRequestDelete={downloadsApi.requestDelete}
+        onRefresh={refreshMissing}
         onShowSettings={() => setShowSettings(true)}
         onShowExtensions={() => setShowExtensions(true)}
       />
@@ -197,7 +211,7 @@ function App() {
           selectedIds={selectedIds}
           onSelectRow={selectRow}
           onRowContext={handleRowContext}
-          onOpenDetail={openDetail}
+          onRowDoubleClick={handleRowDoubleClick}
           marquee={marquee.marquee}
           widths={columnWidths.widths}
           onResizeStart={columnWidths.startResize}
@@ -240,7 +254,6 @@ function App() {
           pausableCount={pausableSel.length}
           cancelableCount={cancelableSel.length}
           canReveal={canReveal}
-          canOpen={canReveal}
           canCopy={selectedItems.length > 0}
           canDelete={deletableSel.length > 0}
           canShowDetail={!!singleSelected}
@@ -250,7 +263,6 @@ function App() {
           onResume={() => downloadsApi.resumeMany(resumableSel)}
           onPause={() => downloadsApi.pauseMany(pausableSel)}
           onCancel={() => downloadsApi.cancelMany(cancelableSel)}
-          onOpen={() => singleSelected && openPath(singleSelected.path).catch(() => {})}
           onReveal={() =>
             singleSelected && revealItemInDir(singleSelected.path).catch(() => {})
           }

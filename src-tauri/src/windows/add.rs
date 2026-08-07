@@ -2,6 +2,7 @@ use tauri::{Emitter, Manager as _};
 
 fn reveal_add_window(app: &tauri::AppHandle) {
     if let Some(w) = app.get_webview_window("add") {
+        let _ = w.center();
         let _ = w.show();
         let _ = w.set_focus();
     }

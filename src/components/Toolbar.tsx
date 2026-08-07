@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { commands } from "../bindings";
 import type { DownloadItem } from "../types";
 import { formatSpeed } from "../format";
@@ -13,10 +14,13 @@ export function Toolbar({
   totalSpeed,
   activeCount,
   queuedCount,
+  searchQuery,
+  onSearchChange,
   onResume,
   onPause,
   onCancel,
   onRequestDelete,
+  onRefresh,
   onShowSettings,
   onShowExtensions,
 }: {
@@ -29,13 +33,32 @@ export function Toolbar({
   totalSpeed: number;
   activeCount: number;
   queuedCount: number;
+  searchQuery: string;
+  onSearchChange: (v: string) => void;
   onResume: (items: DownloadItem[]) => void;
   onPause: (items: DownloadItem[]) => void;
   onCancel: (items: DownloadItem[]) => void;
   onRequestDelete: (items: DownloadItem[]) => void;
+  onRefresh: () => void;
   onShowSettings: () => void;
   onShowExtensions: () => void;
 }) {
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  // Ctrl+F focuses the search box instead of WebView2's native find-in-page
+  // (still suppressed separately by `useNativeShell`'s blocklist — that
+  // handler's preventDefault() doesn't stopPropagation(), so this listener
+  // still sees the same keystroke).
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        searchRef.current?.focus();
+      }
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, []);
   return (
     <div className="topbar" data-tauri-drag-region>
       <button
@@ -82,6 +105,24 @@ export function Toolbar({
       <button className="tbtn" title="Settings" onClick={onShowSettings}>
         <Icon name="settings" />
       </button>
+      <button className="tbtn" title="Refresh file status (F5)" onClick={onRefresh}>
+        <Icon name="refresh" />
+      </button>
+
+      <input
+        ref={searchRef}
+        className="search-input"
+        type="text"
+        placeholder="Search filename or referer…"
+        value={searchQuery}
+        onChange={(e) => onSearchChange(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") {
+            onSearchChange("");
+            e.currentTarget.blur();
+          }
+        }}
+      />
 
       <div className="topbar-status">
         <span className="ts-speed">{formatSpeed(totalSpeed)}</span>

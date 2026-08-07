@@ -25,6 +25,13 @@ export const commands = {
 	deleteDownload: (path: string, deleteFile: boolean) => __TAURI_INVOKE<null>("delete_download", { path, deleteFile }),
 	listResumable: () => __TAURI_INVOKE<ResumableInfo[]>("list_resumable"),
 	/**
+	 *  Re-checks whether each path still exists, in the same order as `paths` —
+	 *  used by the frontend to refresh a finished row's "missing" status on
+	 *  demand (window refocus, F5, the toolbar Refresh button) instead of only
+	 *  once at `load_history` time.
+	 */
+	checkPathsMissing: (paths: string[]) => __TAURI_INVOKE<boolean[]>("check_paths_missing", { paths }),
+	/**
 	 *  Check a URL's size and filename ahead of committing to a download, for the
 	 *  Add window's live "Size:" readout. Reuses the same client/probe path as an
 	 *  actual download so the reported size matches what a real run would see.

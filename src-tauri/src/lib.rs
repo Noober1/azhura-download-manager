@@ -55,6 +55,7 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         commands::set_download_speed_limit,
         commands::delete_download,
         commands::list_resumable,
+        commands::check_paths_missing,
         commands::probe_url,
         commands::default_download_dir,
         commands::extension_dir,
