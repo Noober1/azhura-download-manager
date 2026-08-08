@@ -18,6 +18,7 @@ use crate::engine::pieces::PiecePlan;
 use crate::engine::progress::DownloadEvent;
 use crate::engine::{client::is_insecure_http, download_inner};
 use crate::paths::temp_download_dir;
+use crate::urls::validate_download_url;
 
 /// `start_download`'s own arguments, bundled into one struct rather than left
 /// as separate parameters: specta's `#[specta::specta]` macro (used to
@@ -66,6 +67,8 @@ pub(crate) async fn start_download(
         save_path,
         proxy,
     } = args;
+
+    validate_download_url(&url)?;
 
     let control = Arc::new(Control::new(speed_limit.unwrap_or(0)));
     manager
@@ -209,6 +212,7 @@ pub(crate) async fn probe_url(
     headers: Vec<(String, String)>,
     proxy: Option<ProxyConfig>,
 ) -> Result<ProbeInfo, String> {
+    validate_download_url(&url)?;
     let proxy = proxy.unwrap_or_default();
     if is_insecure_http(&url) && !allow_insecure {
         return Err(

@@ -12,12 +12,22 @@
 // HTTP, and the `adm://` link itself carries only an opaque, one-time
 // handoff id.
 //
+// `/handoff` also rejects any request that isn't the extension's own
+// background-context POST: the Content-Type must be `application/json` (a
+// web page can send `text/plain` instead — a CORS-"simple" content type that
+// skips the preflight this server never answers — and have the browser
+// deliver the request anyway), and a `web` `Origin` header (http/https, i.e.
+// an actual page) is refused outright. An extension's own background/service
+// worker request either carries no `Origin` or a `chrome-extension://`/
+// `moz-extension://` one, neither of which a page script can forge, so this
+// doesn't affect real captures.
+//
 // Residual risk: a local process that squats one of these ports *before* ADM
-// starts could receive a handoff meant for ADM. Pairing the extension to a
-// per-install secret would close that gap, but needs a user-facing pairing
-// step in the extensions dialog — out of scope here. This still removes the
-// credential from every place that logs command lines, which is the
-// exposure that actually matters in practice.
+// starts could still receive a handoff meant for ADM. Pairing the extension
+// to a per-install secret would close that gap, but needs a user-facing
+// pairing step in the extensions dialog — out of scope here. This still
+// removes the credential from every place that logs command lines, which is
+// the exposure that actually matters in practice.
 // ---------------------------------------------------------------------------
 
 use std::collections::HashMap;
@@ -147,6 +157,24 @@ pub(crate) fn start() -> (Arc<HandoffStore>, Arc<BridgeStatus>) {
     (store, status)
 }
 
+/// Case-insensitive lookup of a single request header's value.
+fn header_value<'a>(request: &'a tiny_http::Request, name: &'static str) -> Option<&'a str> {
+    request
+        .headers()
+        .iter()
+        .find(|h| h.field.equiv(name))
+        .map(|h| h.value.as_str())
+}
+
+/// True for an `Origin` header a web page's `fetch()` would send
+/// (`http://`/`https://`) — false for no header at all, or for an
+/// extension's own `chrome-extension://`/`moz-extension://` origin, which a
+/// page script cannot forge.
+fn is_web_origin(origin: &str) -> bool {
+    let o = origin.trim().to_ascii_lowercase();
+    o.starts_with("http://") || o.starts_with("https://")
+}
+
 fn handle_request(store: &HandoffStore, mut request: tiny_http::Request) {
     let method = request.method().clone();
     let url = request.url().to_string();
@@ -155,6 +183,23 @@ fn handle_request(store: &HandoffStore, mut request: tiny_http::Request) {
             let _ = request.respond(Response::from_string(PING_BODY));
         }
         (Method::Post, "/handoff") => {
+            let is_json = header_value(&request, "Content-Type")
+                .map(|v| {
+                    v.split(';')
+                        .next()
+                        .unwrap_or("")
+                        .trim()
+                        .eq_ignore_ascii_case("application/json")
+                })
+                .unwrap_or(false);
+            if !is_json {
+                let _ = request.respond(Response::empty(415));
+                return;
+            }
+            if header_value(&request, "Origin").is_some_and(is_web_origin) {
+                let _ = request.respond(Response::empty(403));
+                return;
+            }
             if request.body_length().unwrap_or(0) > MAX_BODY_BYTES {
                 let _ = request.respond(Response::empty(413));
                 return;
@@ -230,5 +275,15 @@ mod tests {
         let status = BridgeStatus::bound(47600);
         assert!(status.running.load(Ordering::Relaxed));
         assert_eq!(status.port, Some(47600));
+    }
+
+    #[test]
+    fn is_web_origin_flags_http_and_https_only() {
+        assert!(is_web_origin("https://evil.example"));
+        assert!(is_web_origin("http://evil.example"));
+        assert!(is_web_origin("  HTTPS://Evil.Example  "));
+        assert!(!is_web_origin("chrome-extension://abcdefg"));
+        assert!(!is_web_origin("moz-extension://abcdefg"));
+        assert!(!is_web_origin(""));
     }
 }
