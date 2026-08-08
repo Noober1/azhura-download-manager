@@ -21,7 +21,7 @@ use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}
 use tauri::{Emitter, Manager as _};
 use tauri_plugin_autostart::MacosLauncher;
 
-use categories::CATEGORY_FOLDERS;
+use categories::{migrate_legacy_category_folders, PendingMigrationWarnings, CATEGORY_FOLDERS};
 use config::prefs::PrefsState;
 use config::settings::{AutostartLaunch, SettingsState};
 use deeplink::{deep_link_from_args, handle_deep_link, handle_deep_link_cold_start, PendingDeepLink};
@@ -81,12 +81,21 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         config::prefs::save_add_defaults,
         config::prefs::set_category_path,
         config::history::load_history,
-        config::history::save_history
+        config::history::save_history,
+        bridge::grabber_status
     ])
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Runs before anything else touches the download folders (prefs load,
+    // history load, `setup()`'s own folder-creation loop below) so nothing
+    // observes the old singular names as still current. Any folder that
+    // failed to rename is surfaced to the user later, from inside `.setup()`
+    // (see `PendingMigrationWarnings` below) — no `AppHandle` exists yet here
+    // to do that directly.
+    let failed_migrations = migrate_legacy_category_folders();
+
     let specta_builder = specta_builder();
 
     #[cfg(debug_assertions)]
@@ -159,6 +168,7 @@ pub fn run() {
         .manage(PrefsState(Mutex::new(config::prefs::load_prefs_from_disk())))
         .manage(Quitting(AtomicBool::new(false)))
         .manage(TrayMenuState::default())
+        .manage(PendingMigrationWarnings(failed_migrations))
         // Set once at startup from argv — `--autostart` is only ever present
         // when the OS launched us via the autostart entry (see
         // `AUTOSTART_FLAG`), never on a plain manual launch or a deep-link
@@ -179,7 +189,9 @@ pub fn run() {
             // browser that immediately starts listening on a port is exactly
             // the shape of behavior security software watches for — this
             // ensures only the one surviving instance ever binds the bridge.
-            app.manage(bridge::start());
+            let (handoffs, bridge_status) = bridge::start();
+            app.manage(handoffs);
+            app.manage(bridge_status);
 
             // Built here (rather than declared in tauri.conf.json) so it can be
             // given `main` as its OS-level owner: an owned window is always
@@ -190,10 +202,31 @@ pub fn run() {
                 .get_webview_window("main")
                 .expect("main window is declared in tauri.conf.json");
             harden_webview(&main);
+
+            // Surfaces any legacy category-folder rename that failed back in
+            // `run()`'s `migrate_legacy_category_folders()` call — that ran
+            // before any `AppHandle` existed, so this is the earliest point
+            // it can reach the user. Placed before the `add` window build
+            // below (which uses `?` and could bail this closure out early)
+            // so the warning always fires regardless of any later setup step.
+            let migration_warnings = app.state::<PendingMigrationWarnings>();
+            if !migration_warnings.0.is_empty() {
+                let count = migration_warnings.0.len();
+                let message = format!(
+                    "Couldn't rename {count} legacy download folder{} — check the app log for details.",
+                    if count == 1 { "" } else { "s" }
+                );
+                let _ = app.emit_to(
+                    "main",
+                    "backend-warning",
+                    serde_json::json!({ "message": message, "level": "error" }),
+                );
+            }
+
             let add = tauri::WebviewWindowBuilder::new(app, "add", tauri::WebviewUrl::App("add.html".into()))
                 .title("Add Download")
-                .inner_size(610.0, 465.0)
-                .min_inner_size(528.0, 400.0)
+                .inner_size(671.0, 512.0)
+                .min_inner_size(581.0, 440.0)
                 .decorations(false)
                 .visible(false)
                 .shadow(true)

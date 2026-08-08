@@ -56,3 +56,13 @@ export const STATUS_CROSSFADE: Variants = {
   animate: { opacity: 1, transition: { duration: 0.12 } },
   exit: { opacity: 0, transition: { duration: 0.08 } },
 };
+
+/** A toast arriving/leaving the stack — mirrors `MENU_POP`'s "needs to feel
+ *  immediate" timing (a toast is also a transient, non-modal arrival) but
+ *  slides up from the bottom instead of scaling from a cursor point, since
+ *  it's anchored to a screen edge rather than a click position. */
+export const TOAST_POP: Variants = {
+  initial: { opacity: 0, y: 8, scale: 0.98 },
+  animate: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.11, ease: "easeOut" } },
+  exit: { opacity: 0, y: 4, transition: { duration: 0.08 } },
+};

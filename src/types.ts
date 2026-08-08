@@ -87,6 +87,10 @@ export type DownloadItem = {
 /** Emitted by the detail popup when the user clicks an action button there. */
 export type DetailAction = { id: string; action: "pause" | "resume" | "cancel" };
 
+/** Emitted by the Rust backend for one-off warnings with no dedicated event
+ *  of their own (e.g. a failed legacy-folder migration) — see `useBackendWarnings`. */
+export type BackendWarning = { message: string; level: "error" | "info" };
+
 export type Category = "all" | "active" | "finished" | FileCategory;
 
 export type Theme = "system" | "dark" | "light";

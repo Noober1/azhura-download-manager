@@ -121,6 +121,7 @@ export const commands = {
 	setCategoryPath: (category: string, path: string) => __TAURI_INVOKE<null>("set_category_path", { category, path }),
 	loadHistory: () => __TAURI_INVOKE<HistoryLoad_Serialize>("load_history"),
 	saveHistory: (entries: HistoryEntry_Deserialize[]) => __TAURI_INVOKE<null>("save_history", { entries }),
+	grabberStatus: () => __TAURI_INVOKE<GrabberStatus>("grabber_status"),
 };
 
 /* Types */
@@ -164,6 +165,11 @@ export type DownloadEvent = { event: "started"; data: {
 } } | { event: "error"; data: {
 	message: string,
 } };
+
+export type GrabberStatus = {
+	running: boolean,
+	port: number | null,
+};
 
 /**
  *  One finished download. `state` always holds the real terminal state —

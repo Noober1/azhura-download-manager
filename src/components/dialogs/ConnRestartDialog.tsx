@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { motion } from "motion/react";
 import { OVERLAY_FADE, DIALOG_POP } from "../../motion";
 
@@ -10,6 +11,17 @@ export function ConnRestartDialog({
   onApplyOnNextStart: () => void;
   onRestartNow: () => void;
 }) {
+  // Mirrors the backdrop click's own dismiss target: Escape is "cancel this
+  // dialog," and the safe default here is applying on next start rather than
+  // restarting now, same as clicking outside.
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onApplyOnNextStart();
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onApplyOnNextStart]);
+
   return (
     <motion.div
       className="overlay"
@@ -26,8 +38,13 @@ export function ConnRestartDialog({
         initial="initial"
         animate="animate"
         exit="exit"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="connrestart-dialog-title"
       >
-        <div className="dialog-head">Apply new connection count?</div>
+        <div className="dialog-head" id="connrestart-dialog-title">
+          Apply new connection count?
+        </div>
         <div className="dialog-body">
           <p className="detail-note">
             {itemCount > 1

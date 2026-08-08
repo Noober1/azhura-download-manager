@@ -7,6 +7,8 @@ import { AnimatePresence } from "motion/react";
 import { commands } from "./bindings";
 import type { DownloadItem } from "./types";
 import { isResumable, isRedownload } from "./format";
+import { showToast } from "./toast";
+import { ToastHost } from "./components/Toast";
 import { useNativeShell } from "./ui";
 import { useDownloads } from "./hooks/useDownloads";
 import { useScheduler } from "./hooks/useScheduler";
@@ -18,6 +20,8 @@ import { useDeepLinkCapture } from "./hooks/useDeepLinkCapture";
 import { useSortedRows } from "./hooks/useSortedRows";
 import { useColumnWidths } from "./hooks/useColumnWidths";
 import { useMissingRefresh } from "./hooks/useMissingRefresh";
+import { useGrabberStatus } from "./hooks/useGrabberStatus";
+import { useBackendWarnings } from "./hooks/useBackendWarnings";
 import { useSelection } from "./selection/useSelection";
 import { useMarquee } from "./selection/useMarquee";
 import { useTableKeyboard } from "./selection/useTableKeyboard";
@@ -88,6 +92,8 @@ function App() {
   useTrayPush(downloadsRef);
   useDeepLinkCapture(downloadsRef, downloadsApi.addFromPayload, downloadsApi.patchItem);
   const { refresh: refreshMissing } = useMissingRefresh(downloadsRef, downloadsApi.patchItem);
+  const grabber = useGrabberStatus();
+  useBackendWarnings();
 
   // The main window starts hidden (`visible: false` in tauri.conf.json) so
   // there's no white flash before React paints; show it right after the
@@ -130,8 +136,11 @@ function App() {
   // popup — the row's only other way in besides Enter/"Show detail".
   function handleRowDoubleClick(item: DownloadItem) {
     const canReveal = item.state === "completed" && !!item.path && !item.missing;
-    if (canReveal) revealItemInDir(item.path).catch(() => {});
-    else openDetail(item.id);
+    if (canReveal) {
+      revealItemInDir(item.path).catch(() =>
+        showToast("Couldn't open the containing folder — the file may have moved."),
+      );
+    } else openDetail(item.id);
   }
 
   const anyDialogOpen = !!(
@@ -240,6 +249,17 @@ function App() {
       {/* ---- Status bar ---- */}
       <div className="statusbar">
         <span>Azhura Download Manager{version ? ` v${version}` : ""}</span>
+        <span
+          className="sb-grabber"
+          title={
+            grabber.running
+              ? `Browser extension bridge listening on 127.0.0.1:${grabber.port}`
+              : "No port in 47600–47609 was free — the browser extension falls back to the legacy URL-embedded handoff for this session."
+          }
+        >
+          <span className={`sb-dot ${grabber.running ? "on" : "off"}`} />
+          {grabber.running ? `Grabber active · :${grabber.port}` : "Grabber inactive"}
+        </span>
       </div>
 
       {/* ---- Settings dialog ---- */}
@@ -289,9 +309,16 @@ function App() {
             onPause={() => downloadsApi.pauseMany(pausableSel)}
             onCancel={() => downloadsApi.cancelMany(cancelableSel)}
             onReveal={() =>
-              singleSelected && revealItemInDir(singleSelected.path).catch(() => {})
+              singleSelected &&
+              revealItemInDir(singleSelected.path).catch(() =>
+                showToast("Couldn't open the containing folder — the file may have moved."),
+              )
             }
-            onCopyLink={() => writeText(selectedItems.map((i) => i.url).join("\n"))}
+            onCopyLink={() =>
+              writeText(selectedItems.map((i) => i.url).join("\n")).catch(() =>
+                showToast("Couldn't copy to clipboard."),
+              )
+            }
             onShowDetail={() => singleSelected && openDetail(singleSelected.id)}
             onSpeedCap={(bytes) => downloadsApi.applySpeedCap(selectedItems, bytes)}
             onCustomSpeedCap={() =>
@@ -345,6 +372,8 @@ function App() {
           />
         )}
       </AnimatePresence>
+
+      <ToastHost />
     </div>
   );
 }

@@ -83,11 +83,35 @@ pub(crate) fn quit_app(app: &tauri::AppHandle) {
     });
 }
 
+/// Fixed scale every window renders at — a deliberate ~10% bump over the
+/// design-time 100% baseline. Applied via `set_zoom` (native WebView zoom)
+/// rather than a CSS `zoom`/`transform` on `:root`, so it scales the CSS pixel
+/// coordinate space itself: `clientX`/`clientY`, `getBoundingClientRect()` and
+/// `window.innerWidth`/`innerHeight` all stay internally consistent for the
+/// marquee, column-resize and context-menu-placement math in the frontend,
+/// with zero JS-side changes. A CSS `zoom` would leave `position: fixed`
+/// elements (the dialog scrims) sized against the *unscaled* viewport while
+/// their content scales, overflowing by the zoom delta.
+pub(crate) const UI_ZOOM: f64 = 1.1;
+
+/// Applies `UI_ZOOM`. `SetIsZoomControlEnabled(false)` above only blocks
+/// *user*-driven zoom (Ctrl+scroll, Ctrl+±) — programmatic `set_zoom` still
+/// applies, which is exactly what's wanted: a fixed scale the user can't drift
+/// away from. Unsupported on some platforms (Android; macOS/iOS below their
+/// minimum OS version) — those just stay at 100%.
+pub(crate) fn apply_ui_zoom(window: &tauri::WebviewWindow) {
+    if let Err(e) = window.set_zoom(UI_ZOOM) {
+        eprintln!("failed to set UI zoom on window {:?}: {e}", window.label());
+    }
+}
+
 /// Strip the browser-isms out of a WebView2 host: the find bar (Ctrl+F), reload
 /// (F5/Ctrl+R), print, caret browsing (F7), zoom, the link-hover status bubble,
 /// the default context menu, pinch-zoom and swipe-to-navigate. Without this the
 /// app behaves like a web page in a frame no matter what the JS layer does,
-/// because these are host accelerators, not page key events.
+/// because these are host accelerators, not page key events. Also applies the
+/// app's fixed `UI_ZOOM` scale — see its doc comment for why zoom lives here
+/// rather than in CSS.
 pub(crate) fn harden_webview(window: &tauri::WebviewWindow) {
     #[cfg(windows)]
     {
@@ -114,6 +138,5 @@ pub(crate) fn harden_webview(window: &tauri::WebviewWindow) {
             }
         });
     }
-    #[cfg(not(windows))]
-    let _ = window;
+    apply_ui_zoom(window);
 }

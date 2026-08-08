@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 
 use super::secret;
 use super::{config_dir, write_json_atomic};
+use crate::categories::retarget_legacy_path;
 
 #[derive(Serialize, Deserialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase", default)]
@@ -157,7 +158,13 @@ impl StoredPrefs {
         Prefs {
             connections: self.connections,
             speed_limit_mbps: self.speed_limit_mbps,
-            category_paths: self.category_paths,
+            // Follows a v0.2.1 category-folder rename (e.g. `Video` -> `Videos`)
+            // so a saved override doesn't quietly re-create the old folder.
+            category_paths: self
+                .category_paths
+                .into_iter()
+                .map(|(id, path)| (id, retarget_legacy_path(&path)))
+                .collect(),
             proxy: self.proxy.into_wire(),
         }
     }

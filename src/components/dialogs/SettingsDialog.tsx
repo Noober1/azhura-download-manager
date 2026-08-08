@@ -47,8 +47,13 @@ export function SettingsDialog({
         initial="initial"
         animate="animate"
         exit="exit"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settings-dialog-title"
       >
-        <div className="dialog-head">Settings</div>
+        <div className="dialog-head" id="settings-dialog-title">
+          Settings
+        </div>
         <div className="dialog-body">
           <div className="field-row">
             <label htmlFor="maxc">Max active downloads</label>
@@ -63,6 +68,7 @@ export function SettingsDialog({
                 if (Number.isFinite(n)) onSetMaxActive(n);
               }}
             />
+            <span className="field-unit">1–10</span>
           </div>
           <div className="field-row">
             <label htmlFor="glim">Global speed limit</label>

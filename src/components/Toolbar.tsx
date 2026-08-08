@@ -69,6 +69,7 @@ export function Toolbar({
       <motion.button
         className="tbtn primary"
         title="Add download"
+        aria-label="Add download"
         onClick={() => commands.openAddWindow()}
         whileTap={TAP}
       >
@@ -78,6 +79,7 @@ export function Toolbar({
       <motion.button
         className="tbtn"
         title={`${resumeLabel}${resumableSel.length > 1 ? ` (${resumableSel.length})` : ""}`}
+        aria-label={`${resumeLabel}${resumableSel.length > 1 ? ` (${resumableSel.length})` : ""}`}
         disabled={resumableSel.length === 0}
         onClick={() => onResume(resumableSel)}
         whileTap={TAP}
@@ -87,6 +89,7 @@ export function Toolbar({
       <motion.button
         className="tbtn"
         title={`Pause${pausableSel.length > 1 ? ` (${pausableSel.length})` : ""}`}
+        aria-label={`Pause${pausableSel.length > 1 ? ` (${pausableSel.length})` : ""}`}
         disabled={pausableSel.length === 0}
         onClick={() => onPause(pausableSel)}
         whileTap={TAP}
@@ -96,6 +99,7 @@ export function Toolbar({
       <motion.button
         className="tbtn"
         title={`Cancel${cancelableSel.length > 1 ? ` (${cancelableSel.length})` : ""}`}
+        aria-label={`Cancel${cancelableSel.length > 1 ? ` (${cancelableSel.length})` : ""}`}
         disabled={cancelableSel.length === 0}
         onClick={() => onCancel(cancelableSel)}
         whileTap={TAP}
@@ -105,6 +109,7 @@ export function Toolbar({
       <motion.button
         className="tbtn danger"
         title={`Delete${deletableSel.length > 1 ? ` (${deletableSel.length})` : ""}`}
+        aria-label={`Delete${deletableSel.length > 1 ? ` (${deletableSel.length})` : ""}`}
         disabled={deletableSel.length === 0}
         onClick={() => onRequestDelete(selectedItems)}
         whileTap={TAP}
@@ -112,12 +117,19 @@ export function Toolbar({
         <Icon name="trash" />
       </motion.button>
       <span className="tsep" />
-      <motion.button className="tbtn" title="Settings" onClick={onShowSettings} whileTap={TAP}>
+      <motion.button
+        className="tbtn"
+        title="Settings"
+        aria-label="Settings"
+        onClick={onShowSettings}
+        whileTap={TAP}
+      >
         <Icon name="settings" />
       </motion.button>
       <motion.button
         className="tbtn"
         title="Refresh file status (F5)"
+        aria-label="Refresh file status (F5)"
         onClick={onRefresh}
         whileTap={TAP}
       >
@@ -149,6 +161,7 @@ export function Toolbar({
       <motion.button
         className="tbtn"
         title="Install browser extension"
+        aria-label="Install browser extension"
         onClick={onShowExtensions}
         whileTap={TAP}
       >

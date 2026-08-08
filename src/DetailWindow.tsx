@@ -21,6 +21,8 @@ import {
 import { WindowControls, useNativeShell } from "./ui";
 import { FileIcon } from "./fileIcons";
 import { useTheme } from "./theme";
+import { showToast } from "./toast";
+import { ToastHost } from "./components/Toast";
 import "./App.css";
 
 /* One instance of the separate native "Download Details" popup — each
@@ -85,6 +87,7 @@ export function DetailWindow() {
   if (!ready) {
     return (
       <div className="add-window">
+        <ToastHost />
         <div className="dialog-head add-head" data-tauri-drag-region>
           <span>Download Details</span>
           <WindowControls variant="close" />
@@ -97,6 +100,7 @@ export function DetailWindow() {
   if (!item) {
     return (
       <div className="add-window">
+        <ToastHost />
         <div className="dialog-head add-head" data-tauri-drag-region>
           <span>Download Details</span>
           <WindowControls variant="close" />
@@ -127,6 +131,7 @@ export function DetailWindow() {
 
   return (
     <div className="add-window">
+      <ToastHost />
       <div className="dialog-head add-head" data-tauri-drag-region>
         <span title={item.filename}>Download Details — {truncate(item.filename, 32)}</span>
         <WindowControls variant="close" />
@@ -303,10 +308,19 @@ export function DetailWindow() {
         <button disabled={!cancelable} onClick={() => sendAction("cancel")}>
           Cancel
         </button>
-        <button disabled={!canReveal} onClick={() => revealItemInDir(item.path).catch(() => {})}>
+        <button
+          disabled={!canReveal}
+          onClick={() =>
+            revealItemInDir(item.path).catch(() => showToast("Couldn't open the containing folder."))
+          }
+        >
           Open folder
         </button>
-        <button onClick={() => writeText(item.url)}>Copy link</button>
+        <button
+          onClick={() => writeText(item.url).catch(() => showToast("Couldn't copy to clipboard."))}
+        >
+          Copy link
+        </button>
         <button className="primary-btn" onClick={close}>
           Close
         </button>

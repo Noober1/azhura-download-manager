@@ -36,8 +36,8 @@ Jalankan `bun run tauri dev` lalu centang satu per satu.
 
 Tambahkan masing-masing URL berikut lewat Add Download, biarkan selesai, lalu cek nama file akhir & folder kategori-nya:
 
-- [ ] `https://.../download?filename=sample.mp4` → tersimpan sebagai `sample.mp4` (bukan `download`), masuk folder **Video**, icon file benar
-- [ ] URL yang server-nya kirim header `Content-Disposition: attachment; filename*=UTF-8''na%C3%AFve%20file.zip` (bisa pakai httpbin/test server sendiri) → nama file ter-decode UTF-8 dengan benar (`naïve file.zip`), masuk folder **Archive**
+- [ ] `https://.../download?filename=sample.mp4` → tersimpan sebagai `sample.mp4` (bukan `download`), masuk folder **Videos**, icon file benar
+- [ ] URL yang server-nya kirim header `Content-Disposition: attachment; filename*=UTF-8''na%C3%AFve%20file.zip` (bisa pakai httpbin/test server sendiri) → nama file ter-decode UTF-8 dengan benar (`naïve file.zip`), masuk folder **Archives**
 - [ ] URL bare tanpa ekstensi di path (mis. `https://.../stream`) yang server-nya balas `Content-Type: video/mp4` → tersimpan dengan ekstensi `.mp4` ditambahkan otomatis
 - [ ] URL biasa (`https://.../file.zip`) → masih bekerja seperti sebelumnya (regresi check)
 - [ ] Cek preview nama file di Add window (sebelum download dimulai) sudah menampilkan nama yang masuk akal juga, bukan `download`
@@ -64,6 +64,54 @@ Tambahkan masing-masing URL berikut lewat Add Download, biarkan selesai, lalu ce
 - [ ] Buka Add Download window → klik pindah tab (Link/Proxy/More Options/Advanced) → garis aksen di atas tab **slide** ke tab yang aktif
 - [ ] Isi form di salah satu tab, pindah ke tab lain lalu balik lagi → data form **tidak hilang** (tab panel tidak ter-unmount)
 - [ ] Aktifkan **Windows Settings → Aksesibilitas → Efek visual → Animation effects: OFF**, restart app → semua animasi di atas jadi instan (tidak ada transisi sama sekali)
+
+---
+
+## 6. Polish pass — aria-label, toast, extension fallback, migration warning, settings hint
+
+### 6a. Toast (pesan error baru)
+
+- [ ] Selesaikan satu download, lalu **pindahkan/hapus** file hasilnya dari luar app (File Explorer), tekan **F5** untuk refresh status → baris jadi "Moved/deleted"
+- [ ] Klik kanan baris tsb → **Open containing folder** → muncul toast merah "Couldn't open the containing folder — the file may have moved." di pojok kanan bawah, bukan diam saja seperti sebelumnya
+- [ ] Double-click baris yang sama (bukan lewat context menu) → toast yang sama juga muncul
+- [ ] Buka detail popup baris tsb → klik **Open folder** di situ juga → toast muncul (pesannya sedikit beda: tanpa "the file may have moved")
+- [ ] Klik **Copy link** (toolbar/context-menu/detail popup) dalam kondisi normal → **tidak** ada toast (harusnya sukses diam-diam seperti biasa)
+- [ ] Toast hilang otomatis setelah ±5 detik
+- [ ] Klik tombol **×** di toast → toast langsung hilang lebih cepat
+- [ ] Trigger 2 toast berurutan cepat (mis. double-click 2 baris missing berturut-turut) → toast bertumpuk rapi di stack, tidak saling menimpa
+- [ ] Toast muncul di jendela detail popup juga (bukan cuma window utama) saat error terjadi di situ
+- [ ] Toast tetap terlihat walau ada dialog/context menu lain yang sedang terbuka di atasnya
+
+### 6b. Extensions dialog — tombol "Copy address"
+
+- [ ] Buka Settings/toolbar → **Install browser extension**
+- [ ] Baris **Chrome, Edge, Brave, Opera** sekarang punya 2 tombol: **Install** dan **Copy address** (sebelumnya cuma Install)
+- [ ] Klik **Copy address** di baris Chrome → paste di address bar browser → dapat teks `chrome://extensions`
+- [ ] Klik **Copy address** di baris Firefox → paste → dapat teks `about:debugging#/runtime/this-firefox`
+- [ ] (Kalau browser default bukan Chrome asli, mis. Edge/Brave) klik **Install** di baris Chrome → kalaupun gagal membuka `chrome://extensions`-nya, tombol Copy address di sebelahnya tetap jadi jalan alternatif yang berfungsi
+
+### 6c. Migration warning (folder kategori lama gagal di-rename)
+
+Ini paling sulit direproduksi natural (butuh folder lama `Video/`, `Audio/`, dst yang gagal di-rename, misalnya karena sedang dipakai/permission ditolak). Cara simulasi manual:
+
+- [ ] Tutup app sepenuhnya. Di folder downloads app (biasanya `<Downloads>/AzhuraDownloadManager/`), buat folder lama **`Video`** (singular, bukan `Videos`) lalu buka salah satu file di dalamnya dengan program lain supaya folder itu terkunci/tidak bisa di-rename (atau di Windows, set permission folder itu jadi read-only/deny untuk akun sendiri)
+- [ ] Jalankan app lagi → seharusnya muncul toast merah di window utama: "Couldn't rename 1 legacy download folder — check the app log for details."
+- [ ] Cek folder `Video` (lama) masih ada di disk (tidak ke-rename paksa, tidak ada file hilang)
+- [ ] Lepas kuncian/permission folder tsb, restart app lagi → migrasi berhasil kali ini, folder `Video` berubah jadi `Videos`, **tidak** ada toast (karena tidak ada kegagalan)
+- [ ] (Regresi) Kalau tidak ada folder lama sama sekali (install baru) → app start normal, tidak ada toast apapun soal migrasi
+
+### 6d. Aksesibilitas (aria-label, role, Escape)
+
+- [ ] Buka DevTools/Accessibility inspector pada webview (atau screen reader kalau ada) → arahkan ke tombol-tombol toolbar (Add, Resume, Pause, Cancel, Delete, Settings, Refresh, puzzle) dan tombol window (minimize/maximize/close) → masing-masing punya accessible name yang masuk akal, bukan kosong
+- [ ] **Speed cap (Custom…)** dialog → tekan **Escape** → dialog tertutup (sebelumnya cuma bisa lewat klik di luar dialog atau tombol Cancel)
+- [ ] **Connection restart confirmation** dialog → tekan **Escape** → dialog tertutup dengan efek yang sama seperti klik di luar (artinya "Apply on next start", **bukan** restart sekarang)
+- [ ] Klik kanan baris download → context menu → submenu **Speed cap** dan **Connections** masih terbuka/berfungsi normal saat di-hover (perubahan aksesibilitas ini seharusnya tidak mengubah perilaku hover sama sekali)
+- [ ] Semua dialog lain (Settings, Extensions, Delete, Speed cap, Connection restart) masih bisa ditutup normal lewat tombol Cancel/Done/klik backdrop seperti biasa — regresi check, tidak ada yang berubah perilakunya
+
+### 6e. Settings — hint "1–10"
+
+- [ ] Buka Settings → field **Max active downloads** sekarang menampilkan teks kecil **"1–10"** di sebelah kanan input, sama gayanya dengan hint "MB/s · 0 = unlimited (live)" di field Global speed limit
+- [ ] Coba isi angka di luar rentang (mis. 20) lalu klik keluar dari field → nilai tetap ter-clamp ke 10 seperti sebelumnya (perilaku tidak berubah, cuma hint-nya yang baru)
 
 ---
 

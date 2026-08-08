@@ -50,8 +50,11 @@ export function DeleteDialog({
         initial="initial"
         animate="animate"
         exit="exit"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="delete-dialog-title"
       >
-        <div className="dialog-head">
+        <div className="dialog-head" id="delete-dialog-title">
           {deletable.length === 1 ? `Delete "${deletable[0].filename}"?` : `Delete ${deletable.length} downloads?`}
         </div>
         <div className="dialog-body">

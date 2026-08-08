@@ -3,6 +3,7 @@ import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { commands } from "../../bindings";
 import { OVERLAY_FADE, DIALOG_POP } from "../../motion";
+import { showToast } from "../../toast";
 
 async function revealExtension(flavor: "chrome" | "firefox") {
   try {
@@ -39,8 +40,13 @@ export function ExtensionsDialog({ onClose }: { onClose: () => void }) {
         initial="initial"
         animate="animate"
         exit="exit"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="extensions-dialog-title"
       >
-        <div className="dialog-head">Browser extension</div>
+        <div className="dialog-head" id="extensions-dialog-title">
+          Browser extension
+        </div>
         <div className="dialog-body">
           <p className="detail-note">
             Adds “Download with ADM” to your browser’s right-click menu. Pick the build
@@ -55,9 +61,21 @@ export function ExtensionsDialog({ onClose }: { onClose: () => void }) {
                 “Load unpacked” and pick the revealed folder.
               </div>
             </div>
-            <button className="primary-btn" onClick={() => revealExtension("chrome")}>
-              Install
-            </button>
+            <div className="ext-actions">
+              <button className="primary-btn" onClick={() => revealExtension("chrome")}>
+                Install
+              </button>
+              <button
+                className="link-btn"
+                onClick={() =>
+                  writeText("chrome://extensions").catch(() =>
+                    showToast("Couldn't copy to clipboard."),
+                  )
+                }
+              >
+                Copy address
+              </button>
+            </div>
           </div>
 
           <div className="ext-row">
@@ -75,7 +93,11 @@ export function ExtensionsDialog({ onClose }: { onClose: () => void }) {
               </button>
               <button
                 className="link-btn"
-                onClick={() => writeText("about:debugging#/runtime/this-firefox")}
+                onClick={() =>
+                  writeText("about:debugging#/runtime/this-firefox").catch(() =>
+                    showToast("Couldn't copy to clipboard."),
+                  )
+                }
               >
                 Copy address
               </button>

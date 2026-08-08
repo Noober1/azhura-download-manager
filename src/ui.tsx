@@ -78,19 +78,30 @@ export function WindowControls({ variant }: { variant: "full" | "close" }) {
     <div className="win-controls">
       {variant === "full" && (
         <>
-          <button className="win-btn" title="Minimize" onClick={() => win.minimize()}>
+          <button
+            className="win-btn"
+            title="Minimize"
+            aria-label="Minimize"
+            onClick={() => win.minimize()}
+          >
             <Icon name="winmin" />
           </button>
           <button
             className="win-btn"
             title={maximized ? "Restore" : "Maximize"}
+            aria-label={maximized ? "Restore" : "Maximize"}
             onClick={() => win.toggleMaximize()}
           >
             <Icon name={maximized ? "winrestore" : "winmax"} />
           </button>
         </>
       )}
-      <button className="win-btn win-close" title="Close" onClick={() => win.close()}>
+      <button
+        className="win-btn win-close"
+        title="Close"
+        aria-label="Close"
+        onClick={() => win.close()}
+      >
         <Icon name="winclose" />
       </button>
     </div>
