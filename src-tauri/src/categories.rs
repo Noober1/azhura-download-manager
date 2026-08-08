@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::config::prefs::Prefs;
 use crate::paths::downloads_base;
@@ -29,17 +29,105 @@ pub(crate) fn category_id(filename: &str) -> &'static str {
 /// `CATEGORY_FOLDER` in `src/categories.ts`.
 pub(crate) fn category_folder(id: &str) -> &'static str {
     match id {
-        "video" => "Video",
-        "audio" => "Audio",
-        "program" => "Program",
-        "docs" => "Docs",
-        "archive" => "Archive",
-        _ => "Other",
+        "video" => "Videos",
+        "audio" => "Audios",
+        "program" => "Programs",
+        "docs" => "Documents",
+        "archive" => "Archives",
+        _ => "Others",
     }
 }
 
 /// The six category folder names, for creating them once at launch.
-pub(crate) const CATEGORY_FOLDERS: [&str; 6] = ["Video", "Audio", "Program", "Docs", "Archive", "Other"];
+pub(crate) const CATEGORY_FOLDERS: [&str; 6] = [
+    "Videos",
+    "Audios",
+    "Programs",
+    "Documents",
+    "Archives",
+    "Others",
+];
+
+/// Old singular folder name → its current plural name, for one-time migration
+/// of installs created before v0.2.1. Every entry MUST have a matching value
+/// in `CATEGORY_FOLDERS`.
+pub(crate) const LEGACY_CATEGORY_FOLDERS: [(&str, &str); 6] = [
+    ("Video", "Videos"),
+    ("Audio", "Audios"),
+    ("Program", "Programs"),
+    ("Docs", "Documents"),
+    ("Archive", "Archives"),
+    ("Other", "Others"),
+];
+
+/// Result of `migrate_legacy_category_folders()`, stashed via `.manage()` so
+/// `.setup()` — the earliest point an `AppHandle` exists — can warn the user
+/// if any legacy folder failed to migrate. Populated before `.manage()` is
+/// even called (see `run()`), so unlike `PendingDeepLink` this needs no
+/// `Mutex`/`Option`: `.setup()` only runs once, and the value is already
+/// known by the time anything reads it.
+pub(crate) struct PendingMigrationWarnings(pub Vec<String>);
+
+/// Best-effort rename of the legacy singular category folders under
+/// `downloads_base()` to their plural replacements. Renames only when the old
+/// folder exists and the new one does not — if both exist the user has files
+/// in each and a merge could overwrite, so it's left alone: the new folder
+/// wins for future downloads, the old one just sits there untouched.
+///
+/// Returns the old (singular) names of any folder that failed to rename, so
+/// the caller can surface it to the user once a window exists.
+pub(crate) fn migrate_legacy_category_folders() -> Vec<String> {
+    match downloads_base() {
+        Ok(base) => migrate_legacy_category_folders_in(&base),
+        Err(_) => Vec::new(),
+    }
+}
+
+fn migrate_legacy_category_folders_in(base: &Path) -> Vec<String> {
+    let mut failed = Vec::new();
+    for (old, new) in LEGACY_CATEGORY_FOLDERS {
+        let old_path = base.join(old);
+        let new_path = base.join(new);
+        if old_path.is_dir() && !new_path.exists() {
+            if let Err(e) = std::fs::rename(&old_path, &new_path) {
+                eprintln!(
+                    "could not migrate legacy folder {} -> {}: {e}",
+                    old_path.display(),
+                    new_path.display()
+                );
+                failed.push(old.to_string());
+            }
+        }
+    }
+    failed
+}
+
+/// If `path` sits inside a legacy singular category folder that no longer
+/// exists (because `migrate_legacy_category_folders` just renamed it) and the
+/// renamed equivalent does exist, returns the rewritten path; otherwise
+/// returns `path` unchanged. Only ever rewrites paths under `downloads_base()`,
+/// so paths the user redirected elsewhere are never touched.
+pub(crate) fn retarget_legacy_path(path: &str) -> String {
+    if path.is_empty() {
+        return path.to_string();
+    }
+    let Ok(base) = downloads_base() else { return path.to_string() };
+    retarget_legacy_path_in(path, &base)
+}
+
+fn retarget_legacy_path_in(path: &str, base: &Path) -> String {
+    let p = PathBuf::from(path);
+    for (old, new) in LEGACY_CATEGORY_FOLDERS {
+        let old_dir = base.join(old);
+        if let Ok(rest) = p.strip_prefix(&old_dir) {
+            let new_dir = base.join(new);
+            if !old_dir.exists() && new_dir.exists() {
+                return new_dir.join(rest).to_string_lossy().into_owned();
+            }
+        }
+    }
+    path.to_string()
+}
 
 /// Destination directory for `filename` when the user hasn't picked an
 /// explicit save path: the remembered override for its category if one is
@@ -73,13 +161,79 @@ mod tests {
 
     #[test]
     fn category_folder_matches_every_id() {
-        assert_eq!(category_folder("video"), "Video");
-        assert_eq!(category_folder("audio"), "Audio");
-        assert_eq!(category_folder("program"), "Program");
-        assert_eq!(category_folder("docs"), "Docs");
-        assert_eq!(category_folder("archive"), "Archive");
-        assert_eq!(category_folder("other"), "Other");
-        assert_eq!(category_folder("bogus"), "Other");
+        assert_eq!(category_folder("video"), "Videos");
+        assert_eq!(category_folder("audio"), "Audios");
+        assert_eq!(category_folder("program"), "Programs");
+        assert_eq!(category_folder("docs"), "Documents");
+        assert_eq!(category_folder("archive"), "Archives");
+        assert_eq!(category_folder("other"), "Others");
+        assert_eq!(category_folder("bogus"), "Others");
+    }
+
+    #[test]
+    fn migrate_renames_legacy_folder_when_new_one_is_absent() {
+        let dir = tempfile::tempdir().unwrap();
+        let old = dir.path().join("Video");
+        std::fs::create_dir_all(&old).unwrap();
+        std::fs::write(old.join("clip.mp4"), b"x").unwrap();
+
+        let failed = migrate_legacy_category_folders_in(dir.path());
+
+        let new = dir.path().join("Videos");
+        assert!(new.is_dir());
+        assert!(new.join("clip.mp4").exists());
+        assert!(!old.exists());
+        assert!(failed.is_empty());
+    }
+
+    #[test]
+    fn migrate_leaves_both_folders_when_new_one_already_exists() {
+        let dir = tempfile::tempdir().unwrap();
+        let old = dir.path().join("Video");
+        let new = dir.path().join("Videos");
+        std::fs::create_dir_all(&old).unwrap();
+        std::fs::create_dir_all(&new).unwrap();
+
+        let failed = migrate_legacy_category_folders_in(dir.path());
+
+        assert!(old.exists());
+        assert!(new.exists());
+        // Not a rename failure — both already existing is the deliberate
+        // "leave it alone" case, not an error worth surfacing to the user.
+        assert!(failed.is_empty());
+    }
+
+    #[test]
+    fn retarget_rewrites_path_under_renamed_folder() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join("Videos")).unwrap();
+        let old_path = dir.path().join("Video").join("clip.mp4");
+
+        let retargeted = retarget_legacy_path_in(old_path.to_str().unwrap(), dir.path());
+
+        assert_eq!(retargeted, dir.path().join("Videos").join("clip.mp4").to_string_lossy());
+    }
+
+    #[test]
+    fn retarget_leaves_path_unchanged_when_old_folder_still_exists() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join("Video")).unwrap();
+        std::fs::create_dir_all(dir.path().join("Videos")).unwrap();
+        let old_path = dir.path().join("Video").join("clip.mp4");
+
+        let retargeted = retarget_legacy_path_in(old_path.to_str().unwrap(), dir.path());
+
+        assert_eq!(retargeted, old_path.to_string_lossy());
+    }
+
+    #[test]
+    fn retarget_leaves_unrelated_path_unchanged() {
+        let dir = tempfile::tempdir().unwrap();
+        let unrelated = dir.path().join("SomewhereElse").join("clip.mp4");
+
+        let retargeted = retarget_legacy_path_in(unrelated.to_str().unwrap(), dir.path());
+
+        assert_eq!(retargeted, unrelated.to_string_lossy());
     }
 
     // --- Rust↔TS category contract guard --------------------------------------

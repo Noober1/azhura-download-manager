@@ -3,7 +3,9 @@ import { emitTo, listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { AnimatePresence, motion } from "motion/react";
 import { commands } from "./bindings";
+import { BODY_ENTER, STATUS_CROSSFADE } from "./motion";
 import type { DownloadItem, DetailAction } from "./types";
 import {
   formatBytes,
@@ -14,10 +16,13 @@ import {
   pctOf,
   truncate,
   isResumable,
+  isRedownload,
 } from "./format";
 import { WindowControls, useNativeShell } from "./ui";
 import { FileIcon } from "./fileIcons";
 import { useTheme } from "./theme";
+import { showToast } from "./toast";
+import { ToastHost } from "./components/Toast";
 import "./App.css";
 
 /* One instance of the separate native "Download Details" popup — each
@@ -82,6 +87,7 @@ export function DetailWindow() {
   if (!ready) {
     return (
       <div className="add-window">
+        <ToastHost />
         <div className="dialog-head add-head" data-tauri-drag-region>
           <span>Download Details</span>
           <WindowControls variant="close" />
@@ -94,6 +100,7 @@ export function DetailWindow() {
   if (!item) {
     return (
       <div className="add-window">
+        <ToastHost />
         <div className="dialog-head add-head" data-tauri-drag-region>
           <span>Download Details</span>
           <WindowControls variant="close" />
@@ -119,16 +126,23 @@ export function DetailWindow() {
   const pausable = item.state === "downloading";
   const cancelable = pausable;
   const resumable = isResumable(item);
+  const redownload = isRedownload(item);
   const canReveal = item.state === "completed" && !!item.path && !item.missing;
 
   return (
     <div className="add-window">
+      <ToastHost />
       <div className="dialog-head add-head" data-tauri-drag-region>
         <span title={item.filename}>Download Details — {truncate(item.filename, 32)}</span>
         <WindowControls variant="close" />
       </div>
 
-      <div className="dialog-body detail-window-body">
+      <motion.div
+        className="dialog-body detail-window-body"
+        variants={BODY_ENTER}
+        initial="initial"
+        animate="animate"
+      >
         <div className="detail-title-row">
           {/* The filename needs its own element: `.detail-title` is a flex
               container now, and text-overflow doesn't apply to a bare text
@@ -137,7 +151,18 @@ export function DetailWindow() {
             <FileIcon name={item.filename} size={20} />
             <span className="name-text">{item.filename}</span>
           </span>
-          <span className={`mode-tag ${statusClass(item)}`}>{statusLabel(item)}</span>
+          <AnimatePresence mode="wait">
+            <motion.span
+              key={statusLabel(item)}
+              className={`mode-tag ${statusClass(item)}`}
+              variants={STATUS_CROSSFADE}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+            >
+              {statusLabel(item)}
+            </motion.span>
+          </AnimatePresence>
         </div>
 
         <div className="cell-pct detail-overall">
@@ -198,7 +223,7 @@ export function DetailWindow() {
         )}
         {item.missing && (
           <p className="detail-path selectable" title={item.path}>
-            No longer at {item.path} — resume to download it again.
+            No longer at {item.path} — click Redownload to fetch it again.
           </p>
         )}
         {item.awaitingCapture && (
@@ -271,11 +296,11 @@ export function DetailWindow() {
             </>
           )}
         </div>
-      </div>
+      </motion.div>
 
       <div className="dialog-actions">
         <button disabled={!resumable} onClick={() => sendAction("resume")}>
-          Resume
+          {redownload ? "Redownload" : "Resume"}
         </button>
         <button disabled={!pausable} onClick={() => sendAction("pause")}>
           Pause
@@ -283,10 +308,19 @@ export function DetailWindow() {
         <button disabled={!cancelable} onClick={() => sendAction("cancel")}>
           Cancel
         </button>
-        <button disabled={!canReveal} onClick={() => revealItemInDir(item.path).catch(() => {})}>
+        <button
+          disabled={!canReveal}
+          onClick={() =>
+            revealItemInDir(item.path).catch(() => showToast("Couldn't open the containing folder."))
+          }
+        >
           Open folder
         </button>
-        <button onClick={() => writeText(item.url)}>Copy link</button>
+        <button
+          onClick={() => writeText(item.url).catch(() => showToast("Couldn't copy to clipboard."))}
+        >
+          Copy link
+        </button>
         <button className="primary-btn" onClick={close}>
           Close
         </button>

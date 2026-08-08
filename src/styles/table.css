@@ -34,8 +34,25 @@
   color: var(--faint);
 }
 
+.sb-grabber {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  cursor: default;
+}
+.sb-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--faint);
+}
+.sb-dot.on {
+  background: var(--positive);
+}
+
 .dtable {
-  width: 100%;
+  width: max-content;
   table-layout: fixed;
   border-collapse: collapse;
   border: none;
@@ -65,33 +82,24 @@
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  width: 11%;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.col-speed {
-  width: 13%;
-}
 .col-status {
-  width: 12%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .col-pct {
-  width: 8%;
   text-align: right;
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 .col-name {
-  max-width: 0;
-  width: 28%;
   overflow: hidden;
 }
 .col-added {
-  width: 15%;
   font-family: var(--font-mono);
   font-size: 0.78rem;
   color: var(--ink-soft);

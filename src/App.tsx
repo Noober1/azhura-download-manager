@@ -1,10 +1,14 @@
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getVersion } from "@tauri-apps/api/app";
-import { openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { AnimatePresence } from "motion/react";
+import { commands } from "./bindings";
 import type { DownloadItem } from "./types";
-import { isResumable } from "./format";
+import { isResumable, isRedownload } from "./format";
+import { showToast } from "./toast";
+import { ToastHost } from "./components/Toast";
 import { useNativeShell } from "./ui";
 import { useDownloads } from "./hooks/useDownloads";
 import { useScheduler } from "./hooks/useScheduler";
@@ -14,6 +18,10 @@ import { useTrayPush } from "./hooks/useTrayPush";
 import { useDetailWindows } from "./hooks/useDetailWindows";
 import { useDeepLinkCapture } from "./hooks/useDeepLinkCapture";
 import { useSortedRows } from "./hooks/useSortedRows";
+import { useColumnWidths } from "./hooks/useColumnWidths";
+import { useMissingRefresh } from "./hooks/useMissingRefresh";
+import { useGrabberStatus } from "./hooks/useGrabberStatus";
+import { useBackendWarnings } from "./hooks/useBackendWarnings";
 import { useSelection } from "./selection/useSelection";
 import { useMarquee } from "./selection/useMarquee";
 import { useTableKeyboard } from "./selection/useTableKeyboard";
@@ -69,6 +77,7 @@ function App() {
   const { selectedIds, setSelectedIds, anchorRef, selectRow, scrollRowIntoView } = selection;
 
   const marquee = useMarquee(didDragRef, tableWrapRef, selectedIds, setSelectedIds);
+  const columnWidths = useColumnWidths();
 
   const { openDetail } = useDetailWindows(
     downloads,
@@ -82,17 +91,29 @@ function App() {
   useHistoryPersistence(downloads, setDownloads, downloadsRef);
   useTrayPush(downloadsRef);
   useDeepLinkCapture(downloadsRef, downloadsApi.addFromPayload, downloadsApi.patchItem);
+  const { refresh: refreshMissing } = useMissingRefresh(downloadsRef, downloadsApi.patchItem);
+  const grabber = useGrabberStatus();
+  useBackendWarnings();
 
   // The main window starts hidden (`visible: false` in tauri.conf.json) so
   // there's no white flash before React paints; show it right after the
-  // first frame instead.
+  // first frame instead — unless this launch was the OS's own "Run at
+  // startup" autostart, in which case it should stay hidden in the tray
+  // until the user clicks the tray icon (see `reveal_main_window`).
   useEffect(() => {
-    const w = getCurrentWindow();
-    const raf = requestAnimationFrame(() => {
-      w.show()
-        .then(() => w.setFocus())
-        .catch(() => {});
-    });
+    let raf = 0;
+    commands
+      .launchedAtStartup()
+      .catch(() => false)
+      .then((hidden) => {
+        if (hidden) return;
+        raf = requestAnimationFrame(() => {
+          const w = getCurrentWindow();
+          w.show()
+            .then(() => w.setFocus())
+            .catch(() => {});
+        });
+      });
     return () => cancelAnimationFrame(raf);
   }, []);
 
@@ -108,6 +129,18 @@ function App() {
       setSelectedIds(new Set([item.id]));
     }
     setMenu({ x: e.clientX, y: e.clientY });
+  }
+
+  // Completed + still on disk → reveal its folder; otherwise there's nothing
+  // to reveal yet (or the row needs attention), so fall back to the detail
+  // popup — the row's only other way in besides Enter/"Show detail".
+  function handleRowDoubleClick(item: DownloadItem) {
+    const canReveal = item.state === "completed" && !!item.path && !item.missing;
+    if (canReveal) {
+      revealItemInDir(item.path).catch(() =>
+        showToast("Couldn't open the containing folder — the file may have moved."),
+      );
+    } else openDetail(item.id);
   }
 
   const anyDialogOpen = !!(
@@ -129,6 +162,11 @@ function App() {
 
   const selectedItems = downloads.filter((d) => selectedIds.has(d.id));
   const resumableSel = selectedItems.filter(isResumable);
+  // "Redownload" when every resumable row in the selection would restart
+  // from byte zero; "Resume" otherwise (including a mixed selection, where
+  // some rows genuinely continue).
+  const resumeLabel =
+    resumableSel.length > 0 && resumableSel.every(isRedownload) ? "Redownload" : "Resume";
   const pausableSel = selectedItems.filter((d) => d.state === "downloading");
   const cancelableSel = pausableSel;
   const deletableSel = selectedItems.filter(
@@ -158,6 +196,7 @@ function App() {
       {/* ---- Top toolbar ---- */}
       <Toolbar
         resumableSel={resumableSel}
+        resumeLabel={resumeLabel}
         pausableSel={pausableSel}
         cancelableSel={cancelableSel}
         deletableSel={deletableSel}
@@ -166,10 +205,13 @@ function App() {
         totalSpeed={totalSpeed}
         activeCount={activeCount}
         queuedCount={queuedCount}
+        searchQuery={sorted.searchQuery}
+        onSearchChange={sorted.setSearchQuery}
         onResume={downloadsApi.resumeMany}
         onPause={downloadsApi.pauseMany}
         onCancel={downloadsApi.cancelMany}
         onRequestDelete={downloadsApi.requestDelete}
+        onRefresh={refreshMissing}
         onShowSettings={() => setShowSettings(true)}
         onShowExtensions={() => setShowExtensions(true)}
       />
@@ -195,106 +237,143 @@ function App() {
           selectedIds={selectedIds}
           onSelectRow={selectRow}
           onRowContext={handleRowContext}
-          onOpenDetail={openDetail}
+          onRowDoubleClick={handleRowDoubleClick}
           marquee={marquee.marquee}
+          widths={columnWidths.widths}
+          onResizeStart={columnWidths.startResize}
+          onAutoFit={columnWidths.autoFit}
+          didResizeRef={columnWidths.didResizeRef}
         />
       </div>
 
       {/* ---- Status bar ---- */}
       <div className="statusbar">
         <span>Azhura Download Manager{version ? ` v${version}` : ""}</span>
+        <span
+          className="sb-grabber"
+          title={
+            grabber.running
+              ? `Browser extension bridge listening on 127.0.0.1:${grabber.port}`
+              : "No port in 47600–47609 was free — the browser extension falls back to the legacy URL-embedded handoff for this session."
+          }
+        >
+          <span className={`sb-dot ${grabber.running ? "on" : "off"}`} />
+          {grabber.running ? `Grabber active · :${grabber.port}` : "Grabber inactive"}
+        </span>
       </div>
 
       {/* ---- Settings dialog ---- */}
-      {showSettings && (
-        <SettingsDialog
-          maxConcurrent={settings.maxConcurrent}
-          globalLimitMbps={settings.globalLimitMbps}
-          theme={settings.theme}
-          minimizeToTray={settings.minimizeToTray}
-          notifications={settings.notifications}
-          onSetMaxActive={settings.setMaxActive}
-          onSetGlobalLimit={settings.setGlobalLimit}
-          onSetTheme={settings.setThemeSetting}
-          onSetMinimizeToTray={settings.setMinimizeToTraySetting}
-          onSetNotifications={settings.setNotificationsSetting}
-          onClose={() => setShowSettings(false)}
-        />
-      )}
+      <AnimatePresence>
+        {showSettings && (
+          <SettingsDialog
+            maxConcurrent={settings.maxConcurrent}
+            globalLimitMbps={settings.globalLimitMbps}
+            theme={settings.theme}
+            minimizeToTray={settings.minimizeToTray}
+            notifications={settings.notifications}
+            runAtStartup={settings.runAtStartup}
+            onSetMaxActive={settings.setMaxActive}
+            onSetGlobalLimit={settings.setGlobalLimit}
+            onSetTheme={settings.setThemeSetting}
+            onSetMinimizeToTray={settings.setMinimizeToTraySetting}
+            onSetNotifications={settings.setNotificationsSetting}
+            onSetRunAtStartup={settings.setRunAtStartupSetting}
+            onClose={() => setShowSettings(false)}
+          />
+        )}
+      </AnimatePresence>
 
       {/* ---- Browser extension dialog ---- */}
-      {showExtensions && <ExtensionsDialog onClose={() => setShowExtensions(false)} />}
+      <AnimatePresence>
+        {showExtensions && <ExtensionsDialog onClose={() => setShowExtensions(false)} />}
+      </AnimatePresence>
 
       {/* ---- Row context menu ---- */}
-      {menu && (
-        <ContextMenu
-          x={menu.x}
-          y={menu.y}
-          resumableCount={resumableSel.length}
-          pausableCount={pausableSel.length}
-          cancelableCount={cancelableSel.length}
-          canReveal={canReveal}
-          canOpen={canReveal}
-          canCopy={selectedItems.length > 0}
-          canDelete={deletableSel.length > 0}
-          canShowDetail={!!singleSelected}
-          canModify={selectedItems.length > 0}
-          currentSpeedLimit={singleSelected?.speedLimit ?? null}
-          currentConnections={singleSelected?.connections ?? null}
-          onResume={() => downloadsApi.resumeMany(resumableSel)}
-          onPause={() => downloadsApi.pauseMany(pausableSel)}
-          onCancel={() => downloadsApi.cancelMany(cancelableSel)}
-          onOpen={() => singleSelected && openPath(singleSelected.path).catch(() => {})}
-          onReveal={() =>
-            singleSelected && revealItemInDir(singleSelected.path).catch(() => {})
-          }
-          onCopyLink={() => writeText(selectedItems.map((i) => i.url).join("\n"))}
-          onShowDetail={() => singleSelected && openDetail(singleSelected.id)}
-          onSpeedCap={(bytes) => downloadsApi.applySpeedCap(selectedItems, bytes)}
-          onCustomSpeedCap={() =>
-            setSpeedCapDialog({
-              items: selectedItems,
-              mbps: singleSelected ? singleSelected.speedLimit / (1024 * 1024) : 0,
-            })
-          }
-          onConnections={(n) => downloadsApi.applyConnections(selectedItems, n)}
-          onDelete={() => downloadsApi.requestDelete(selectedItems)}
-          onClose={() => setMenu(null)}
-        />
-      )}
+      <AnimatePresence>
+        {menu && (
+          <ContextMenu
+            x={menu.x}
+            y={menu.y}
+            resumableCount={resumableSel.length}
+            resumeLabel={resumeLabel}
+            pausableCount={pausableSel.length}
+            cancelableCount={cancelableSel.length}
+            canReveal={canReveal}
+            canCopy={selectedItems.length > 0}
+            canDelete={deletableSel.length > 0}
+            canShowDetail={!!singleSelected}
+            canModify={selectedItems.length > 0}
+            currentSpeedLimit={singleSelected?.speedLimit ?? null}
+            currentConnections={singleSelected?.connections ?? null}
+            onResume={() => downloadsApi.resumeMany(resumableSel)}
+            onPause={() => downloadsApi.pauseMany(pausableSel)}
+            onCancel={() => downloadsApi.cancelMany(cancelableSel)}
+            onReveal={() =>
+              singleSelected &&
+              revealItemInDir(singleSelected.path).catch(() =>
+                showToast("Couldn't open the containing folder — the file may have moved."),
+              )
+            }
+            onCopyLink={() =>
+              writeText(selectedItems.map((i) => i.url).join("\n")).catch(() =>
+                showToast("Couldn't copy to clipboard."),
+              )
+            }
+            onShowDetail={() => singleSelected && openDetail(singleSelected.id)}
+            onSpeedCap={(bytes) => downloadsApi.applySpeedCap(selectedItems, bytes)}
+            onCustomSpeedCap={() =>
+              setSpeedCapDialog({
+                items: selectedItems,
+                mbps: singleSelected ? singleSelected.speedLimit / (1024 * 1024) : 0,
+              })
+            }
+            onConnections={(n) => downloadsApi.applyConnections(selectedItems, n)}
+            onDelete={() => downloadsApi.requestDelete(selectedItems)}
+            onClose={() => setMenu(null)}
+          />
+        )}
+      </AnimatePresence>
 
       {/* ---- Delete confirmation ---- */}
-      {downloadsApi.pendingDelete && (
-        <DeleteDialog
-          items={downloadsApi.pendingDelete}
-          deleteWithFile={downloadsApi.deleteWithFile}
-          onToggleDeleteWithFile={downloadsApi.setDeleteWithFile}
-          onCancel={() => downloadsApi.setPendingDelete(null)}
-          onConfirm={downloadsApi.confirmDelete}
-        />
-      )}
+      <AnimatePresence>
+        {downloadsApi.pendingDelete && (
+          <DeleteDialog
+            items={downloadsApi.pendingDelete}
+            deleteWithFile={downloadsApi.deleteWithFile}
+            onToggleDeleteWithFile={downloadsApi.setDeleteWithFile}
+            onCancel={() => downloadsApi.setPendingDelete(null)}
+            onConfirm={downloadsApi.confirmDelete}
+          />
+        )}
+      </AnimatePresence>
 
       {/* ---- Custom speed cap dialog ---- */}
-      {speedCapDialog && (
-        <SpeedCapDialog
-          dialog={speedCapDialog}
-          onChangeMbps={(mbps) => setSpeedCapDialog({ ...speedCapDialog, mbps })}
-          onApply={(items, bytesPerSec) => {
-            downloadsApi.applySpeedCap(items, bytesPerSec);
-            setSpeedCapDialog(null);
-          }}
-          onCancel={() => setSpeedCapDialog(null)}
-        />
-      )}
+      <AnimatePresence>
+        {speedCapDialog && (
+          <SpeedCapDialog
+            dialog={speedCapDialog}
+            onChangeMbps={(mbps) => setSpeedCapDialog({ ...speedCapDialog, mbps })}
+            onApply={(items, bytesPerSec) => {
+              downloadsApi.applySpeedCap(items, bytesPerSec);
+              setSpeedCapDialog(null);
+            }}
+            onCancel={() => setSpeedCapDialog(null)}
+          />
+        )}
+      </AnimatePresence>
 
       {/* ---- Connections-change restart confirmation ---- */}
-      {downloadsApi.connRestart && (
-        <ConnRestartDialog
-          itemCount={downloadsApi.connRestart.items.length}
-          onApplyOnNextStart={() => downloadsApi.setConnRestart(null)}
-          onRestartNow={downloadsApi.confirmConnRestart}
-        />
-      )}
+      <AnimatePresence>
+        {downloadsApi.connRestart && (
+          <ConnRestartDialog
+            itemCount={downloadsApi.connRestart.items.length}
+            onApplyOnNextStart={() => downloadsApi.setConnRestart(null)}
+            onRestartNow={downloadsApi.confirmConnRestart}
+          />
+        )}
+      </AnimatePresence>
+
+      <ToastHost />
     </div>
   );
 }

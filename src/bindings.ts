@@ -25,6 +25,13 @@ export const commands = {
 	deleteDownload: (path: string, deleteFile: boolean) => __TAURI_INVOKE<null>("delete_download", { path, deleteFile }),
 	listResumable: () => __TAURI_INVOKE<ResumableInfo[]>("list_resumable"),
 	/**
+	 *  Re-checks whether each path still exists, in the same order as `paths` —
+	 *  used by the frontend to refresh a finished row's "missing" status on
+	 *  demand (window refocus, F5, the toolbar Refresh button) instead of only
+	 *  once at `load_history` time.
+	 */
+	checkPathsMissing: (paths: string[]) => __TAURI_INVOKE<boolean[]>("check_paths_missing", { paths }),
+	/**
 	 *  Check a URL's size and filename ahead of committing to a download, for the
 	 *  Add window's live "Size:" readout. Reuses the same client/probe path as an
 	 *  actual download so the reported size matches what a real run would see.
@@ -106,11 +113,15 @@ export const commands = {
 	updateTrayDownloads: (items: TrayDownload[], tooltip: string) => __TAURI_INVOKE<null>("update_tray_downloads", { items, tooltip }),
 	loadSettings: () => __TAURI_INVOKE<AppSettings>("load_settings"),
 	saveSettings: (settings: AppSettings) => __TAURI_INVOKE<null>("save_settings", { settings }),
+	getRunAtStartup: () => __TAURI_INVOKE<boolean>("get_run_at_startup"),
+	setRunAtStartup: (enabled: boolean) => __TAURI_INVOKE<null>("set_run_at_startup", { enabled }),
+	launchedAtStartup: () => __TAURI_INVOKE<boolean>("launched_at_startup"),
 	loadPrefs: () => __TAURI_INVOKE<Prefs>("load_prefs"),
 	saveAddDefaults: (args: SaveAddDefaultsArgs) => __TAURI_INVOKE<null>("save_add_defaults", { args }),
 	setCategoryPath: (category: string, path: string) => __TAURI_INVOKE<null>("set_category_path", { category, path }),
 	loadHistory: () => __TAURI_INVOKE<HistoryLoad_Serialize>("load_history"),
 	saveHistory: (entries: HistoryEntry_Deserialize[]) => __TAURI_INVOKE<null>("save_history", { entries }),
+	grabberStatus: () => __TAURI_INVOKE<GrabberStatus>("grabber_status"),
 };
 
 /* Types */
@@ -154,6 +165,11 @@ export type DownloadEvent = { event: "started"; data: {
 } } | { event: "error"; data: {
 	message: string,
 } };
+
+export type GrabberStatus = {
+	running: boolean,
+	port: number | null,
+};
 
 /**
  *  One finished download. `state` always holds the real terminal state —

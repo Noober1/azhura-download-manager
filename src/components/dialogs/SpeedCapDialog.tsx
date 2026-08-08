@@ -1,4 +1,7 @@
+import { useEffect } from "react";
+import { motion } from "motion/react";
 import type { DownloadItem } from "../../types";
+import { OVERLAY_FADE, DIALOG_POP } from "../../motion";
 
 export function SpeedCapDialog({
   dialog,
@@ -11,14 +14,41 @@ export function SpeedCapDialog({
   onApply: (items: DownloadItem[], bytesPerSec: number) => void;
   onCancel: () => void;
 }) {
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onCancel();
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onCancel]);
+
   function apply() {
     onApply(dialog.items, Math.round(dialog.mbps * 1024 * 1024));
   }
 
   return (
-    <div className="overlay" onClick={onCancel}>
-      <div className="dialog dialog-sm" onClick={(e) => e.stopPropagation()}>
-        <div className="dialog-head">Speed cap</div>
+    <motion.div
+      className="overlay"
+      onClick={onCancel}
+      variants={OVERLAY_FADE}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+    >
+      <motion.div
+        className="dialog dialog-sm"
+        onClick={(e) => e.stopPropagation()}
+        variants={DIALOG_POP}
+        initial="initial"
+        animate="animate"
+        exit="exit"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="speedcap-dialog-title"
+      >
+        <div className="dialog-head" id="speedcap-dialog-title">
+          Speed cap
+        </div>
         <div className="dialog-body">
           <div className="field-row">
             <label htmlFor="custom-cap">Limit</label>
@@ -43,8 +73,8 @@ export function SpeedCapDialog({
             Apply
           </button>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }
 

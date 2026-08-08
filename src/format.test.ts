@@ -7,13 +7,16 @@ import {
   truncate,
   pctOf,
   isResumable,
+  isRedownload,
   statusClass,
   statusLabel,
+  statusRank,
   looksLikeUrl,
   fallbackName,
 } from "./format";
 import type { DownloadItem, DlState } from "./types";
 import { DEFAULT_PROXY } from "./types";
+import { DISPLAY_STATUS_RANK } from "./constants";
 
 function makeItem(overrides: Partial<DownloadItem> = {}): DownloadItem {
   return {
@@ -193,6 +196,51 @@ describe("statusClass / statusLabel", () => {
   });
 });
 
+describe("isRedownload", () => {
+  it("is true for a missing completed download", () => {
+    expect(isRedownload(makeItem({ state: "completed", missing: true }))).toBe(true);
+  });
+
+  it("is true for a row restored from history", () => {
+    expect(isRedownload(makeItem({ state: "paused", fromHistory: true }))).toBe(true);
+  });
+
+  it("is false for a plain paused/error/canceled row", () => {
+    expect(isRedownload(makeItem({ state: "paused" }))).toBe(false);
+    expect(isRedownload(makeItem({ state: "error" }))).toBe(false);
+    expect(isRedownload(makeItem({ state: "canceled" }))).toBe(false);
+  });
+
+  it("is false for awaitingCapture — that path retries capture, not a restart", () => {
+    expect(isRedownload(makeItem({ state: "paused", awaitingCapture: true }))).toBe(false);
+  });
+});
+
+describe("statusRank", () => {
+  it("ranks a missing completed row between error and canceled", () => {
+    const missing = statusRank(makeItem({ state: "completed", missing: true }));
+    const error = statusRank(makeItem({ state: "error" }));
+    const canceled = statusRank(makeItem({ state: "canceled" }));
+    expect(missing).toBeGreaterThan(error);
+    expect(missing).toBeLessThan(canceled);
+    expect(missing).toBe(DISPLAY_STATUS_RANK.missing);
+  });
+
+  it("ranks awaitingCapture separately from its underlying paused state", () => {
+    const awaiting = statusRank(makeItem({ state: "paused", awaitingCapture: true }));
+    const paused = statusRank(makeItem({ state: "paused" }));
+    expect(awaiting).toBe(DISPLAY_STATUS_RANK.awaitingCapture);
+    expect(awaiting).not.toBe(paused);
+    expect(awaiting).toBeLessThan(paused);
+  });
+
+  it("ranks a plain completed row last", () => {
+    const completed = statusRank(makeItem({ state: "completed" }));
+    expect(completed).toBe(DISPLAY_STATUS_RANK.completed);
+    expect(completed).toBeGreaterThan(statusRank(makeItem({ state: "canceled" })));
+  });
+});
+
 describe("looksLikeUrl", () => {
   it("accepts http(s) URLs only", () => {
     expect(looksLikeUrl("https://example.com")).toBe(true);
@@ -209,5 +257,17 @@ describe("fallbackName", () => {
 
   it("falls back to 'download' when the path ends in a slash", () => {
     expect(fallbackName("https://example.com/")).toBe("download");
+  });
+
+  it("prefers a query-param filename hint that has a plausible extension", () => {
+    expect(fallbackName("https://example.com/download?filename=test.mp4")).toBe("test.mp4");
+  });
+
+  it("ignores a query-param hint with no extension and falls back to the path", () => {
+    expect(fallbackName("https://example.com/download?filename=test")).toBe("download");
+  });
+
+  it("percent-decodes the path segment", () => {
+    expect(fallbackName("https://example.com/path/na%C3%AFve%20file.zip")).toBe("naïve file.zip");
   });
 });

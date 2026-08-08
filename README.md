@@ -19,7 +19,7 @@ browser.
 
 ### Rapi dan otomatis terorganisir
 - File hasil unduhan otomatis dikelompokkan ke folder berdasarkan jenisnya:
-  Video, Audio, Program, Dokumen, Arsip, dan Lainnya.
+  Videos, Audios, Programs, Documents, Archives, dan Others.
 - Folder tujuan tiap kategori bisa diganti sesuai keinginan, dan akan diingat
   untuk unduhan berikutnya.
 - Nama file yang bentrok otomatis diberi penomoran, tidak akan menimpa file

@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use super::{config_dir, write_json_atomic};
+use crate::categories::retarget_legacy_path;
 use crate::config::prefs::ProxyConfig;
 
 /// One finished download. `state` always holds the real terminal state —
@@ -108,6 +109,10 @@ pub(crate) async fn load_history() -> Result<HistoryLoad, String> {
         .into_iter()
         .filter_map(|v| serde_json::from_value::<HistoryEntry>(v).ok())
         .map(|mut e| {
+            // Follows a v0.2.1 category-folder rename (e.g. `Video` -> `Videos`)
+            // so a row saved by an older install doesn't show up as missing.
+            e.path = retarget_legacy_path(&e.path);
+            e.save_path = retarget_legacy_path(&e.save_path);
             e.missing = !e.path.is_empty() && !Path::new(&e.path).exists();
             e
         })

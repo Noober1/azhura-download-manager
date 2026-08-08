@@ -13,3 +13,44 @@
   font-size: 0.6em;
 }
 
+/* ---- Column resize handles -------------------------------------------- */
+
+.dtable thead th.sortable {
+  position: relative;
+}
+.col-resizer {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  width: 7px;
+  height: 100%;
+  cursor: col-resize;
+  user-select: none;
+  z-index: 2;
+}
+/* The last column's handle sits at the table's outer edge — pulling it
+   inward keeps it inside `.table-wrap`'s scroll area instead of clipped. */
+.dtable thead th.sortable:last-child .col-resizer {
+  right: 0;
+}
+.col-resizer::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  width: 1px;
+  background: transparent;
+}
+.col-resizer:hover::after,
+body.col-resizing .col-resizer::after {
+  background: var(--border-strong);
+}
+body.col-resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+body.col-resizing .dtable thead th.sortable:hover {
+  background: none;
+}
+

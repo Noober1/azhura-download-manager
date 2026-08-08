@@ -44,8 +44,8 @@ pub(crate) async fn open_detail_window(app: tauri::AppHandle, id: String) -> Res
     let mut builder =
         tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::App("detail.html".into()))
             .title("Download Details")
-            .inner_size(620.0, 540.0)
-            .min_inner_size(520.0, 420.0)
+            .inner_size(682.0, 594.0)
+            .min_inner_size(572.0, 462.0)
             .decorations(false)
             .visible(false)
             .shadow(true)

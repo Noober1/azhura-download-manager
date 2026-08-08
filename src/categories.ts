@@ -14,22 +14,22 @@ export const FILE_CATEGORIES: FileCategory[] = [
 ];
 
 export const CATEGORY_LABEL: Record<FileCategory, string> = {
-  video: "Video",
-  audio: "Audio",
-  program: "Program",
-  docs: "Docs",
-  archive: "Archive",
-  other: "Other",
+  video: "Videos",
+  audio: "Audios",
+  program: "Programs",
+  docs: "Documents",
+  archive: "Archives",
+  other: "Others",
 };
 
 /** Folder name under the download base (`<Downloads>/AzhuraDownloadManager/<folder>`). */
 export const CATEGORY_FOLDER: Record<FileCategory, string> = {
-  video: "Video",
-  audio: "Audio",
-  program: "Program",
-  docs: "Docs",
-  archive: "Archive",
-  other: "Other",
+  video: "Videos",
+  audio: "Audios",
+  program: "Programs",
+  docs: "Documents",
+  archive: "Archives",
+  other: "Others",
 };
 
 const EXT_CATEGORY: Record<string, FileCategory> = {};

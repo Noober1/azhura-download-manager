@@ -9,8 +9,12 @@
   flex-shrink: 0;
 }
 /* VS Code editor tabs: no rounding, active one lifts to the editor background
-   with an accent rule along its top edge. */
+   with an accent rule along its top edge. The lift is a `.tab-indicator`
+   element sharing a motion `layoutId` across tabs (see AddWindow.tsx), so it
+   slides to the new tab instead of just jumping — `.tab` only needs to stay
+   a positioning root for it. */
 .tab {
+  position: relative;
   font-family: var(--font-head);
   font-weight: 400;
   font-size: 0.8rem;
@@ -19,7 +23,6 @@
   color: var(--faint);
   background: transparent;
   border: none;
-  border-top: 1px solid transparent;
   border-right: 1px solid var(--border);
   border-radius: 0;
   box-shadow: none;
@@ -36,12 +39,22 @@
   transform: none;
   box-shadow: none;
 }
+.tab-indicator {
+  position: absolute;
+  inset: 0;
+  background: var(--canvas);
+  border-top: 1px solid var(--accent);
+  pointer-events: none;
+  z-index: 0;
+}
+.tab-label {
+  position: relative;
+  z-index: 1;
+}
 /* Same cascade guard as `.cat.active` above. */
 .tab.active,
 .tab.active:hover {
   color: var(--ink);
-  background: var(--canvas);
-  border-top-color: var(--accent);
   box-shadow: none;
 }
 

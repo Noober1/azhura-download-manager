@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { motion } from "motion/react";
 import { SPEED_PRESETS, CONNECTION_PRESETS } from "../constants";
+import { MENU_POP } from "../motion";
 
 /* Fixed-position right-click menu for the selected row(s). Clamps itself to
    stay inside the window and dismisses on outside click, Escape, scroll, or
@@ -8,10 +10,10 @@ export function ContextMenu({
   x,
   y,
   resumableCount,
+  resumeLabel,
   pausableCount,
   cancelableCount,
   canReveal,
-  canOpen,
   canCopy,
   canDelete,
   canShowDetail,
@@ -21,7 +23,6 @@ export function ContextMenu({
   onResume,
   onPause,
   onCancel,
-  onOpen,
   onReveal,
   onCopyLink,
   onShowDetail,
@@ -34,10 +35,12 @@ export function ContextMenu({
   x: number;
   y: number;
   resumableCount: number;
+  /** "Resume" or "Redownload" — depends on whether every selected resumable
+   *  row would restart from byte zero (see `isRedownload` in format.ts). */
+  resumeLabel: string;
   pausableCount: number;
   cancelableCount: number;
   canReveal: boolean;
-  canOpen: boolean;
   canCopy: boolean;
   canDelete: boolean;
   canShowDetail: boolean;
@@ -47,7 +50,6 @@ export function ContextMenu({
   onResume: () => void;
   onPause: () => void;
   onCancel: () => void;
-  onOpen: () => void;
   onReveal: () => void;
   onCopyLink: () => void;
   onShowDetail: () => void;
@@ -99,17 +101,28 @@ export function ContextMenu({
   }
 
   return (
-    <div className={`ctx-menu ${flip ? "flip" : ""}`} style={{ left: pos.x, top: pos.y }} ref={ref}>
+    <motion.div
+      className={`ctx-menu ${flip ? "flip" : ""}`}
+      style={{ left: pos.x, top: pos.y }}
+      ref={ref}
+      role="menu"
+      variants={MENU_POP}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+    >
       <button
         type="button"
+        role="menuitem"
         className="ctx-item"
         disabled={resumableCount === 0}
         onClick={() => run(onResume)}
       >
-        Resume{resumableCount > 1 ? ` (${resumableCount})` : ""}
+        {resumeLabel}{resumableCount > 1 ? ` (${resumableCount})` : ""}
       </button>
       <button
         type="button"
+        role="menuitem"
         className="ctx-item"
         disabled={pausableCount === 0}
         onClick={() => run(onPause)}
@@ -118,6 +131,7 @@ export function ContextMenu({
       </button>
       <button
         type="button"
+        role="menuitem"
         className="ctx-item"
         disabled={cancelableCount === 0}
         onClick={() => run(onCancel)}
@@ -127,30 +141,45 @@ export function ContextMenu({
       <div className="ctx-sep" />
       <button
         type="button"
+        role="menuitem"
         className="ctx-item"
         disabled={!canShowDetail}
         onClick={() => run(onShowDetail)}
       >
         Show detail
       </button>
-      <button type="button" className="ctx-item" disabled={!canOpen} onClick={() => run(onOpen)}>
-        Open
-      </button>
-      <button type="button" className="ctx-item" disabled={!canReveal} onClick={() => run(onReveal)}>
+      <button
+        type="button"
+        role="menuitem"
+        className="ctx-item"
+        disabled={!canReveal}
+        onClick={() => run(onReveal)}
+      >
         Open containing folder
       </button>
-      <button type="button" className="ctx-item" disabled={!canCopy} onClick={() => run(onCopyLink)}>
+      <button
+        type="button"
+        role="menuitem"
+        className="ctx-item"
+        disabled={!canCopy}
+        onClick={() => run(onCopyLink)}
+      >
         Copy link
       </button>
       <div className="ctx-sep" />
-      <div className={`ctx-item ctx-sub ${!canModify ? "disabled" : ""}`}>
+      <div
+        className={`ctx-item ctx-sub ${!canModify ? "disabled" : ""}`}
+        role="menuitem"
+        aria-haspopup="true"
+      >
         Speed cap
-        <span className="ctx-caret">▸</span>
-        <div className="ctx-flyout">
+        <span className="ctx-caret" aria-hidden="true">▸</span>
+        <div className="ctx-flyout" role="menu">
           {SPEED_PRESETS.map((p) => (
             <button
               key={p.bytes}
               type="button"
+              role="menuitem"
               className="ctx-item"
               disabled={!canModify}
               onClick={() => run(() => onSpeedCap(p.bytes))}
@@ -162,6 +191,7 @@ export function ContextMenu({
           <div className="ctx-sep" />
           <button
             type="button"
+            role="menuitem"
             className="ctx-item"
             disabled={!canModify}
             onClick={() => run(onCustomSpeedCap)}
@@ -170,14 +200,19 @@ export function ContextMenu({
           </button>
         </div>
       </div>
-      <div className={`ctx-item ctx-sub ${!canModify ? "disabled" : ""}`}>
+      <div
+        className={`ctx-item ctx-sub ${!canModify ? "disabled" : ""}`}
+        role="menuitem"
+        aria-haspopup="true"
+      >
         Connections
-        <span className="ctx-caret">▸</span>
-        <div className="ctx-flyout">
+        <span className="ctx-caret" aria-hidden="true">▸</span>
+        <div className="ctx-flyout" role="menu">
           {CONNECTION_PRESETS.map((n) => (
             <button
               key={n}
               type="button"
+              role="menuitem"
               className="ctx-item"
               disabled={!canModify}
               onClick={() => run(() => onConnections(n))}
@@ -191,13 +226,14 @@ export function ContextMenu({
       <div className="ctx-sep" />
       <button
         type="button"
+        role="menuitem"
         className="ctx-item danger"
         disabled={!canDelete}
         onClick={() => run(onDelete)}
       >
         Delete…
       </button>
-    </div>
+    </motion.div>
   );
 }
 

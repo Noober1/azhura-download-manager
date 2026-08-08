@@ -1,5 +1,37 @@
+import { motion } from "motion/react";
 import type { Category } from "../types";
 import { FILE_CATEGORIES, CATEGORY_LABEL } from "../categories";
+import { LAYOUT_SPRING } from "../motion";
+
+/* A single category row. The active one gets a `motion.div` sharing
+   `layoutId="sidebar-active"` with every other row's — motion animates it
+   sliding to the new position instead of the highlight just jumping. */
+function CatButton({
+  active,
+  label,
+  count,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  count: number;
+  onClick: () => void;
+}) {
+  return (
+    <button className={`cat ${active ? "active" : ""}`} onClick={onClick}>
+      {active && (
+        <motion.div
+          className="cat-indicator"
+          layoutId="sidebar-active"
+          transition={LAYOUT_SPRING}
+        />
+      )}
+      <span className="cat-content">
+        {label} <span className="cat-n">{count}</span>
+      </span>
+    </button>
+  );
+}
 
 export function Sidebar({
   category,
@@ -19,34 +51,34 @@ export function Sidebar({
   return (
     <aside className="sidebar">
       <div className="side-title">Category</div>
-      <button
-        className={`cat ${category === "all" ? "active" : ""}`}
+      <CatButton
+        active={category === "all"}
+        label="All Downloads"
+        count={totalCount}
         onClick={() => setCategory("all")}
-      >
-        All Downloads <span className="cat-n">{totalCount}</span>
-      </button>
-      <button
-        className={`cat ${category === "active" ? "active" : ""}`}
+      />
+      <CatButton
+        active={category === "active"}
+        label="Active"
+        count={activeCount}
         onClick={() => setCategory("active")}
-      >
-        Active <span className="cat-n">{activeCount}</span>
-      </button>
-      <button
-        className={`cat ${category === "finished" ? "active" : ""}`}
+      />
+      <CatButton
+        active={category === "finished"}
+        label="Finished"
+        count={finishedCount}
         onClick={() => setCategory("finished")}
-      >
-        Finished <span className="cat-n">{finishedCount}</span>
-      </button>
+      />
 
       <div className="side-title">File type</div>
       {FILE_CATEGORIES.map((c) => (
-        <button
+        <CatButton
           key={c}
-          className={`cat ${category === c ? "active" : ""}`}
+          active={category === c}
+          label={CATEGORY_LABEL[c]}
+          count={categoryCounts[c] ?? 0}
           onClick={() => setCategory(c)}
-        >
-          {CATEGORY_LABEL[c]} <span className="cat-n">{categoryCounts[c] ?? 0}</span>
-        </button>
+        />
       ))}
     </aside>
   );

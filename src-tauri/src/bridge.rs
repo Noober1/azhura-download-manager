@@ -22,6 +22,7 @@
 
 use std::collections::HashMap;
 use std::io::Read;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -74,34 +75,76 @@ impl HandoffStore {
     }
 }
 
-/// Starts the loopback listener on its own OS thread (the server is
-/// blocking/sync, so it can't run on the tokio runtime) and returns the
-/// store Tauri commands and `deeplink.rs` can query. Binds only to
-/// `127.0.0.1` — never `0.0.0.0` — and never advertises which port it landed
-/// on beyond answering `/adm-ping` on it, since the extension just scans the
-/// whole range.
-pub(crate) fn start() -> Arc<HandoffStore> {
-    let store = Arc::new(HandoffStore::default());
-    let worker_store = store.clone();
-    std::thread::spawn(move || run_server(&worker_store));
-    store
+/// Whether the loopback listener is up, and which port it landed on — queried
+/// by the `grabber_status` command to drive the status-bar indicator. The
+/// port is still never sent over the network (the extension just scans the
+/// whole range itself); this only surfaces it to this same process's own
+/// frontend over IPC.
+#[derive(Default)]
+pub(crate) struct BridgeStatus {
+    pub(crate) port: Option<u16>,
+    running: AtomicBool,
 }
 
-fn run_server(store: &HandoffStore) {
-    let server = PORTS.clone().find_map(|port| Server::http(("127.0.0.1", port)).ok());
-    let Some(server) = server else {
+impl BridgeStatus {
+    fn bound(port: u16) -> Self {
+        Self {
+            port: Some(port),
+            running: AtomicBool::new(true),
+        }
+    }
+}
+
+#[derive(serde::Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct GrabberStatus {
+    running: bool,
+    port: Option<u16>,
+}
+
+#[tauri::command]
+#[specta::specta]
+pub(crate) fn grabber_status(status: tauri::State<'_, Arc<BridgeStatus>>) -> GrabberStatus {
+    GrabberStatus {
+        running: status.running.load(Ordering::Relaxed),
+        port: status.port,
+    }
+}
+
+/// Binds the loopback listener (synchronously, so the caller knows right away
+/// whether a port was free) and starts serving it on its own OS thread — the
+/// server is blocking/sync, so it can't run on the tokio runtime. Returns the
+/// handoff store and the bind status Tauri commands and `deeplink.rs` can
+/// query. Binds only to `127.0.0.1`, never `0.0.0.0`.
+pub(crate) fn start() -> (Arc<HandoffStore>, Arc<BridgeStatus>) {
+    let store = Arc::new(HandoffStore::default());
+    let server = PORTS
+        .clone()
+        .find_map(|port| Server::http(("127.0.0.1", port)).ok().zip(Some(port)));
+
+    let Some((server, port)) = server else {
         eprintln!(
             "adm bridge: no port in {}..={} was free; the browser extension will fall back to \
              the legacy URL-embedded handoff for this session",
             PORTS.start(),
             PORTS.end()
         );
-        return;
+        return (store, Arc::new(BridgeStatus::default()));
     };
 
-    for request in server.incoming_requests() {
-        handle_request(store, request);
-    }
+    let status = Arc::new(BridgeStatus::bound(port));
+    let worker_store = store.clone();
+    let worker_status = status.clone();
+    std::thread::spawn(move || {
+        for request in server.incoming_requests() {
+            handle_request(&worker_store, request);
+        }
+        // `incoming_requests()` only stops iterating once the server itself
+        // is gone — keep the indicator honest instead of leaving it frozen
+        // at "running" forever.
+        worker_status.running.store(false, Ordering::Relaxed);
+    });
+    (store, status)
 }
 
 fn handle_request(store: &HandoffStore, mut request: tiny_http::Request) {
@@ -173,5 +216,19 @@ mod tests {
     fn take_of_unknown_id_is_none() {
         let store = HandoffStore::default();
         assert!(store.take("does-not-exist").is_none());
+    }
+
+    #[test]
+    fn bridge_status_defaults_to_not_running_with_no_port() {
+        let status = BridgeStatus::default();
+        assert!(!status.running.load(Ordering::Relaxed));
+        assert_eq!(status.port, None);
+    }
+
+    #[test]
+    fn bridge_status_bound_reports_running_with_its_port() {
+        let status = BridgeStatus::bound(47600);
+        assert!(status.running.load(Ordering::Relaxed));
+        assert_eq!(status.port, Some(47600));
     }
 }

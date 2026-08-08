@@ -21,6 +21,7 @@ export function Icon({ name }: { name: string }) {
         <circle cx="7" cy="12.5" r="2" fill="var(--surface)" />
       </>
     ),
+    refresh: <path d="M14.5 9a5.5 5.5 0 1 1-1.7-3.97M14.5 2.5v4h-4" />,
     puzzle: (
       <>
         <rect x="3.5" y="3.5" width="11" height="11" />
@@ -77,19 +78,30 @@ export function WindowControls({ variant }: { variant: "full" | "close" }) {
     <div className="win-controls">
       {variant === "full" && (
         <>
-          <button className="win-btn" title="Minimize" onClick={() => win.minimize()}>
+          <button
+            className="win-btn"
+            title="Minimize"
+            aria-label="Minimize"
+            onClick={() => win.minimize()}
+          >
             <Icon name="winmin" />
           </button>
           <button
             className="win-btn"
             title={maximized ? "Restore" : "Maximize"}
+            aria-label={maximized ? "Restore" : "Maximize"}
             onClick={() => win.toggleMaximize()}
           >
             <Icon name={maximized ? "winrestore" : "winmax"} />
           </button>
         </>
       )}
-      <button className="win-btn win-close" title="Close" onClick={() => win.close()}>
+      <button
+        className="win-btn win-close"
+        title="Close"
+        aria-label="Close"
+        onClick={() => win.close()}
+      >
         <Icon name="winclose" />
       </button>
     </div>

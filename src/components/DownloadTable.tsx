@@ -3,21 +3,32 @@ import type { DownloadItem } from "../types";
 import { formatBytes, formatSpeed, pctOf, statusClass, statusLabel, formatDateAdded } from "../format";
 import { FileIcon } from "../fileIcons";
 import type { SortKey } from "../constants";
+import { COLUMN_ORDER, totalWidth, type ColumnWidths } from "../columns";
 
 /* A sortable column header: click cycles asc → desc → default (unsorted)
-   for its own key, and starts at asc when switching from a different key. */
+   for its own key, and starts at asc when switching from a different key.
+   A drag on the trailing resize handle must not also toggle sort — that's
+   what `didResizeRef` (shared with `useColumnWidths`) suppresses, the same
+   way `useSelection`'s `didDragRef` suppresses a marquee drag's trailing
+   click. */
 function SortTh({
   className,
   label,
   sortKey,
   sort,
   onSort,
+  onResizeStart,
+  onAutoFit,
+  didResizeRef,
 }: {
   className: string;
   label: string;
   sortKey: SortKey;
   sort: { key: SortKey; dir: "asc" | "desc" } | null;
   onSort: (key: SortKey) => void;
+  onResizeStart: (key: SortKey, e: ReactMouseEvent) => void;
+  onAutoFit: (key: SortKey) => void;
+  didResizeRef: RefObject<boolean>;
 }) {
   const active = sort?.key === sortKey;
   const ariaSort = active ? (sort!.dir === "asc" ? "ascending" : "descending") : "none";
@@ -25,38 +36,55 @@ function SortTh({
     <th
       className={`${className} sortable`}
       aria-sort={ariaSort}
-      onClick={() => onSort(sortKey)}
+      onClick={() => {
+        if (didResizeRef.current) {
+          didResizeRef.current = false;
+          return;
+        }
+        onSort(sortKey);
+      }}
     >
       {label}
       {active && <span className="sort-arrow">{sort!.dir === "asc" ? "▲" : "▼"}</span>}
+      <span
+        className="col-resizer"
+        onMouseDown={(e) => onResizeStart(sortKey, e)}
+        onClick={(e) => e.stopPropagation()}
+        onDoubleClick={(e) => {
+          e.stopPropagation();
+          onAutoFit(sortKey);
+        }}
+      />
     </th>
   );
 }
 
-/* A single row in the download table. Double-click (any state) opens the
-   "Download Details" popup — see `onOpenDetail` — which now owns everything
-   that used to expand inline here (per-connection bars, paths, etc). */
+/* A single row in the download table. Double-click reveals the file's
+   containing folder when it's completed and still on disk; otherwise it
+   falls back to opening the "Download Details" popup (the old unconditional
+   behavior) — see `onDoubleClick`, whose fallback logic lives in App.tsx's
+   `handleRowDoubleClick`. */
 function Row({
   item,
   pct,
   selected,
   onSelect,
   onContext,
-  onOpenDetail,
+  onDoubleClick,
 }: {
   item: DownloadItem;
   pct: number | null;
   selected: boolean;
   onSelect: (e: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }) => void;
   onContext: (e: ReactMouseEvent) => void;
-  onOpenDetail: () => void;
+  onDoubleClick: () => void;
 }) {
   return (
     <tr
       className={`drow ${selected ? "selected" : ""}`}
       data-id={item.id}
       onClick={onSelect}
-      onDoubleClick={onOpenDetail}
+      onDoubleClick={onDoubleClick}
       onContextMenu={(e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -95,8 +123,12 @@ export function DownloadTable({
   selectedIds,
   onSelectRow,
   onRowContext,
-  onOpenDetail,
+  onRowDoubleClick,
   marquee,
+  widths,
+  onResizeStart,
+  onAutoFit,
+  didResizeRef,
 }: {
   tableWrapRef: RefObject<HTMLElement | null>;
   onTableMouseDown: (e: ReactMouseEvent) => void;
@@ -107,9 +139,14 @@ export function DownloadTable({
   selectedIds: Set<string>;
   onSelectRow: (id: string, e: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }) => void;
   onRowContext: (e: ReactMouseEvent, item: DownloadItem) => void;
-  onOpenDetail: (id: string) => void;
+  onRowDoubleClick: (item: DownloadItem) => void;
   marquee: { left: number; top: number; width: number; height: number } | null;
+  widths: ColumnWidths;
+  onResizeStart: (key: SortKey, e: ReactMouseEvent) => void;
+  onAutoFit: (key: SortKey) => void;
+  didResizeRef: RefObject<boolean>;
 }) {
+  const headerProps = { sort, onSort, onResizeStart, onAutoFit, didResizeRef };
   return (
     <>
       <main
@@ -118,46 +155,21 @@ export function DownloadTable({
         onMouseDown={onTableMouseDown}
         onClick={onTableClick}
       >
-        <table className="dtable">
+        <table className="dtable" style={{ width: totalWidth(widths) }}>
+          <colgroup>
+            {COLUMN_ORDER.map((key) => (
+              <col key={key} style={{ width: widths[key] }} />
+            ))}
+          </colgroup>
           <thead>
             <tr>
-              <SortTh className="col-name" label="Name" sortKey="name" sort={sort} onSort={onSort} />
-              <SortTh
-                className="col-added"
-                label="Date Added"
-                sortKey="added"
-                sort={sort}
-                onSort={onSort}
-              />
-              <SortTh
-                className="col-status"
-                label="Status"
-                sortKey="status"
-                sort={sort}
-                onSort={onSort}
-              />
-              <SortTh className="col-num" label="Size" sortKey="size" sort={sort} onSort={onSort} />
-              <SortTh
-                className="col-num"
-                label="Downloaded"
-                sortKey="downloaded"
-                sort={sort}
-                onSort={onSort}
-              />
-              <SortTh
-                className="col-pct"
-                label="Percentage"
-                sortKey="pct"
-                sort={sort}
-                onSort={onSort}
-              />
-              <SortTh
-                className="col-num col-speed"
-                label="Speed"
-                sortKey="speed"
-                sort={sort}
-                onSort={onSort}
-              />
+              <SortTh className="col-name" label="Name" sortKey="name" {...headerProps} />
+              <SortTh className="col-added" label="Date Added" sortKey="added" {...headerProps} />
+              <SortTh className="col-status" label="Status" sortKey="status" {...headerProps} />
+              <SortTh className="col-num" label="Size" sortKey="size" {...headerProps} />
+              <SortTh className="col-num" label="Downloaded" sortKey="downloaded" {...headerProps} />
+              <SortTh className="col-pct" label="Percentage" sortKey="pct" {...headerProps} />
+              <SortTh className="col-num col-speed" label="Speed" sortKey="speed" {...headerProps} />
             </tr>
           </thead>
           <tbody>
@@ -179,7 +191,7 @@ export function DownloadTable({
                   selected={selectedRow}
                   onSelect={(e) => onSelectRow(item.id, e)}
                   onContext={(e) => onRowContext(e, item)}
-                  onOpenDetail={() => onOpenDetail(item.id)}
+                  onDoubleClick={() => onRowDoubleClick(item)}
                 />
               );
             })}

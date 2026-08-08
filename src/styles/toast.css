@@ -1,0 +1,48 @@
+/* ---- Toasts ---------------------------------------------------------------
+   Transient error/info messages for actions that fail silently otherwise
+   (reveal-in-folder, clipboard writes). z-index 80 sits above both `.overlay`
+   (50) and `.ctx-menu`/`.ctx-flyout` (60/61) so a toast stays visible even
+   while a dialog or context menu is open. */
+
+.toast-stack {
+  position: fixed;
+  right: 1rem;
+  bottom: 40px;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  pointer-events: none;
+  max-width: 320px;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.6rem 0.5rem 0.7rem;
+  background: var(--canvas);
+  border: 1px solid var(--border-strong);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-card);
+  box-shadow: var(--sh-float);
+  font-size: 0.8rem;
+  color: var(--ink);
+  pointer-events: auto;
+}
+.toast-error {
+  border-left-color: var(--danger);
+}
+
+.toast-close {
+  margin-left: auto;
+  background: none;
+  border: none;
+  padding: 0 0.2rem;
+  font-size: 1rem;
+  line-height: 1;
+  color: var(--ink-soft);
+}
+.toast-close:hover {
+  color: var(--ink);
+}
