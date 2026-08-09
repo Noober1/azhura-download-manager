@@ -21,14 +21,15 @@ export const MAX_COLUMN_WIDTH = 900;
 
 /** Pixel equivalents of the percentages the table used before columns became
  *  resizable, resolved against a ~900px table — a fresh install looks the
- *  same as it always did. */
+ *  same as it always did. `pct` is the one exception: it grew from 80 to fit
+ *  the progress bar added alongside the percentage text. */
 export const DEFAULT_COLUMN_WIDTHS: ColumnWidths = {
   name: 260,
   added: 140,
   status: 110,
   size: 100,
   downloaded: 110,
-  pct: 80,
+  pct: 120,
   speed: 110,
 };
 

@@ -1,7 +1,7 @@
-import { useEffect } from "react";
 import { motion } from "motion/react";
 import type { DownloadItem } from "../../types";
 import { OVERLAY_FADE, DIALOG_POP } from "../../motion";
+import { useDialogA11y } from "../../hooks/useDialogA11y";
 
 export function SpeedCapDialog({
   dialog,
@@ -14,13 +14,7 @@ export function SpeedCapDialog({
   onApply: (items: DownloadItem[], bytesPerSec: number) => void;
   onCancel: () => void;
 }) {
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") onCancel();
-    }
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [onCancel]);
+  const panelRef = useDialogA11y<HTMLDivElement>(onCancel);
 
   function apply() {
     onApply(dialog.items, Math.round(dialog.mbps * 1024 * 1024));
@@ -36,6 +30,7 @@ export function SpeedCapDialog({
       exit="exit"
     >
       <motion.div
+        ref={panelRef}
         className="dialog dialog-sm"
         onClick={(e) => e.stopPropagation()}
         variants={DIALOG_POP}
@@ -45,6 +40,7 @@ export function SpeedCapDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="speedcap-dialog-title"
+        tabIndex={-1}
       >
         <div className="dialog-head" id="speedcap-dialog-title">
           Speed cap

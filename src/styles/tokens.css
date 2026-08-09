@@ -12,11 +12,31 @@
   --bw-lg: 1px;
   --radius-field: 2px;
   --radius-card: 5px;
+  --radius-panel: 6px; /* floating surfaces: dialog, ctx-menu, toast */
   /* Kept as tokens (rather than deleted) because dozens of rules below still
      reference them; the neobrutalist offset shadow is simply gone now. */
   --sh-sm: none;
   --sh: none;
-  --sh-float: 0 4px 12px rgba(0, 0, 0, 0.36);
+  /* --sh-raised / --sh-float are theme-scoped below, not here — light and
+     dark need different opacities, and a single :root value previously left
+     light theme using dark theme's shadow (see the "dark" / "light" blocks). */
+
+  /* Motion scale. src/motion.ts mirrors these as DUR/DECEL/ACCEL for
+     Motion's JS-driven animations (CSS can't consume it directly) — change
+     both together. */
+  --dur-1: 80ms; /* tint hover/background: instant feedback */
+  --dur-2: 120ms; /* overlay fade, status crossfade, small state swaps */
+  --dur-3: 180ms; /* enters that travel a distance, progress bar width */
+  --ease-standard: cubic-bezier(0.33, 0, 0.67, 1);
+  --ease-decel: cubic-bezier(0, 0, 0, 1); /* enter */
+  --ease-accel: cubic-bezier(0.7, 0, 1, 0.5); /* exit */
+
+  /* Label/text scale — collapses seven scattered sizes (0.68/0.70/0.72/0.75/
+     0.78/0.80/0.82/0.85rem) down to four. */
+  --fs-label: 0.68rem; /* small uppercase labels */
+  --fs-xs: 0.75rem;
+  --fs-sm: 0.8rem;
+  --fs-base: 0.85rem;
 
   --font-sans: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
   --font-head: var(--font-sans);
@@ -55,6 +75,15 @@
   --scroll-thumb: rgba(121, 121, 121, 0.4);
   --scroll-thumb-hover: rgba(153, 153, 153, 0.7);
   --scrim: rgba(0, 0, 0, 0.5);
+
+  /* Two elevation tiers: raised (ctx-menu, toast) vs float (dialog, the
+     highest surface). Theme-scoped because dark needs a darker, larger
+     shadow to read against a dark canvas than light does. */
+  --sh-raised: 0 2px 6px rgba(0, 0, 0, 0.32);
+  --sh-float: 0 8px 24px rgba(0, 0, 0, 0.44);
+
+  --focus: var(--accent);
+  --focus-contrast: var(--on-accent);
 }
 
 :root[data-theme="light"] {
@@ -83,6 +112,12 @@
   --scroll-thumb: rgba(100, 100, 100, 0.4);
   --scroll-thumb-hover: rgba(100, 100, 100, 0.7);
   --scrim: rgba(0, 0, 0, 0.3);
+
+  --sh-raised: 0 2px 6px rgba(0, 0, 0, 0.1);
+  --sh-float: 0 8px 24px rgba(0, 0, 0, 0.16);
+
+  --focus: var(--accent);
+  --focus-contrast: var(--on-accent);
 }
 
 :root {

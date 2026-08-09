@@ -1,0 +1,58 @@
+/* ---- Reduced motion --------------------------------------------------------
+   Covers what MotionConfig (main.tsx / add.tsx / detail.tsx, via
+   MotionProvider) can't reach: the handful of plain-CSS transitions and the
+   one @keyframes animation. Fires on the OS-level media query AND the
+   in-app Settings toggle (data-reduced-motion, stamped by
+   src/reducedMotion.ts and pre-painted by public/theme-boot.js) — either one
+   is enough, so the two blocks below repeat the same rules rather than share
+   them (CSS has no "OR" between a media query and an attribute selector).
+
+   Progress-bar width transitions are deliberately left alone: they convey
+   real data (how much has downloaded), not decoration, and
+   prefers-reduced-motion targets vestibular-triggering motion, not all
+   change. Only the sweep keyframe (indeterminate progress, pure decoration)
+   is stopped. */
+
+@media (prefers-reduced-motion: reduce) {
+  .tbtn,
+  .win-btn,
+  .cat,
+  .tab,
+  input,
+  button,
+  textarea,
+  select,
+  .ctx-sub,
+  .ctx-flyout {
+    transition: none !important;
+  }
+  .mini-bar.indeterminate,
+  .seg-bar.idle {
+    animation: none !important;
+  }
+  .mini-bar.indeterminate {
+    width: 100% !important;
+    opacity: 0.5;
+  }
+}
+
+:root[data-reduced-motion="on"] .tbtn,
+:root[data-reduced-motion="on"] .win-btn,
+:root[data-reduced-motion="on"] .cat,
+:root[data-reduced-motion="on"] .tab,
+:root[data-reduced-motion="on"] input,
+:root[data-reduced-motion="on"] button,
+:root[data-reduced-motion="on"] textarea,
+:root[data-reduced-motion="on"] select,
+:root[data-reduced-motion="on"] .ctx-sub,
+:root[data-reduced-motion="on"] .ctx-flyout {
+  transition: none !important;
+}
+:root[data-reduced-motion="on"] .mini-bar.indeterminate,
+:root[data-reduced-motion="on"] .seg-bar.idle {
+  animation: none !important;
+}
+:root[data-reduced-motion="on"] .mini-bar.indeterminate {
+  width: 100% !important;
+  opacity: 0.5;
+}

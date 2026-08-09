@@ -31,15 +31,21 @@
   border-radius: var(--radius-card);
   box-shadow: none;
   cursor: pointer;
-  transition: background 0.08s ease;
+  transition: background var(--dur-1) var(--ease-standard);
 }
 .tbtn:hover:not(:disabled) {
   background: var(--hover);
   box-shadow: none;
 }
+/* Full-bleed, fixed-size control: a scale press would look like a glitch
+   sitting flush against the toolbar, so press feedback is a brightness dip
+   instead — it composites correctly over transparent, hover, and .primary's
+   accent background alike, unlike a background swap which would need to
+   out-specificity every state. */
 .tbtn:active:not(:disabled) {
   transform: none;
   box-shadow: none;
+  filter: brightness(0.9);
 }
 .tbtn:disabled {
   opacity: 0.4;
@@ -73,7 +79,7 @@
   width: 180px;
   height: 24px;
   padding: 0 0.5em;
-  font-size: 0.78rem;
+  font-size: var(--fs-sm);
   border-radius: var(--radius-field);
 }
 
@@ -88,12 +94,12 @@
 .ts-speed {
   font-family: var(--font-mono);
   font-weight: 600;
-  font-size: 0.85rem;
+  font-size: var(--fs-base);
   font-variant-numeric: tabular-nums;
   color: var(--ink);
 }
 .ts-counts {
-  font-size: 0.85rem;
+  font-size: var(--fs-base);
   color: var(--faint);
 }
 
@@ -121,7 +127,7 @@
   border-radius: 0;
   box-shadow: none;
   cursor: pointer;
-  transition: background 0.08s ease;
+  transition: background var(--dur-1) var(--ease-standard);
 }
 .win-btn:hover {
   background: var(--hover);
@@ -129,6 +135,7 @@
 }
 .win-btn:active {
   transform: none;
+  filter: brightness(0.9);
 }
 .win-btn.win-close:hover {
   background: #c42b1b;

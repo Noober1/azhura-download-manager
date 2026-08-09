@@ -3,7 +3,7 @@
 .del-list {
   margin: 0;
   padding-left: 1.1rem;
-  font-size: 0.82rem;
+  font-size: var(--fs-sm);
   color: var(--ink-soft);
   max-height: 8rem;
   overflow-y: auto;
@@ -16,7 +16,7 @@
 
 .inline-warn {
   padding: 0.7rem 0.8rem;
-  font-size: 0.82rem;
+  font-size: var(--fs-sm);
   line-height: 1.5;
   background: var(--surface);
   border: 1px solid var(--warn);

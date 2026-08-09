@@ -272,12 +272,14 @@ function App() {
             minimizeToTray={settings.minimizeToTray}
             notifications={settings.notifications}
             runAtStartup={settings.runAtStartup}
+            reduceMotion={settings.reduceMotion}
             onSetMaxActive={settings.setMaxActive}
             onSetGlobalLimit={settings.setGlobalLimit}
             onSetTheme={settings.setThemeSetting}
             onSetMinimizeToTray={settings.setMinimizeToTraySetting}
             onSetNotifications={settings.setNotificationsSetting}
             onSetRunAtStartup={settings.setRunAtStartupSetting}
+            onSetReduceMotion={settings.setReduceMotionSetting}
             onClose={() => setShowSettings(false)}
           />
         )}

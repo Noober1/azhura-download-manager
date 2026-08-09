@@ -2,6 +2,7 @@ import type { MouseEvent as ReactMouseEvent, RefObject } from "react";
 import type { DownloadItem } from "../types";
 import { formatBytes, formatSpeed, pctOf, statusClass, statusLabel, formatDateAdded } from "../format";
 import { FileIcon } from "../fileIcons";
+import { Icon } from "../ui";
 import type { SortKey } from "../constants";
 import { COLUMN_ORDER, totalWidth, type ColumnWidths } from "../columns";
 
@@ -105,7 +106,21 @@ function Row({
       </td>
       <td className="col-num">{item.total ? formatBytes(item.total) : "—"}</td>
       <td className="col-num">{formatBytes(item.downloaded)}</td>
-      <td className="col-pct">{pct !== null ? `${pct.toFixed(0)}%` : "—"}</td>
+      <td className="col-pct">
+        <span className="cell-pct pct-overlay">
+          <span className="mini-track">
+            <span
+              className={`mini-bar ${
+                item.state === "completed" && !item.missing ? "done" : ""
+              } ${item.state === "error" || item.state === "canceled" ? "error" : ""} ${
+                pct === null && item.state === "downloading" ? "indeterminate" : ""
+              }`}
+              style={pct !== null ? { width: `${pct}%` } : undefined}
+            />
+          </span>
+          <span className="pct-num">{pct !== null ? `${pct.toFixed(0)}%` : "—"}</span>
+        </span>
+      </td>
       <td className="col-num col-speed">
         {item.state === "downloading" ? formatSpeed(item.speed) : "—"}
       </td>
@@ -176,7 +191,15 @@ export function DownloadTable({
             {rows.length === 0 && (
               <tr>
                 <td colSpan={7} className="empty-cell">
-                  No downloads here — click <strong>+</strong> to add one.
+                  <span className="empty-state">
+                    <span className="empty-icon">
+                      <Icon name="tray" size={22} />
+                    </span>
+                    <p className="empty-title">No downloads yet</p>
+                    <p className="empty-hint">
+                      Click <strong>+</strong> in the toolbar to add one.
+                    </p>
+                  </span>
                 </td>
               </tr>
             )}

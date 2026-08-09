@@ -25,8 +25,15 @@
   outline: none;
 }
 :focus-visible {
-  outline: 1px solid var(--accent);
-  outline-offset: -1px;
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+/* `--focus` is the same color as the accent background these two paint on
+   hover/selection — the ring would be invisible against its own background
+   without swapping to the contrast color. */
+.ctx-item:focus-visible,
+.drow.selected:focus-visible {
+  outline-color: var(--focus-contrast);
 }
 ::selection {
   background: var(--accent);

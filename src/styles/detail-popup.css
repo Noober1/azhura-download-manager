@@ -35,7 +35,7 @@
   grid-template-columns: auto 1fr;
   column-gap: 1rem;
   row-gap: 0.4rem;
-  font-size: 0.78rem;
+  font-size: var(--fs-sm);
   border-top: 1px solid var(--border);
   padding-top: 0.6rem;
 }

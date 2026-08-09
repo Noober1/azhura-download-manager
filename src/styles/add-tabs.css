@@ -17,7 +17,7 @@
   position: relative;
   font-family: var(--font-head);
   font-weight: 400;
-  font-size: 0.8rem;
+  font-size: var(--fs-sm);
   text-transform: none;
   letter-spacing: 0;
   color: var(--faint);
@@ -38,6 +38,7 @@
 .tab:active:not(:disabled) {
   transform: none;
   box-shadow: none;
+  filter: brightness(0.9);
 }
 .tab-indicator {
   position: absolute;
@@ -71,7 +72,7 @@
   justify-content: center;
   min-height: 10rem;
   color: var(--faint);
-  font-size: 0.85rem;
+  font-size: var(--fs-base);
   text-align: center;
 }
 
@@ -82,7 +83,7 @@
   flex-wrap: wrap;
 }
 .field-row label {
-  font-size: 0.8rem;
+  font-size: var(--fs-sm);
   font-weight: 400;
   text-transform: none;
   letter-spacing: 0;
@@ -94,7 +95,7 @@
   font-family: var(--font-mono);
 }
 .field-unit {
-  font-size: 0.75rem;
+  font-size: var(--fs-xs);
   color: var(--faint);
 }
 .field-headers {
@@ -105,7 +106,7 @@
   flex: 1;
   min-width: 11rem;
   font-family: var(--font-mono);
-  font-size: 0.8rem;
+  font-size: var(--fs-sm);
 }
 .proxy-field {
   flex: 1;
@@ -113,7 +114,7 @@
 }
 .tab-panel textarea {
   font-family: var(--font-mono);
-  font-size: 0.8rem;
+  font-size: var(--fs-sm);
   line-height: 1.5;
   resize: vertical;
 }
@@ -127,7 +128,7 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 0.85rem;
+  font-size: var(--fs-base);
   cursor: pointer;
 }
 .check-row input[type="checkbox"] {
@@ -149,12 +150,12 @@
   gap: 0.6rem;
 }
 .link-btn {
-  font-size: 0.78rem;
+  font-size: var(--fs-sm);
   padding: 0.3em 0.6em;
 }
 .size-readout {
   margin-left: auto;
   font-family: var(--font-mono);
-  font-size: 0.78rem;
+  font-size: var(--fs-sm);
   color: var(--faint);
 }

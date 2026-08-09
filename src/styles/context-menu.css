@@ -8,7 +8,7 @@
   background: var(--surface-2);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-card);
-  box-shadow: var(--sh-float);
+  box-shadow: var(--sh-raised);
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -24,7 +24,7 @@
   min-width: 0;
   text-align: left;
   font-weight: 400;
-  font-size: 0.82rem;
+  font-size: var(--fs-sm);
   color: var(--ink);
   background: transparent;
   border: none;
@@ -45,6 +45,7 @@
 .ctx-item:active:not(:disabled) {
   transform: none;
   box-shadow: none;
+  filter: brightness(0.9);
 }
 .ctx-item:disabled {
   opacity: 0.4;

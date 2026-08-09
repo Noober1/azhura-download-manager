@@ -30,7 +30,7 @@
   padding: 0 0.75rem;
   background: var(--surface);
   border-top: 1px solid var(--border);
-  font-size: 0.72rem;
+  font-size: var(--fs-xs);
   color: var(--faint);
 }
 
@@ -67,8 +67,8 @@
   height: 22px;
   background: var(--canvas);
   font-family: var(--font-head);
-  font-weight: 400;
-  font-size: 0.68rem;
+  font-weight: 600;
+  font-size: var(--fs-label);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--faint);
@@ -101,7 +101,7 @@
 }
 .col-added {
   font-family: var(--font-mono);
-  font-size: 0.78rem;
+  font-size: var(--fs-sm);
   color: var(--ink-soft);
   white-space: nowrap;
   overflow: hidden;
@@ -131,10 +131,11 @@
   height: 24px;
   padding: 0 8px;
   border-bottom: none;
-  font-size: 0.85rem;
+  font-size: var(--fs-base);
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+  transition: background var(--dur-1) var(--ease-standard);
 }
 .drow {
   cursor: pointer;
@@ -157,8 +158,37 @@
   align-items: center;
   gap: 0.5rem;
 }
+/* Table-only variant: the number sits on top of the bar instead of beside
+   it. A modifier rather than changing `.cell-pct` itself, since that class
+   is shared with the Detail popup's side-by-side overall bar. The track is
+   thicker here (14px vs the usual 4px) so the number has a surface to sit
+   on — at 4px a centered label would just float past both ends of it. The
+   text-shadow halo (canvas-colored, layered twice) keeps the number legible
+   whether it lands over the filled or unfilled half of the bar. */
+.cell-pct.pct-overlay {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.cell-pct.pct-overlay .mini-track {
+  height: 14px;
+}
+.cell-pct.pct-overlay .pct-num {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  color: var(--ink);
+  text-shadow:
+    0 0 3px var(--canvas),
+    0 0 3px var(--canvas);
+  pointer-events: none;
+}
 .mini-track {
   flex: 1;
+  min-width: 24px;
   height: 4px;
   border: none;
   border-radius: 2px;
@@ -172,7 +202,7 @@
   height: 100%;
   width: 0;
   background: var(--accent);
-  transition: width 0.15s ease-out;
+  transition: width var(--dur-3) var(--ease-decel);
 }
 .mini-bar.done {
   background: var(--positive);
@@ -195,7 +225,7 @@
 }
 .pct-num {
   font-family: var(--font-mono);
-  font-size: 0.75rem;
+  font-size: var(--fs-xs);
   color: var(--ink-soft);
   width: 2.6rem;
   text-align: right;
@@ -212,6 +242,34 @@
   white-space: normal !important;
   color: var(--faint);
 }
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+.empty-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 0.2rem;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--faint);
+}
+.empty-title {
+  margin: 0;
+  font-size: var(--fs-base);
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+.empty-hint {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--faint);
+}
 
 /* ---- Status text --------------------------------------------------------- */
 /* VS Code states things in colored text rather than badges, so the pill is
@@ -219,7 +277,7 @@
 
 .mode-tag {
   display: inline-block;
-  font-size: 0.85rem;
+  font-size: var(--fs-base);
   font-weight: 600;
   letter-spacing: 0;
   text-transform: none;
