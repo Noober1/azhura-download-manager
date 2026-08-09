@@ -4,6 +4,7 @@ import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { commands } from "../../bindings";
 import { OVERLAY_FADE, DIALOG_POP } from "../../motion";
 import { showToast } from "../../toast";
+import { useDialogA11y } from "../../hooks/useDialogA11y";
 
 async function revealExtension(flavor: "chrome" | "firefox") {
   try {
@@ -24,6 +25,8 @@ async function revealExtension(flavor: "chrome" | "firefox") {
 }
 
 export function ExtensionsDialog({ onClose }: { onClose: () => void }) {
+  const panelRef = useDialogA11y<HTMLDivElement>(onClose);
+
   return (
     <motion.div
       className="overlay"
@@ -34,6 +37,7 @@ export function ExtensionsDialog({ onClose }: { onClose: () => void }) {
       exit="exit"
     >
       <motion.div
+        ref={panelRef}
         className="dialog"
         onClick={(e) => e.stopPropagation()}
         variants={DIALOG_POP}
@@ -43,6 +47,7 @@ export function ExtensionsDialog({ onClose }: { onClose: () => void }) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="extensions-dialog-title"
+        tabIndex={-1}
       >
         <div className="dialog-head" id="extensions-dialog-title">
           Browser extension

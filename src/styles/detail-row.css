@@ -14,12 +14,12 @@
   display: flex;
   gap: 1.2rem;
   align-items: baseline;
-  font-size: 0.8rem;
+  font-size: var(--fs-sm);
   color: var(--ink-soft);
   flex-wrap: wrap;
 }
 .detail-note {
-  font-size: 0.78rem;
+  font-size: var(--fs-sm);
   font-weight: 400;
   color: var(--faint);
   line-height: 1.5;
@@ -27,7 +27,7 @@
 .detail-path {
   margin: 0;
   font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: var(--fs-xs);
   color: var(--faint);
   word-break: break-all;
 }
@@ -44,7 +44,7 @@
 }
 .seg-idx {
   font-family: var(--font-mono);
-  font-size: 0.7rem;
+  font-size: var(--fs-xs);
   color: var(--faint);
   width: 1.8rem;
 }
@@ -63,7 +63,7 @@
   height: 100%;
   width: 0;
   background: var(--accent);
-  transition: width 0.15s ease-out;
+  transition: width var(--dur-3) var(--ease-decel);
 }
 .seg-bar.idle {
   background: repeating-linear-gradient(
@@ -76,7 +76,7 @@
 }
 .seg-pct {
   font-family: var(--font-mono);
-  font-size: 0.7rem;
+  font-size: var(--fs-xs);
   color: var(--faint);
   width: 3.4rem;
   text-align: right;
@@ -84,13 +84,13 @@
 
 .ok {
   margin: 0;
-  font-size: 0.8rem;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--positive);
 }
 .err {
   margin: 0;
-  font-size: 0.8rem;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--danger);
   word-break: break-all;

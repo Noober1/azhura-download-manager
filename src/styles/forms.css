@@ -5,7 +5,7 @@ button,
 textarea,
 select {
   font-family: var(--font-sans);
-  font-size: 0.85rem;
+  font-size: var(--fs-base);
   color: var(--ink);
   background: var(--surface-2);
   border: 1px solid var(--border-strong);
@@ -13,7 +13,9 @@ select {
   padding: 0.35em 0.6em;
   box-shadow: none;
   outline: none;
-  transition: background 0.08s ease, border-color 0.08s ease;
+  transition:
+    background var(--dur-1) var(--ease-standard),
+    border-color var(--dur-1) var(--ease-standard);
 }
 select {
   cursor: pointer;
@@ -49,8 +51,13 @@ button:hover:not(:disabled) {
   background: var(--hover);
   box-shadow: none;
 }
+/* Discrete buttons (dialog footers, .link-btn) get a scale press — they sit
+   on their own with space around them, so a shrink reads as tactile rather
+   than glitchy. Full-bleed rows (.tbtn, .win-btn, .cat, .tab, .ctx-item) keep
+   `transform: none` and use a background tint instead — see their own
+   :active rules for why. */
 button:active:not(:disabled) {
-  transform: none;
+  transform: scale(0.97);
   box-shadow: none;
 }
 button:disabled {

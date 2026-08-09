@@ -21,6 +21,11 @@ pub(crate) struct AppSettings {
     /// `src/theme.ts`); Rust only persists it.
     theme: String,
     notifications: bool,
+    /// User opt-in on top of the OS-level `prefers-reduced-motion` — only
+    /// ever adds reduction, never overrides the OS setting the other way.
+    /// Applied entirely on the frontend (see `src/reducedMotion.ts`); Rust
+    /// only persists it.
+    reduce_motion: bool,
 }
 
 impl Default for AppSettings {
@@ -31,6 +36,7 @@ impl Default for AppSettings {
             minimize_to_tray: false,
             theme: "system".to_string(),
             notifications: true,
+            reduce_motion: false,
         }
     }
 }

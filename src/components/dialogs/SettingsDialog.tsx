@@ -1,6 +1,7 @@
 import { motion } from "motion/react";
 import type { Theme } from "../../types";
 import { OVERLAY_FADE, DIALOG_POP } from "../../motion";
+import { useDialogA11y } from "../../hooks/useDialogA11y";
 
 export function SettingsDialog({
   maxConcurrent,
@@ -9,12 +10,14 @@ export function SettingsDialog({
   minimizeToTray,
   notifications,
   runAtStartup,
+  reduceMotion,
   onSetMaxActive,
   onSetGlobalLimit,
   onSetTheme,
   onSetMinimizeToTray,
   onSetNotifications,
   onSetRunAtStartup,
+  onSetReduceMotion,
   onClose,
 }: {
   maxConcurrent: number;
@@ -23,14 +26,18 @@ export function SettingsDialog({
   minimizeToTray: boolean;
   notifications: boolean;
   runAtStartup: boolean;
+  reduceMotion: boolean;
   onSetMaxActive: (n: number) => void;
   onSetGlobalLimit: (mbps: number) => void;
   onSetTheme: (t: Theme) => void;
   onSetMinimizeToTray: (v: boolean) => void;
   onSetNotifications: (v: boolean) => void;
   onSetRunAtStartup: (v: boolean) => void;
+  onSetReduceMotion: (v: boolean) => void;
   onClose: () => void;
 }) {
+  const panelRef = useDialogA11y<HTMLDivElement>(onClose);
+
   return (
     <motion.div
       className="overlay"
@@ -41,6 +48,7 @@ export function SettingsDialog({
       exit="exit"
     >
       <motion.div
+        ref={panelRef}
         className="dialog dialog-sm"
         onClick={(e) => e.stopPropagation()}
         variants={DIALOG_POP}
@@ -50,6 +58,7 @@ export function SettingsDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="settings-dialog-title"
+        tabIndex={-1}
       >
         <div className="dialog-head" id="settings-dialog-title">
           Settings
@@ -93,6 +102,15 @@ export function SettingsDialog({
               <option value="dark">Dark</option>
               <option value="light">Light</option>
             </select>
+          </div>
+          <div className="check-row">
+            <input
+              type="checkbox"
+              id="reduce-motion"
+              checked={reduceMotion}
+              onChange={(e) => onSetReduceMotion(e.currentTarget.checked)}
+            />
+            <label htmlFor="reduce-motion">Reduce motion</label>
           </div>
           <div className="check-row">
             <input

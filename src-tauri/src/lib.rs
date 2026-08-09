@@ -12,6 +12,7 @@ mod deeplink;
 mod engine;
 mod paths;
 mod tray;
+mod urls;
 mod windows;
 
 use std::sync::atomic::{AtomicBool, Ordering};

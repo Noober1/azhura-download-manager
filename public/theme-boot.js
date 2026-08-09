@@ -1,6 +1,8 @@
-// Stamps the color theme before the first paint, so a light-theme user never
-// sees a dark frame while React boots. settings.json stays the source of
-// truth; this reads the mirror src/theme.ts keeps in sync.
+// Stamps the color theme (and the reduced-motion opt-in) before the first
+// paint, so a light-theme user never sees a dark frame while React boots,
+// and a reduced-motion user never sees the sweep keyframe spin for even one
+// frame. settings.json stays the source of truth; this reads the mirrors
+// src/theme.ts and src/reducedMotion.ts keep in sync.
 //
 // A separate file (rather than inlined in each HTML entry point) so it can
 // be loaded via <script src>, which is what lets tauri.conf.json's CSP drop
@@ -15,5 +17,11 @@
     document.documentElement.dataset.theme = dark ? "dark" : "light";
   } catch (e) {
     document.documentElement.dataset.theme = "dark";
+  }
+  try {
+    var reduceMotion = localStorage.getItem("adm-reduce-motion") === "1";
+    document.documentElement.dataset.reducedMotion = reduceMotion ? "on" : "off";
+  } catch (e) {
+    document.documentElement.dataset.reducedMotion = "off";
   }
 })();

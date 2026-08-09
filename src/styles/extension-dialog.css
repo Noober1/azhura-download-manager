@@ -13,11 +13,11 @@
 .ext-name {
   font-family: var(--font-head);
   font-weight: 600;
-  font-size: 0.85rem;
+  font-size: var(--fs-base);
 }
 .ext-hint {
   margin-top: 0.25rem;
-  font-size: 0.75rem;
+  font-size: var(--fs-xs);
   line-height: 1.5;
   color: var(--faint);
 }

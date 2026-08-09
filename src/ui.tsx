@@ -1,10 +1,18 @@
 import { useEffect, useState, type ReactElement } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
-/* Minimal inline icons — no emoji, stroke = currentColor. */
-export function Icon({ name }: { name: string }) {
+/* Minimal inline icons — no emoji, stroke = currentColor. `size` defaults to
+   the toolbar's 14px; the empty-state badge is the one caller that scales it
+   up. */
+export function Icon({ name, size = 14 }: { name: string; size?: number }) {
   const glyphs: Record<string, ReactElement> = {
     add: <path d="M9 2.5v13M2.5 9h13" />,
+    tray: (
+      <>
+        <path d="M9 2.5v8M5.5 7.5L9 11l3.5-3.5" />
+        <path d="M3 11v3a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-3" />
+      </>
+    ),
     resume: <path d="M4.5 3l10 6-10 6z" fill="currentColor" stroke="none" />,
     pause: (
       <>
@@ -42,8 +50,8 @@ export function Icon({ name }: { name: string }) {
   return (
     <svg
       viewBox="0 0 18 18"
-      width="14"
-      height="14"
+      width={size}
+      height={size}
       fill="none"
       stroke="currentColor"
       strokeWidth="2"

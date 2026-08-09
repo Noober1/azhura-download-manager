@@ -1,6 +1,6 @@
-import { useEffect } from "react";
 import { motion } from "motion/react";
 import { OVERLAY_FADE, DIALOG_POP } from "../../motion";
+import { useDialogA11y } from "../../hooks/useDialogA11y";
 
 export function ConnRestartDialog({
   itemCount,
@@ -14,13 +14,7 @@ export function ConnRestartDialog({
   // Mirrors the backdrop click's own dismiss target: Escape is "cancel this
   // dialog," and the safe default here is applying on next start rather than
   // restarting now, same as clicking outside.
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") onApplyOnNextStart();
-    }
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [onApplyOnNextStart]);
+  const panelRef = useDialogA11y<HTMLDivElement>(onApplyOnNextStart);
 
   return (
     <motion.div
@@ -32,6 +26,7 @@ export function ConnRestartDialog({
       exit="exit"
     >
       <motion.div
+        ref={panelRef}
         className="dialog dialog-sm"
         onClick={(e) => e.stopPropagation()}
         variants={DIALOG_POP}
@@ -41,6 +36,7 @@ export function ConnRestartDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="connrestart-dialog-title"
+        tabIndex={-1}
       >
         <div className="dialog-head" id="connrestart-dialog-title">
           Apply new connection count?

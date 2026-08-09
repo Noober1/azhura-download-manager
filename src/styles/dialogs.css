@@ -16,7 +16,7 @@
   max-width: 440px;
   background: var(--canvas);
   border: 1px solid var(--border-strong);
-  border-radius: 6px;
+  border-radius: var(--radius-panel);
   box-shadow: var(--sh-float);
 }
 
@@ -61,7 +61,7 @@
   width: 100%;
 }
 .dlg-label {
-  font-size: 0.68rem;
+  font-size: var(--fs-label);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;

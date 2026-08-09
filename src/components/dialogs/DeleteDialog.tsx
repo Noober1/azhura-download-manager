@@ -1,7 +1,7 @@
-import { useEffect } from "react";
 import { motion } from "motion/react";
 import type { DownloadItem } from "../../types";
 import { OVERLAY_FADE, DIALOG_POP } from "../../motion";
+import { useDialogA11y } from "../../hooks/useDialogA11y";
 
 /* Confirms a single or batch delete, offering to also remove the source
    file(s) from disk (unchecked by default). Running downloads in `items` are
@@ -19,13 +19,7 @@ export function DeleteDialog({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") onCancel();
-    }
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [onCancel]);
+  const panelRef = useDialogA11y<HTMLDivElement>(onCancel);
 
   const deletable = items.filter((d) => d.state !== "downloading" && d.state !== "verifying");
   const skipped = items.length - deletable.length;
@@ -44,6 +38,7 @@ export function DeleteDialog({
       exit="exit"
     >
       <motion.div
+        ref={panelRef}
         className="dialog dialog-sm"
         onClick={(e) => e.stopPropagation()}
         variants={DIALOG_POP}
@@ -53,6 +48,7 @@ export function DeleteDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="delete-dialog-title"
+        tabIndex={-1}
       >
         <div className="dialog-head" id="delete-dialog-title">
           {deletable.length === 1 ? `Delete "${deletable[0].filename}"?` : `Delete ${deletable.length} downloads?`}

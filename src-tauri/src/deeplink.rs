@@ -5,6 +5,7 @@ use tauri::{Emitter, Manager as _};
 use crate::bridge::HandoffStore;
 #[cfg(test)]
 use crate::bridge::Handoff;
+use crate::urls::validate_download_url;
 
 /// Holds an `adm://` link seen before the Add window's frontend had a
 /// chance to mount (i.e. a cold start — see `handle_deep_link_cold_start`
@@ -82,11 +83,12 @@ pub(crate) fn build_deep_link_payload(link: &str, handoffs: &HandoffStore) -> Op
         );
     }
 
-    // Reject anything that isn't an actual http(s) target — e.g. a
-    // `javascript:` link the extension couldn't resolve to a real URL — so
-    // it doesn't show up as a row that just immediately errors.
-    let is_http = target_url.starts_with("http://") || target_url.starts_with("https://");
-    if target_url.is_empty() || !is_http {
+    // Reject anything that isn't a well-formed http(s) target — e.g. a
+    // `javascript:` link the extension couldn't resolve to a real URL, or one
+    // carrying embedded control characters — so it doesn't show up as a row
+    // that just immediately errors (or, for the latter, silently corrupts
+    // this download's Mark-of-the-Web tag later on).
+    if validate_download_url(&target_url).is_err() {
         return None;
     }
     let mut headers: Vec<(String, String)> = Vec::new();
@@ -183,6 +185,26 @@ mod tests {
         let handoffs = HandoffStore::default();
         assert!(build_deep_link_payload("adm://add?url=ftp://example.com/file", &handoffs).is_none());
         assert!(build_deep_link_payload("adm://add", &handoffs).is_none());
+    }
+
+    #[test]
+    fn deep_link_payload_rejects_url_with_percent_encoded_crlf() {
+        let handoffs = HandoffStore::default();
+        // %0D%0A decodes to a real CR/LF once `query_pairs()` percent-decodes
+        // the query value — this used to slip past the old prefix-only check.
+        assert!(
+            build_deep_link_payload(
+                "adm://add?url=https%3A%2F%2Fevil.example%2Fx%0D%0AZoneId%3D0",
+                &handoffs
+            )
+            .is_none()
+        );
+        // A normal link is unaffected.
+        assert!(build_deep_link_payload(
+            "adm://add?url=https%3A%2F%2Fexample.com%2Ffile.zip",
+            &handoffs
+        )
+        .is_some());
     }
 
     #[test]

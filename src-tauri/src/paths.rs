@@ -324,9 +324,15 @@ pub(crate) fn temp_download_dir() -> Result<PathBuf, String> {
 pub(crate) async fn write_mark_of_the_web(dest: &Path, url: &str, referrer: Option<&str>) {
     let mut ads: OsString = dest.as_os_str().to_owned();
     ads.push(":Zone.Identifier");
+    // `url`/`referrer` reach this format string as free-form strings — the
+    // IPC/deep-link boundary rejects control characters (see
+    // `urls::validate_download_url`), but this sink strips them again rather
+    // than trust that guarantee, since a `\r`/`\n` here would land inside a
+    // `\r\n`-delimited INI body it doesn't otherwise control.
+    let url = crate::urls::strip_controls(url);
     let mut body = format!("[ZoneTransfer]\r\nZoneId=3\r\nHostUrl={url}\r\n");
     if let Some(r) = referrer.filter(|r| !r.is_empty()) {
-        body.push_str(&format!("ReferrerUrl={r}\r\n"));
+        body.push_str(&format!("ReferrerUrl={}\r\n", crate::urls::strip_controls(r)));
     }
     let _ = tokio::fs::write(PathBuf::from(ads), body).await;
 }
@@ -497,5 +503,30 @@ mod tests {
             filename_stem_from_referer("https://example.com/watch/big-buck-bunny"),
             Some("big-buck-bunny".to_string())
         );
+    }
+
+    // A malformed URL should never reach this sink in practice — the IPC and
+    // deep-link boundaries reject control characters before a download ever
+    // starts (see `urls::validate_download_url`) — but this test proves the
+    // sink is safe on its own even if that guarantee were ever bypassed.
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn write_mark_of_the_web_strips_injected_crlf() {
+        let dir = tempfile::tempdir().unwrap();
+        let dest = dir.path().join("setup.exe");
+        std::fs::write(&dest, b"x").unwrap();
+
+        let malicious_url = "https://evil.example/setup.exe\r\nZoneId=0";
+        write_mark_of_the_web(&dest, malicious_url, None).await;
+
+        let ads_path = format!("{}:Zone.Identifier", dest.display());
+        let body = std::fs::read_to_string(&ads_path).unwrap();
+
+        // The stripped CR/LF leaves the injected text stuck onto the end of
+        // the HostUrl value rather than escaping into its own line — so the
+        // only `ZoneId=` *line* is still the legitimate one.
+        let zone_id_lines: Vec<&str> = body.lines().filter(|l| l.starts_with("ZoneId=")).collect();
+        assert_eq!(zone_id_lines, vec!["ZoneId=3"]);
+        assert!(body.contains("HostUrl=https://evil.example/setup.exeZoneId=0"));
     }
 }

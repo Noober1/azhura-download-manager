@@ -2,11 +2,13 @@ import { useEffect, useState } from "react";
 import { commands } from "../bindings";
 import type { AppSettings, Theme } from "../types";
 import { broadcastTheme, normalizeTheme, useTheme } from "../theme";
+import { broadcastReducedMotion } from "../reducedMotion";
 import { initNotifications, setNotificationsEnabled } from "../notify";
 
 /** App-wide settings persisted to settings.json — scheduler knobs, tray
- *  behavior, theme, and notifications — plus the setters that keep the
- *  backend's copy (and, for theme, sibling windows) in sync. */
+ *  behavior, theme, notifications, and the reduced-motion opt-in — plus the
+ *  setters that keep the backend's copy (and, for theme/reduced-motion,
+ *  sibling windows) in sync. */
 export function useSettings() {
   const [maxConcurrent, setMaxConcurrent] = useState(3);
   const [globalLimitMbps, setGlobalLimitMbps] = useState(0);
@@ -14,6 +16,7 @@ export function useSettings() {
   const [theme, setTheme] = useState<Theme>("system");
   const [notifications, setNotifications] = useState(true);
   const [runAtStartup, setRunAtStartup] = useState(false);
+  const [reduceMotion, setReduceMotion] = useState(false);
 
   useTheme();
 
@@ -36,6 +39,7 @@ export function useSettings() {
         setTheme(normalizeTheme(s.theme));
         setNotifications(notifications);
         setNotificationsEnabled(notifications);
+        setReduceMotion(s.reduceMotion ?? false);
         if (globalLimitMbps > 0) {
           commands.setGlobalSpeedLimit({
             bytesPerSec: Math.round(globalLimitMbps * 1024 * 1024),
@@ -69,6 +73,7 @@ export function useSettings() {
       minimizeToTray,
       theme,
       notifications,
+      reduceMotion,
       ...overrides,
     } as AppSettings);
   }
@@ -105,6 +110,14 @@ export function useSettings() {
     persistSettings({ notifications: v });
   }
 
+  // Applies here and pushes the change to the Add / Details windows, mirroring
+  // setThemeSetting above — both windows hold their own MotionConfig instance.
+  function setReduceMotionSetting(v: boolean) {
+    setReduceMotion(v);
+    broadcastReducedMotion(v);
+    persistSettings({ reduceMotion: v });
+  }
+
   // Optimistic: flips the checkbox immediately, then reverts it if the OS
   // call actually fails (e.g. the registry key is locked down).
   function setRunAtStartupSetting(v: boolean) {
@@ -119,11 +132,13 @@ export function useSettings() {
     theme,
     notifications,
     runAtStartup,
+    reduceMotion,
     setMaxActive,
     setGlobalLimit,
     setMinimizeToTraySetting,
     setThemeSetting,
     setNotificationsSetting,
     setRunAtStartupSetting,
+    setReduceMotionSetting,
   };
 }

@@ -135,6 +135,13 @@ export type AppSettings = {
 	 */
 	theme?: string,
 	notifications?: boolean,
+	/**
+	 *  User opt-in on top of the OS-level `prefers-reduced-motion` — only
+	 *  ever adds reduction, never overrides the OS setting the other way.
+	 *  Applied entirely on the frontend (see `src/reducedMotion.ts`); Rust
+	 *  only persists it.
+	 */
+	reduceMotion?: boolean,
 };
 
 export type ConnInfo = {
