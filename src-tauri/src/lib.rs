@@ -11,6 +11,7 @@ mod config;
 mod deeplink;
 mod engine;
 mod paths;
+mod shell_icon;
 mod tray;
 mod urls;
 mod windows;
@@ -36,7 +37,7 @@ use windows::{harden_webview, quit_app, reveal_main_window, Quitting};
 /// and the cold-start detection below have to agree on.
 const AUTOSTART_FLAG: &str = "--autostart";
 
-/// 28 of the app's 30 IPC-crossing commands, collected once here so both the
+/// 29 of the app's 31 IPC-crossing commands, collected once here so both the
 /// runtime invoke handler and (in debug builds) the generated
 /// `../src/bindings.ts` stay derived from the same list — order matches the
 /// old `tauri::generate_handler!` list it replaced.
@@ -66,6 +67,7 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         commands::probe_url,
         commands::default_download_dir,
         commands::extension_dir,
+        shell_icon::shell_icon,
         windows::add::open_add_window,
         windows::add::reveal_add_window_cmd,
         windows::add::close_add_window,

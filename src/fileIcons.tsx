@@ -1,12 +1,18 @@
-/* File-type icons for the download table, drawn from the Material Icon Theme
-   (MIT, github.com/material-extensions/vscode-material-icon-theme) — the same
-   art VS Code's file explorer uses.
+/* File-type icons for the download table. `FileIcon` prefers the real
+   Windows Explorer icon for the file's extension (via `src/shellIcons.ts`,
+   backed by the `shell_icon` Tauri command) and falls back to a bundled
+   Material Icon Theme SVG (MIT, github.com/material-extensions/vscode-material-icon-theme)
+   while that's loading, on non-Windows builds, or if the shell lookup ever
+   fails.
 
    Imported with `?url`: each icon is a few hundred bytes, so Vite inlines it
    as a data URI rather than emitting a file, which keeps the app free of
    network/disk lookups at render time and avoids dangerouslySetInnerHTML.
    The SVGs carry fixed multicolor fills that are designed to read against
    both a light and a dark editor background, so they need no theming. */
+
+import { useEffect, useSyncExternalStore } from "react";
+import { extOf, getShellIcon, requestShellIcon, subscribeShellIcons } from "./shellIcons";
 
 import archive from "material-icon-theme/icons/zip.svg?url";
 import video from "material-icon-theme/icons/video.svg?url";
@@ -90,8 +96,9 @@ for (const [url, exts] of GROUPS) {
   for (const ext of exts) EXT_ICON[ext] = url;
 }
 
-/** The icon for `filename`'s extension, or the generic file icon. A name with
- *  no dot at all (a URL-derived "download") falls through to generic too. */
+/** The fallback SVG for `filename`'s extension, or the generic file icon. A
+ *  name with no dot at all (a URL-derived "download") falls through to
+ *  generic too. */
 export function iconFor(filename: string): string {
   const dot = filename.lastIndexOf(".");
   if (dot <= 0) return generic;
@@ -99,10 +106,22 @@ export function iconFor(filename: string): string {
 }
 
 export function FileIcon({ name, size = 16 }: { name: string; size?: number }) {
+  const ext = extOf(name);
+  // getSnapshot must stay a pure cache read — the fetch itself is kicked
+  // from the effect below, not from here.
+  const shellIcon = useSyncExternalStore(
+    subscribeShellIcons,
+    () => getShellIcon(ext),
+    () => null,
+  );
+  useEffect(() => {
+    requestShellIcon(ext);
+  }, [ext]);
+
   return (
     <img
       className="file-icon"
-      src={iconFor(name)}
+      src={shellIcon ?? iconFor(name)}
       width={size}
       height={size}
       alt=""

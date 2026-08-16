@@ -26,7 +26,14 @@ export function useColumnWidths() {
     e.preventDefault();
     e.stopPropagation();
     didResizeRef.current = false;
-    setDrag({ key, startX: e.clientX, startWidth: widths[key] });
+    // The `name` column has no explicit width (see DownloadTable's colgroup) —
+    // it's laid out by the table's flex space, which can exceed the stored
+    // width. Seed the drag from the header's actual rendered width so the
+    // handle starts exactly under the cursor instead of jumping to whatever
+    // was last persisted.
+    const th = e.currentTarget.closest("th");
+    const startWidth = th?.getBoundingClientRect().width ?? widths[key];
+    setDrag({ key, startX: e.clientX, startWidth });
   }
 
   useEffect(() => {

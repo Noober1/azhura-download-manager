@@ -57,6 +57,7 @@ export const commands = {
 	 *  Gecko disagree on the MV3 background key.
 	 */
 	extensionDir: (flavor: string | null) => __TAURI_INVOKE<string>("extension_dir", { flavor }),
+	shellIcon: (ext: string) => __TAURI_INVOKE<string | null>("shell_icon", { ext }),
 	/**
 	 *  Reveal the Add window for the "+" button case, and let it know it was
 	 *  just opened so it can check the clipboard for a URL to prefill.

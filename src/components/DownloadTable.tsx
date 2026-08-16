@@ -170,11 +170,22 @@ export function DownloadTable({
         onMouseDown={onTableMouseDown}
         onClick={onTableClick}
       >
-        <table className="dtable" style={{ width: totalWidth(widths) }}>
+        <table className="dtable" style={{ minWidth: totalWidth(widths) }}>
+          {/* Every column but `name` is a fixed `<col>` width; `name` gets none, so
+              under `table-layout: fixed` it's the sole flex column — it absorbs
+              whatever space `.table-wrap` has beyond the other six columns' widths.
+              A drag or double-click auto-fit on `name`'s resizer only narrows it
+              back below that floor; while there's slack, widening/auto-fitting it
+              has no visible effect, because the rendered width is `max(wrap width,
+              minWidth)`, not `sum(widths)`. */}
           <colgroup>
-            {COLUMN_ORDER.map((key) => (
-              <col key={key} style={{ width: widths[key] }} />
-            ))}
+            {COLUMN_ORDER.map((key) =>
+              key === "name" ? (
+                <col key={key} />
+              ) : (
+                <col key={key} style={{ width: widths[key] }} />
+              ),
+            )}
           </colgroup>
           <thead>
             <tr>
