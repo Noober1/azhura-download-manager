@@ -3,7 +3,7 @@ import type { SortKey } from "./constants";
 /** Table column widths, in pixels, persisted to localStorage only — there is
  *  no settings.json round trip for these (see `src/theme.ts` for the same
  *  localStorage-as-source-of-truth pattern). */
-export const COLUMN_ORDER: SortKey[] = [
+export const DEFAULT_COLUMN_ORDER: SortKey[] = [
   "name",
   "added",
   "status",
@@ -13,9 +13,30 @@ export const COLUMN_ORDER: SortKey[] = [
   "speed",
 ];
 
+export const COLUMN_LABEL: Record<SortKey, string> = {
+  name: "Name",
+  added: "Date Added",
+  status: "Status",
+  size: "Size",
+  downloaded: "Downloaded",
+  pct: "Percentage",
+  speed: "Speed",
+};
+
+export const COLUMN_CLASS: Record<SortKey, string> = {
+  name: "col-name",
+  added: "col-added",
+  status: "col-status",
+  size: "col-num",
+  downloaded: "col-num",
+  pct: "col-pct",
+  speed: "col-num col-speed",
+};
+
 export type ColumnWidths = Record<SortKey, number>;
 
 export const COLUMN_WIDTHS_KEY = "adm-column-widths";
+export const COLUMN_ORDER_KEY = "adm-column-order";
 export const MIN_COLUMN_WIDTH = 56;
 export const MAX_COLUMN_WIDTH = 900;
 
@@ -44,7 +65,7 @@ export function normalizeColumnWidths(value: unknown): ColumnWidths {
   const out = { ...DEFAULT_COLUMN_WIDTHS };
   if (value && typeof value === "object" && !Array.isArray(value)) {
     const record = value as Record<string, unknown>;
-    for (const key of COLUMN_ORDER) {
+    for (const key of DEFAULT_COLUMN_ORDER) {
       const raw = record[key];
       if (typeof raw === "number" && Number.isFinite(raw)) {
         out[key] = clampWidth(raw);
@@ -73,5 +94,61 @@ export function saveColumnWidths(widths: ColumnWidths): void {
 }
 
 export function totalWidth(widths: ColumnWidths): number {
-  return COLUMN_ORDER.reduce((sum, key) => sum + widths[key], 0);
+  return DEFAULT_COLUMN_ORDER.reduce((sum, key) => sum + widths[key], 0);
+}
+
+/** Anything unrecognized is dropped, duplicates are dropped (first instance
+ *  wins), and any column missing from the stored value is appended at its
+ *  default position — mirrors `normalizeColumnWidths` above, but for order
+ *  instead of width. This keeps a stale/corrupt localStorage value from ever
+ *  producing fewer than all seven columns. */
+export function normalizeColumnOrder(value: unknown): SortKey[] {
+  const seen = new Set<SortKey>();
+  const out: SortKey[] = [];
+  if (Array.isArray(value)) {
+    for (const raw of value) {
+      if (
+        typeof raw === "string" &&
+        !seen.has(raw as SortKey) &&
+        (DEFAULT_COLUMN_ORDER as string[]).includes(raw)
+      ) {
+        seen.add(raw as SortKey);
+        out.push(raw as SortKey);
+      }
+    }
+  }
+  for (const key of DEFAULT_COLUMN_ORDER) {
+    if (!seen.has(key)) out.push(key);
+  }
+  return out;
+}
+
+export function loadColumnOrder(): SortKey[] {
+  try {
+    const raw = localStorage.getItem(COLUMN_ORDER_KEY);
+    return normalizeColumnOrder(raw ? JSON.parse(raw) : undefined);
+  } catch {
+    return [...DEFAULT_COLUMN_ORDER];
+  }
+}
+
+export function saveColumnOrder(order: SortKey[]): void {
+  try {
+    localStorage.setItem(COLUMN_ORDER_KEY, JSON.stringify(order));
+  } catch {
+    /* private mode / storage disabled — reorder still works for this
+       session, only persistence across relaunches is lost */
+  }
+}
+
+/** Returns a new array with the column at `from` moved to `to` — never
+ *  mutates `order`. */
+export function moveColumn(order: SortKey[], from: number, to: number): SortKey[] {
+  if (from === to || from < 0 || from >= order.length || to < 0 || to >= order.length) {
+    return order;
+  }
+  const next = [...order];
+  const [moved] = next.splice(from, 1);
+  next.splice(to, 0, moved);
+  return next;
 }

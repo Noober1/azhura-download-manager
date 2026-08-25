@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import type { SortKey } from "../constants";
 import {
-  COLUMN_ORDER,
   clampWidth,
   loadColumnWidths,
   saveColumnWidths,
@@ -13,8 +12,13 @@ import {
  *  `mousemove`/`mouseup` listeners so the drag keeps tracking even if the
  *  cursor leaves the header. `didResizeRef` (read by `DownloadTable`'s sort
  *  click handler) distinguishes an actual drag from a plain click, since a
- *  drag's mouseup always fires a click right after it. */
-export function useColumnWidths() {
+ *  drag's mouseup always fires a click right after it.
+ *
+ *  `order` is the column's *current* left-to-right order (from
+ *  `useColumnOrder`) — `autoFit` needs it to find a column's live position in
+ *  the DOM, which no longer matches the fixed `DEFAULT_COLUMN_ORDER` once
+ *  columns have been dragged around. */
+export function useColumnWidths(order: SortKey[]) {
   const [widths, setWidths] = useState<ColumnWidths>(loadColumnWidths);
   const [drag, setDrag] = useState<{ key: SortKey; startX: number; startWidth: number } | null>(
     null,
@@ -67,7 +71,7 @@ export function useColumnWidths() {
 
   // Snaps a column to fit the widest visible content (header + rows) in it.
   function autoFit(key: SortKey) {
-    const i = COLUMN_ORDER.indexOf(key);
+    const i = order.indexOf(key);
     if (i === -1) return;
 
     let widest = 0;

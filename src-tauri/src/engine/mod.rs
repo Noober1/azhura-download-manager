@@ -367,6 +367,11 @@ pub(crate) async fn download_inner(
                 total: setup.total,
                 speed_bps: avg,
                 connections: Vec::new(),
+                // The download is already complete at this point — the
+                // frontend clears its piece map on the `Finished` event this
+                // is immediately followed by, so there's nothing for this
+                // one final synthetic progress tick to report.
+                pieces: Vec::new(),
             });
             // `dest` may differ from `setup.filename` if a same-named file
             // already existed in the destination folder — `move_to_destination`

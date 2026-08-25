@@ -23,7 +23,11 @@ import { FileIcon } from "./fileIcons";
 import { useTheme } from "./theme";
 import { showToast } from "./toast";
 import { ToastHost } from "./components/Toast";
+import { sparklinePoints, SPEED_SAMPLE_INTERVAL_MS } from "./speedHistory";
 import "./App.css";
+
+const SPARK_WIDTH = 160;
+const SPARK_HEIGHT = 44;
 
 /* One instance of the separate native "Download Details" popup — each
    download that's inspected gets its own window (labeled `detail-<id>`), so
@@ -192,6 +196,50 @@ export function DetailWindow() {
           )}
           {elapsed !== null && <span className="tabular">Elapsed {formatEta(elapsed)}</span>}
         </div>
+
+        {/* No `state === "downloading"` gate here — pausing simply stops new
+            samples from arriving, which freezes the line right where it was
+            rather than hiding it, and that's the intended "paused" look.
+            The `<svg>` itself is `aria-hidden`: the peak and timeline next
+            to it are real text conveying the same information, so the line
+            drawing is decorative rather than the sole source of the data. */}
+        {(item.speedHistory?.length ?? 0) > 1 && (
+          <div className="speed-spark">
+            <div className="speed-spark-head">
+              <span className="speed-spark-label">Speed</span>
+              {(item.peakSpeed ?? 0) > 0 && (
+                <span className="speed-spark-peak">Peak {formatSpeed(item.peakSpeed ?? 0)}</span>
+              )}
+            </div>
+            <svg aria-hidden="true" viewBox={`0 0 ${SPARK_WIDTH} ${SPARK_HEIGHT}`} preserveAspectRatio="none">
+              <polyline points={sparklinePoints(item.speedHistory ?? [], SPARK_WIDTH, SPARK_HEIGHT)} />
+            </svg>
+            <div className="speed-spark-timeline">
+              {/* `speedHistory` samples land roughly `SPEED_SAMPLE_INTERVAL_MS`
+                  apart (see `useDownloads`'s sampling gate) — close enough
+                  for an approximate span label, not a precise time series. */}
+              <span>
+                -{formatEta(((item.speedHistory!.length - 1) * SPEED_SAMPLE_INTERVAL_MS) / 1000)}
+              </span>
+              <span>now</span>
+            </div>
+          </div>
+        )}
+
+        {/* A single-connection download has no piece plan at all, so
+            `pieceMap` stays empty for its whole run — it keeps the plain
+            overall progress bar above instead. */}
+        {(item.pieceMap?.length ?? 0) > 0 && (
+          <div
+            className="piece-map"
+            role="img"
+            aria-label={`${pct !== null ? pct.toFixed(0) : 0}% downloaded`}
+          >
+            {item.pieceMap!.map((v, i) => (
+              <span key={i} className="piece-map-cell" style={{ opacity: 0.15 + (0.85 * v) / 255 }} />
+            ))}
+          </div>
+        )}
 
         {item.state === "downloading" && item.conns.length > 1 && (
           <div className="segments">

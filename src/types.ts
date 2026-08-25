@@ -82,6 +82,22 @@ export type DownloadItem = {
   startedAt?: number;
   /** When this row first entered the list — drives the "Date Added" column and default sort. */
   addedAt: number;
+  /** Recent speed samples for the detail window's sparkline, newest last —
+   *  sampled at a slower rate than progress events arrive at (see
+   *  `useDownloads`). Session-only: `toHistoryEntry`/`fromHistoryEntry` in
+   *  `history.ts` are an explicit field allowlist that doesn't mention this
+   *  field, so it can never round-trip through history.json — no exclusion
+   *  needed there. */
+  speedHistory?: number[];
+  /** Fill level (0..=255) of each equal-sized slice of the file for the
+   *  detail window's per-piece progress map — empty for a single-connection
+   *  download. Session-only, same as `speedHistory` above. */
+  pieceMap?: number[];
+  /** Highest `speed` seen so far this run, updated on every progress tick
+   *  (not just the throttled ticks `speedHistory` samples on) so a brief
+   *  spike between two samples still counts. Session-only, same as
+   *  `speedHistory` above. */
+  peakSpeed?: number;
 };
 
 /** Emitted by the detail popup when the user clicks an action button there. */

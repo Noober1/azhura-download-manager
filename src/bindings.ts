@@ -163,6 +163,13 @@ export type DownloadEvent = { event: "started"; data: {
 	total: number | null,
 	speedBps: number | null,
 	connections: ConnInfo[],
+	/**
+	 *  Fill level of each of `PIECE_BUCKETS` equal-sized slices of the
+	 *  file, 0..=255. Fixed length regardless of file size, so a 100 GB
+	 *  download costs no more per tick than a 10 MB one. Empty for a
+	 *  single-connection download, which has no piece plan at all.
+	 */
+	pieces: number[],
 } } | { event: "paused"; data: {
 	downloaded: number,
 } } | { event: "canceled"; data: {

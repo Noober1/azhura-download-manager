@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { flushSync } from "react-dom";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getVersion } from "@tauri-apps/api/app";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
@@ -19,6 +20,8 @@ import { useDetailWindows } from "./hooks/useDetailWindows";
 import { useDeepLinkCapture } from "./hooks/useDeepLinkCapture";
 import { useSortedRows } from "./hooks/useSortedRows";
 import { useColumnWidths } from "./hooks/useColumnWidths";
+import { useColumnOrder } from "./hooks/useColumnOrder";
+import { useInfiniteRows } from "./hooks/useInfiniteRows";
 import { useMissingRefresh } from "./hooks/useMissingRefresh";
 import { useGrabberStatus } from "./hooks/useGrabberStatus";
 import { useBackendWarnings } from "./hooks/useBackendWarnings";
@@ -77,7 +80,30 @@ function App() {
   const { selectedIds, setSelectedIds, anchorRef, selectRow, scrollRowIntoView } = selection;
 
   const marquee = useMarquee(didDragRef, tableWrapRef, selectedIds, setSelectedIds);
-  const columnWidths = useColumnWidths();
+  const columnOrder = useColumnOrder();
+  const columnWidths = useColumnWidths(columnOrder.order);
+  const infiniteRows = useInfiniteRows(rows, tableWrapRef, sorted.viewKey);
+
+  // Deterministic version of `scrollRowIntoView` for keyboard navigation
+  // (Home/End/Ctrl+A/arrows in `useTableKeyboard`): if the target row is
+  // already rendered, scroll straight to it — the common case, zero extra
+  // cost. Otherwise force the row into the render window with `flushSync`
+  // before scrolling, so the DOM node actually exists when
+  // `scrollRowIntoView`'s `querySelector` looks for it. A single
+  // `requestAnimationFrame` isn't enough here: `useTableKeyboard` attaches a
+  // raw `document.addEventListener("keydown", ...)`, so the `setCount` from
+  // `ensureRendered` is scheduled through React's default-priority
+  // `MessageChannel` task, which isn't guaranteed to run before a same-frame
+  // rAF callback. `flushSync` is safe in this native-listener context (it's
+  // not a React event handler) and keyboard nav is rare enough that a
+  // synchronous render costs nothing.
+  function scrollRowIntoViewEnsured(id: string) {
+    const i = rows.findIndex((d) => d.id === id);
+    if (i !== -1 && i >= infiniteRows.count) {
+      flushSync(() => infiniteRows.ensureRendered(id));
+    }
+    scrollRowIntoView(id);
+  }
 
   const { openDetail } = useDetailWindows(
     downloads,
@@ -187,7 +213,7 @@ function App() {
     setSelectedIds,
     anchorRef,
     requestDelete: downloadsApi.requestDelete,
-    scrollRowIntoView,
+    scrollRowIntoView: scrollRowIntoViewEnsured,
     openDetail,
   });
 
@@ -233,16 +259,23 @@ function App() {
           onTableClick={marquee.handleTableClick}
           sort={sorted.sort}
           onSort={sorted.toggleSort}
-          rows={rows}
+          rows={infiniteRows.visibleRows}
           selectedIds={selectedIds}
           onSelectRow={selectRow}
           onRowContext={handleRowContext}
           onRowDoubleClick={handleRowDoubleClick}
           marquee={marquee.marquee}
+          order={columnOrder.order}
           widths={columnWidths.widths}
           onResizeStart={columnWidths.startResize}
           onAutoFit={columnWidths.autoFit}
           didResizeRef={columnWidths.didResizeRef}
+          dragKey={columnOrder.dragKey}
+          dropIndex={columnOrder.dropIndex}
+          dragRect={columnOrder.dragRect}
+          offsetX={columnOrder.offsetX}
+          onReorderStart={columnOrder.startReorder}
+          sentinelRef={infiniteRows.sentinelRef}
         />
       </div>
 

@@ -39,9 +39,9 @@
 }
 /* Full-bleed, fixed-size control: a scale press would look like a glitch
    sitting flush against the toolbar, so press feedback is a brightness dip
-   instead — it composites correctly over transparent, hover, and .primary's
-   accent background alike, unlike a background swap which would need to
-   out-specificity every state. */
+   instead — it composites correctly over transparent and hover backgrounds
+   alike, unlike a background swap which would need to out-specificity every
+   state. */
 .tbtn:active:not(:disabled) {
   transform: none;
   box-shadow: none;
@@ -51,20 +51,6 @@
   opacity: 0.4;
   cursor: not-allowed;
   box-shadow: none;
-}
-.tbtn.primary {
-  background: var(--accent);
-  color: var(--on-accent);
-}
-.tbtn.primary:hover:not(:disabled) {
-  background: var(--accent-strong);
-}
-.tbtn.danger {
-  background: transparent;
-  color: var(--danger);
-}
-.tbtn.danger:hover:not(:disabled) {
-  background: var(--hover);
 }
 
 .tsep {

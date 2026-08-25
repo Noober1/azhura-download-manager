@@ -10,7 +10,7 @@ use serde::Serialize;
 use tauri::ipc::Channel;
 
 use super::meta::MetaCtx;
-use super::pieces::{Shared, WorkerUi};
+use super::pieces::{piece_buckets, Shared, WorkerUi};
 
 #[derive(Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
@@ -47,6 +47,11 @@ pub(crate) enum DownloadEvent {
         total: Option<u64>,
         speed_bps: f64,
         connections: Vec<ConnInfo>,
+        /// Fill level of each of `PIECE_BUCKETS` equal-sized slices of the
+        /// file, 0..=255. Fixed length regardless of file size, so a 100 GB
+        /// download costs no more per tick than a 10 MB one. Empty for a
+        /// single-connection download, which has no piece plan at all.
+        pieces: Vec<u8>,
     },
     Paused {
         #[specta(type = specta_typescript::Number)]
@@ -76,7 +81,14 @@ pub(crate) async fn report_progress(
 ) {
     let mut ticker = tokio::time::interval(Duration::from_millis(150));
     let mut last = Instant::now();
-    let mut last_bytes = 0u64;
+    // Seeded from the current value, not 0: on a resumed download,
+    // `total_downloaded` starts pre-loaded with bytes already on disk from a
+    // previous run (`engine/mod.rs` seeds it from the resume sidecar's
+    // `done_bytes`). Starting `last_bytes` at 0 would make the very first
+    // tick's raw-speed calculation below divide that *entire* resumed
+    // baseline by one 150ms tick, reporting a many-GB/s spike that isn't a
+    // real rate — only bytes added *during this run* should count.
+    let mut last_bytes = total_downloaded.load(Ordering::Relaxed);
     let mut last_meta = Instant::now();
     // EMA of the instantaneous rate. With 16 connections pulling pieces off a
     // shared queue, bytes arrive in bursts (a piece finishes, a new one hasn't
@@ -115,11 +127,17 @@ pub(crate) async fn report_progress(
             })
             .collect();
 
+        let pieces = match &meta {
+            Some((_, shared)) => piece_buckets(shared),
+            None => Vec::new(),
+        };
+
         let _ = on_event.send(DownloadEvent::Progress {
             downloaded: sum,
             total,
             speed_bps: speed,
             connections: conns,
+            pieces,
         });
         last = now;
         last_bytes = sum;

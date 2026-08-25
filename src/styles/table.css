@@ -20,6 +20,26 @@
   background: color-mix(in srgb, var(--accent) 15%, transparent);
 }
 
+/* ---- Column drag ghost -------------------------------------------------- */
+
+.col-drag-ghost {
+  position: fixed;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  padding: 0 0.6rem;
+  background: var(--surface-2);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-card);
+  box-shadow: var(--sh-float);
+  color: var(--ink);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  pointer-events: none;
+}
+
 /* ---- Status bar ----------------------------------------------------------- */
 
 .statusbar {
@@ -139,6 +159,15 @@
 }
 .drow {
   cursor: pointer;
+}
+
+/* Infinite-scroll sentinel: an empty row the IntersectionObserver in
+   `useInfiniteRows` watches to know when to render the next page. Never a
+   `.drow` — it must stay invisible to marquee selection, column auto-fit,
+   and keyboard scroll-into-view, which all sweep `.drow` elements. A tiny
+   explicit height keeps its intersection geometry well-defined. */
+.row-sentinel {
+  height: 1px;
 }
 .drow:hover td {
   background: var(--hover);

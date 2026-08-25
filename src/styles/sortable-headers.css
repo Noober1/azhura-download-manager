@@ -54,3 +54,35 @@ body.col-resizing .dtable thead th.sortable:hover {
   background: none;
 }
 
+/* ---- Column drag-to-reorder -------------------------------------------- */
+
+body.col-reordering {
+  cursor: grabbing;
+  user-select: none;
+}
+body.col-reordering .dtable thead th.sortable:hover {
+  background: none;
+}
+.dtable thead th.sortable.col-dragging {
+  opacity: 0.5;
+}
+/* A thin vertical line marking where the dragged column will land — `before`
+   sits on the target header's leading edge, `after` only ever applies to the
+   last header (dropping past the final column). */
+.dtable thead th.sortable.col-drop-before::before,
+.dtable thead th.sortable.col-drop-after::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--accent);
+  z-index: 3;
+}
+.dtable thead th.sortable.col-drop-before::before {
+  left: -1px;
+}
+.dtable thead th.sortable.col-drop-after::after {
+  right: -1px;
+}
+

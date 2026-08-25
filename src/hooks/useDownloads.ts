@@ -7,6 +7,14 @@ import type { AddPayload, DownloadItem } from "../types";
 import { DEFAULT_PROXY } from "../types";
 import { fallbackName } from "../format";
 import { notify } from "../notify";
+import { pushSpeedSample, SPEED_SAMPLE_INTERVAL_MS } from "../speedHistory";
+
+// Progress events themselves arrive roughly every 150ms (`engine/progress.rs`'s
+// tick) — far more often than the speed history / piece map need, and a
+// fresh 160-number `pieceMap` array on every tick would mean re-rendering
+// the detail window's piece map ~7x/sec for no visible gain.
+// `SPEED_SAMPLE_INTERVAL_MS` lives in `speedHistory.ts` so `DetailWindow`
+// can use the same number to label the sparkline's timeline.
 
 /** Owns the download list itself plus every action that mutates it: running,
  *  pausing, canceling, resuming, deleting, and applying live speed/connection
@@ -28,6 +36,12 @@ export function useDownloads(callbacks: {
   // Downloads that have completed since the queue was last empty, so draining
   // it can report "all N complete" instead of just the final filename.
   const completedBurstRef = useRef(0);
+  // Last time (ms) each download's progress tick was allowed to sample
+  // speed history / replace the piece map — see `SAMPLE_INTERVAL_MS`. Only
+  // ever grows by one entry per download seen this session; cleaned up in
+  // `removeMany` below so it doesn't accumulate across a long session's
+  // worth of finished-and-removed downloads.
+  const lastSampleAtRef = useRef<Map<string, number>>(new Map());
 
   const [pendingDelete, setPendingDelete] = useState<DownloadItem[] | null>(null);
   const [deleteWithFile, setDeleteWithFile] = useState(false);
@@ -55,6 +69,17 @@ export function useDownloads(callbacks: {
     setDownloads((ds) => ds.map((d) => (d.id === id ? { ...d, ...patch } : d)));
   }
 
+  // Like `patchItem`, but for a patch that depends on the item's prior state
+  // (only `speedHistory`'s append needs this — everything else in this hook
+  // either patches unconditionally or, in the `"error"` case, only *reads*
+  // prior state for a toast without feeding it back into the patch).
+  // Computing the derived fields inside the `setDownloads` updater keeps
+  // the read-and-append atomic, instead of depending on a render having
+  // landed between two 150ms-apart progress events.
+  function patchItemWith(id: string, updater: (prev: DownloadItem) => Partial<DownloadItem>) {
+    setDownloads((ds) => ds.map((d) => (d.id === id ? { ...d, ...updater(d) } : d)));
+  }
+
   function handleEvent(id: string, msg: DownloadEvent) {
     switch (msg.event) {
       case "started":
@@ -66,19 +91,45 @@ export function useDownloads(callbacks: {
           numPieces: msg.data.numPieces,
           pieceSize: msg.data.pieceSize,
           state: "downloading",
+          speedHistory: [],
+          pieceMap: [],
+          // A fresh run's peak starts from zero rather than carrying over a
+          // stale value from a previous run of the same download (e.g. a
+          // resumed or re-queued one).
+          peakSpeed: 0,
         });
         break;
       case "progress": {
-        const patch: Partial<DownloadItem> = {
-          downloaded: msg.data.downloaded,
-          total: msg.data.total,
-          // speedBps is `number | null` in the generated binding because specta
-          // conservatively widens every f64 for NaN-safety; the backend never
-          // actually sends null here.
-          speed: msg.data.speedBps ?? 0,
-        };
-        if (msg.data.connections.length > 0) patch.conns = msg.data.connections;
-        patchItem(id, patch);
+        // speedBps is `number | null` in the generated binding because specta
+        // conservatively widens every f64 for NaN-safety; the backend never
+        // actually sends null here.
+        const speed = msg.data.speedBps ?? 0;
+
+        // The speed sparkline and piece map both sample at a slower rate
+        // than progress events arrive — `sample` below throttles those two
+        // derived fields only, not the always-live fields or the peak
+        // tracker, which are cheap enough (a comparison, not an array copy)
+        // to just update on every tick and would otherwise miss a brief
+        // speed spike that lands between two samples.
+        const now = Date.now();
+        const lastSample = lastSampleAtRef.current.get(id) ?? 0;
+        const sample = now - lastSample >= SPEED_SAMPLE_INTERVAL_MS;
+        if (sample) lastSampleAtRef.current.set(id, now);
+
+        patchItemWith(id, (prev) => {
+          const patch: Partial<DownloadItem> = {
+            downloaded: msg.data.downloaded,
+            total: msg.data.total,
+            speed,
+            peakSpeed: Math.max(prev.peakSpeed ?? 0, speed),
+          };
+          if (msg.data.connections.length > 0) patch.conns = msg.data.connections;
+          if (sample) {
+            patch.speedHistory = pushSpeedSample(prev.speedHistory ?? [], speed);
+            if (msg.data.pieces.length > 0) patch.pieceMap = msg.data.pieces;
+          }
+          return patch;
+        });
         break;
       }
       case "paused":
@@ -106,6 +157,11 @@ export function useDownloads(callbacks: {
           missing: false,
           fromHistory: false,
           finishedAt: Date.now(),
+          // The reporter task is aborted (`engine/mod.rs`) right before this
+          // event, before it ever gets to send a final all-255 piece map —
+          // without clearing it here, the detail window would keep showing
+          // whatever ~99%-filled map the last progress tick left behind.
+          pieceMap: [],
         });
         completedBurstRef.current += 1;
         notify("Download complete", msg.data.filename);
@@ -296,6 +352,7 @@ export function useDownloads(callbacks: {
     );
     const ids = new Set(items.map((i) => i.id));
     setDownloads((ds) => ds.filter((d) => !ids.has(d.id)));
+    ids.forEach((id) => lastSampleAtRef.current.delete(id));
     callbacks.onItemsRemoved?.(ids);
   }
   // Single seam every delete entry point (toolbar, context menu, Delete key)

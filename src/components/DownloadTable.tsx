@@ -4,14 +4,21 @@ import { formatBytes, formatSpeed, pctOf, statusClass, statusLabel, formatDateAd
 import { FileIcon } from "../fileIcons";
 import { Icon } from "../ui";
 import type { SortKey } from "../constants";
-import { COLUMN_ORDER, totalWidth, type ColumnWidths } from "../columns";
+import { COLUMN_CLASS, COLUMN_LABEL, totalWidth, type ColumnWidths } from "../columns";
+import type { DragRect } from "../hooks/useColumnOrder";
 
-/* A sortable column header: click cycles asc → desc → default (unsorted)
-   for its own key, and starts at asc when switching from a different key.
-   A drag on the trailing resize handle must not also toggle sort — that's
-   what `didResizeRef` (shared with `useColumnWidths`) suppresses, the same
-   way `useSelection`'s `didDragRef` suppresses a marquee drag's trailing
-   click. */
+/* A sortable, reorderable column header: click cycles asc → desc → default
+   (unsorted) for its own key, and starts at asc when switching from a
+   different key. A drag on the trailing resize handle must not also toggle
+   sort — that's what `didResizeRef` (shared with `useColumnWidths`)
+   suppresses, the same way `useSelection`'s `didDragRef` suppresses a
+   marquee drag's trailing click.
+
+   Dragging the header itself (anywhere but the resize handle) reorders
+   columns instead — `useColumnOrder` arms its own capture-phase click
+   suppression on drop (see that hook's module comment for why a
+   `didReorderRef`-style flag can't work here), so this component doesn't
+   need to guard against a reorder's trailing click at all. */
 function SortTh({
   className,
   label,
@@ -21,6 +28,10 @@ function SortTh({
   onResizeStart,
   onAutoFit,
   didResizeRef,
+  onReorderStart,
+  dragging,
+  dropBefore,
+  dropAfter,
 }: {
   className: string;
   label: string;
@@ -30,13 +41,20 @@ function SortTh({
   onResizeStart: (key: SortKey, e: ReactMouseEvent) => void;
   onAutoFit: (key: SortKey) => void;
   didResizeRef: RefObject<boolean>;
+  onReorderStart: (key: SortKey, e: ReactMouseEvent) => void;
+  dragging: boolean;
+  dropBefore: boolean;
+  dropAfter: boolean;
 }) {
   const active = sort?.key === sortKey;
   const ariaSort = active ? (sort!.dir === "asc" ? "ascending" : "descending") : "none";
   return (
     <th
-      className={`${className} sortable`}
+      className={`${className} sortable ${dragging ? "col-dragging" : ""} ${
+        dropBefore ? "col-drop-before" : ""
+      } ${dropAfter ? "col-drop-after" : ""}`}
       aria-sort={ariaSort}
+      onMouseDown={(e) => onReorderStart(sortKey, e)}
       onClick={() => {
         if (didResizeRef.current) {
           didResizeRef.current = false;
@@ -49,7 +67,10 @@ function SortTh({
       {active && <span className="sort-arrow">{sort!.dir === "asc" ? "▲" : "▼"}</span>}
       <span
         className="col-resizer"
-        onMouseDown={(e) => onResizeStart(sortKey, e)}
+        onMouseDown={(e) => {
+          e.stopPropagation();
+          onResizeStart(sortKey, e);
+        }}
         onClick={(e) => e.stopPropagation()}
         onDoubleClick={(e) => {
           e.stopPropagation();
@@ -58,6 +79,73 @@ function SortTh({
       />
     </th>
   );
+}
+
+/** Renders one `<td>` for `key`, in the shape `Row` used to hardcode inline —
+ *  moved here unchanged so both the header and the body can be driven by the
+ *  same `order` array. */
+function renderCell(key: SortKey, item: DownloadItem, pct: number | null) {
+  switch (key) {
+    case "name":
+      return (
+        <td key={key} className={COLUMN_CLASS.name} title={item.path || item.url}>
+          <span className="name-cell">
+            <FileIcon name={item.filename} />
+            <span className="name-text">{item.filename}</span>
+          </span>
+        </td>
+      );
+    case "added":
+      return (
+        <td key={key} className={COLUMN_CLASS.added}>
+          {formatDateAdded(item.addedAt)}
+        </td>
+      );
+    case "status":
+      return (
+        <td key={key} className={COLUMN_CLASS.status}>
+          {/* One state class only — `.mode-tag.missing` and `.mode-tag.completed`
+              have equal specificity, so both applying would be order-dependent. */}
+          <span className={`mode-tag ${statusClass(item)}`}>{statusLabel(item)}</span>
+        </td>
+      );
+    case "size":
+      return (
+        <td key={key} className={COLUMN_CLASS.size}>
+          {item.total ? formatBytes(item.total) : "—"}
+        </td>
+      );
+    case "downloaded":
+      return (
+        <td key={key} className={COLUMN_CLASS.downloaded}>
+          {formatBytes(item.downloaded)}
+        </td>
+      );
+    case "pct":
+      return (
+        <td key={key} className={COLUMN_CLASS.pct}>
+          <span className="cell-pct pct-overlay">
+            <span className="mini-track">
+              <span
+                className={`mini-bar ${
+                  item.state === "completed" && !item.missing ? "done" : ""
+                } ${item.state === "error" || item.state === "canceled" ? "error" : ""} ${
+                  pct === null && item.state === "downloading" ? "indeterminate" : ""
+                }`}
+                style={pct !== null ? { width: `${pct}%` } : undefined}
+              />
+            </span>
+            <span className="pct-num">{pct !== null ? `${pct.toFixed(0)}%` : "—"}</span>
+          </span>
+        </td>
+      );
+    case "speed":
+      return (
+        <td key={key} className={COLUMN_CLASS.speed}>
+          {item.state === "downloading" ? formatSpeed(item.speed) : "—"}
+        </td>
+      );
+  }
 }
 
 /* A single row in the download table. Double-click reveals the file's
@@ -69,6 +157,7 @@ function Row({
   item,
   pct,
   selected,
+  order,
   onSelect,
   onContext,
   onDoubleClick,
@@ -76,6 +165,7 @@ function Row({
   item: DownloadItem;
   pct: number | null;
   selected: boolean;
+  order: SortKey[];
   onSelect: (e: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }) => void;
   onContext: (e: ReactMouseEvent) => void;
   onDoubleClick: () => void;
@@ -92,38 +182,7 @@ function Row({
         onContext(e);
       }}
     >
-      <td className="col-name" title={item.path || item.url}>
-        <span className="name-cell">
-          <FileIcon name={item.filename} />
-          <span className="name-text">{item.filename}</span>
-        </span>
-      </td>
-      <td className="col-added">{formatDateAdded(item.addedAt)}</td>
-      <td className="col-status">
-        {/* One state class only — `.mode-tag.missing` and `.mode-tag.completed`
-            have equal specificity, so both applying would be order-dependent. */}
-        <span className={`mode-tag ${statusClass(item)}`}>{statusLabel(item)}</span>
-      </td>
-      <td className="col-num">{item.total ? formatBytes(item.total) : "—"}</td>
-      <td className="col-num">{formatBytes(item.downloaded)}</td>
-      <td className="col-pct">
-        <span className="cell-pct pct-overlay">
-          <span className="mini-track">
-            <span
-              className={`mini-bar ${
-                item.state === "completed" && !item.missing ? "done" : ""
-              } ${item.state === "error" || item.state === "canceled" ? "error" : ""} ${
-                pct === null && item.state === "downloading" ? "indeterminate" : ""
-              }`}
-              style={pct !== null ? { width: `${pct}%` } : undefined}
-            />
-          </span>
-          <span className="pct-num">{pct !== null ? `${pct.toFixed(0)}%` : "—"}</span>
-        </span>
-      </td>
-      <td className="col-num col-speed">
-        {item.state === "downloading" ? formatSpeed(item.speed) : "—"}
-      </td>
+      {order.map((key) => renderCell(key, item, pct))}
     </tr>
   );
 }
@@ -140,10 +199,17 @@ export function DownloadTable({
   onRowContext,
   onRowDoubleClick,
   marquee,
+  order,
   widths,
   onResizeStart,
   onAutoFit,
   didResizeRef,
+  dragKey,
+  dropIndex,
+  dragRect,
+  offsetX,
+  onReorderStart,
+  sentinelRef,
 }: {
   tableWrapRef: RefObject<HTMLElement | null>;
   onTableMouseDown: (e: ReactMouseEvent) => void;
@@ -156,12 +222,25 @@ export function DownloadTable({
   onRowContext: (e: ReactMouseEvent, item: DownloadItem) => void;
   onRowDoubleClick: (item: DownloadItem) => void;
   marquee: { left: number; top: number; width: number; height: number } | null;
+  order: SortKey[];
   widths: ColumnWidths;
   onResizeStart: (key: SortKey, e: ReactMouseEvent) => void;
   onAutoFit: (key: SortKey) => void;
   didResizeRef: RefObject<boolean>;
+  /** Marks the end of the currently-rendered rows for `useInfiniteRows`'s
+   *  `IntersectionObserver` to watch — rendered as an empty `<tr>` right
+   *  after the real rows, never as a `.drow` (so `useMarquee`/`autoFit`/
+   *  `scrollRowIntoView`, which all sweep `.drow`, never see it). */
+  sentinelRef?: RefObject<HTMLTableRowElement | null>;
+  dragKey: SortKey | null;
+  dropIndex: number | null;
+  /** Dragged header's own rect at drag start, and how far the cursor has
+   *  moved horizontally since — together they position the floating ghost
+   *  below. Both null/0 outside an active drag. */
+  dragRect: DragRect | null;
+  offsetX: number;
+  onReorderStart: (key: SortKey, e: ReactMouseEvent) => void;
 }) {
-  const headerProps = { sort, onSort, onResizeStart, onAutoFit, didResizeRef };
   return (
     <>
       <main
@@ -179,7 +258,7 @@ export function DownloadTable({
               has no visible effect, because the rendered width is `max(wrap width,
               minWidth)`, not `sum(widths)`. */}
           <colgroup>
-            {COLUMN_ORDER.map((key) =>
+            {order.map((key) =>
               key === "name" ? (
                 <col key={key} />
               ) : (
@@ -189,19 +268,29 @@ export function DownloadTable({
           </colgroup>
           <thead>
             <tr>
-              <SortTh className="col-name" label="Name" sortKey="name" {...headerProps} />
-              <SortTh className="col-added" label="Date Added" sortKey="added" {...headerProps} />
-              <SortTh className="col-status" label="Status" sortKey="status" {...headerProps} />
-              <SortTh className="col-num" label="Size" sortKey="size" {...headerProps} />
-              <SortTh className="col-num" label="Downloaded" sortKey="downloaded" {...headerProps} />
-              <SortTh className="col-pct" label="Percentage" sortKey="pct" {...headerProps} />
-              <SortTh className="col-num col-speed" label="Speed" sortKey="speed" {...headerProps} />
+              {order.map((key, i) => (
+                <SortTh
+                  key={key}
+                  className={COLUMN_CLASS[key]}
+                  label={COLUMN_LABEL[key]}
+                  sortKey={key}
+                  sort={sort}
+                  onSort={onSort}
+                  onResizeStart={onResizeStart}
+                  onAutoFit={onAutoFit}
+                  didResizeRef={didResizeRef}
+                  onReorderStart={onReorderStart}
+                  dragging={dragKey === key}
+                  dropBefore={dropIndex === i}
+                  dropAfter={i === order.length - 1 && dropIndex === order.length}
+                />
+              ))}
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 && (
               <tr>
-                <td colSpan={7} className="empty-cell">
+                <td colSpan={order.length} className="empty-cell">
                   <span className="empty-state">
                     <span className="empty-icon">
                       <Icon name="tray" size={22} />
@@ -223,17 +312,39 @@ export function DownloadTable({
                   item={item}
                   pct={pct}
                   selected={selectedRow}
+                  order={order}
                   onSelect={(e) => onSelectRow(item.id, e)}
                   onContext={(e) => onRowContext(e, item)}
                   onDoubleClick={() => onRowDoubleClick(item)}
                 />
               );
             })}
+            {rows.length > 0 && <tr ref={sentinelRef} className="row-sentinel" aria-hidden="true" />}
           </tbody>
         </table>
       </main>
 
       {marquee && <div className="marquee" style={marquee} />}
+
+      {/* Floating ghost of the dragged header — X axis only, per the design
+          in `useColumnOrder`'s module comment: it follows the cursor
+          horizontally but stays pinned to the header's own top vertically,
+          since columns only ever reorder left-right. Rendered as a plain
+          `position: fixed` sibling of `.table-wrap` (not a portal) — the
+          same approach `.marquee` above already uses successfully. */}
+      {dragKey && dragRect && (
+        <div
+          className="col-drag-ghost"
+          style={{
+            left: dragRect.left + offsetX,
+            top: dragRect.top,
+            width: dragRect.width,
+            height: dragRect.height,
+          }}
+        >
+          {COLUMN_LABEL[dragKey]}
+        </div>
+      )}
     </>
   );
 }

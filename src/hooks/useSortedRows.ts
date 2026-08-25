@@ -95,6 +95,13 @@ export function useSortedRows(downloads: DownloadItem[]) {
     });
   }
 
+  // Identifies "which list is being looked at" for `useInfiniteRows` to reset
+  // its render window on — everything that reorders or refilters `rows`,
+  // and nothing else (`rows` itself changes on every progress patch, ~7/sec,
+  // which would reset the scroll window constantly). JSON rather than a
+  // joined string: `searchQuery` is free text and could contain a delimiter.
+  const viewKey = JSON.stringify([category, searchQuery, sort]);
+
   return {
     category,
     setCategory,
@@ -106,5 +113,6 @@ export function useSortedRows(downloads: DownloadItem[]) {
     finishedItems,
     categoryCounts,
     rows,
+    viewKey,
   };
 }

@@ -67,7 +67,7 @@ export function Toolbar({
   return (
     <div className="topbar" data-tauri-drag-region>
       <motion.button
-        className="tbtn primary"
+        className="tbtn"
         title="Add download"
         aria-label="Add download"
         onClick={() => commands.openAddWindow()}
@@ -107,7 +107,7 @@ export function Toolbar({
         <Icon name="cancel" />
       </motion.button>
       <motion.button
-        className="tbtn danger"
+        className="tbtn"
         title={`Delete${deletableSel.length > 1 ? ` (${deletableSel.length})` : ""}`}
         aria-label={`Delete${deletableSel.length > 1 ? ` (${deletableSel.length})` : ""}`}
         disabled={deletableSel.length === 0}
