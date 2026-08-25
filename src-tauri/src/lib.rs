@@ -101,9 +101,17 @@ pub fn run() {
 
     let specta_builder = specta_builder();
 
+    // `env!("CARGO_MANIFEST_DIR")` rather than a bare relative path: a debug
+    // build launched with some other working directory (e.g. the OS autostart
+    // entry, which runs with no project directory as CWD at all) would
+    // otherwise fail this write and `.expect()` straight into a crash instead
+    // of ever reaching `.run()` below.
     #[cfg(debug_assertions)]
     specta_builder
-        .export(specta_typescript::Typescript::default(), "../src/bindings.ts")
+        .export(
+            specta_typescript::Typescript::default(),
+            concat!(env!("CARGO_MANIFEST_DIR"), "/../src/bindings.ts"),
+        )
         .expect("failed to export typescript bindings");
 
     // Computed up front (rather than inline in `.invoke_handler(...)` below)
