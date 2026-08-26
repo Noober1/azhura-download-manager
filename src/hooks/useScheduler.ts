@@ -15,7 +15,7 @@ export function useScheduler(
     const slots = maxConcurrent - active;
     if (slots <= 0) return;
     downloads
-      .filter((d) => d.state === "queued")
+      .filter((d) => d.state === "queued" && !d.retryPending)
       .slice(0, slots)
       .forEach((item) => startRun(item));
     // eslint-disable-next-line react-hooks/exhaustive-deps

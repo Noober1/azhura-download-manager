@@ -143,6 +143,13 @@ export type AppSettings = {
 	 *  only persists it.
 	 */
 	reduceMotion?: boolean,
+	/**
+	 *  How many times a failed download retries itself automatically before
+	 *  giving up for good, with backoff between attempts. 0 = disabled
+	 *  (today's behavior). Applied entirely on the frontend (see
+	 *  `useDownloads.ts`); Rust only persists it.
+	 */
+	maxRetryAttempts?: number,
 };
 
 export type ConnInfo = {

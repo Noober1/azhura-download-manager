@@ -160,19 +160,23 @@ export function isRedownload(item: DownloadItem): boolean {
 
 export function statusClass(item: DownloadItem): string {
   if (item.awaitingCapture) return "queued";
+  if (item.retryPending) return "queued";
   return item.missing ? "missing" : item.state;
 }
 
 export function statusLabel(item: DownloadItem): string {
   if (item.awaitingCapture) return "Waiting for browser";
+  if (item.retryPending) return "Retrying…";
   return item.missing ? "Moved / deleted" : STATE_LABEL[item.state];
 }
 
 /** Sort rank for the Status column — mirrors the same `awaitingCapture` →
- *  `missing` → `state` precedence `statusClass`/`statusLabel` use, so the
- *  sort order always agrees with what's actually rendered in the cell. */
+ *  `retryPending` → `missing` → `state` precedence `statusClass`/
+ *  `statusLabel` use, so the sort order always agrees with what's actually
+ *  rendered in the cell. */
 export function statusRank(item: DownloadItem): number {
   if (item.awaitingCapture) return DISPLAY_STATUS_RANK.awaitingCapture;
+  if (item.retryPending) return DISPLAY_STATUS_RANK.retryPending;
   if (item.missing) return DISPLAY_STATUS_RANK.missing;
   return DISPLAY_STATUS_RANK[item.state];
 }

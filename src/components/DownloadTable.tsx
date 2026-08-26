@@ -9,16 +9,12 @@ import type { DragRect } from "../hooks/useColumnOrder";
 
 /* A sortable, reorderable column header: click cycles asc → desc → default
    (unsorted) for its own key, and starts at asc when switching from a
-   different key. A drag on the trailing resize handle must not also toggle
-   sort — that's what `didResizeRef` (shared with `useColumnWidths`)
-   suppresses, the same way `useSelection`'s `didDragRef` suppresses a
-   marquee drag's trailing click.
-
-   Dragging the header itself (anywhere but the resize handle) reorders
-   columns instead — `useColumnOrder` arms its own capture-phase click
-   suppression on drop (see that hook's module comment for why a
-   `didReorderRef`-style flag can't work here), so this component doesn't
-   need to guard against a reorder's trailing click at all. */
+   different key. Neither a resize drag on the trailing handle nor a reorder
+   drag on the header itself can leak into this `onClick` as a stray sort —
+   both `useColumnWidths` and `useColumnOrder` arm a one-shot
+   `suppressNextClick()` on their own `mouseup` when a real drag happened,
+   which stops the trailing click before it reaches here (see either hook's
+   module comment for why a same-element flag check can't do this). */
 function SortTh({
   className,
   label,
@@ -27,7 +23,6 @@ function SortTh({
   onSort,
   onResizeStart,
   onAutoFit,
-  didResizeRef,
   onReorderStart,
   dragging,
   dropBefore,
@@ -40,7 +35,6 @@ function SortTh({
   onSort: (key: SortKey) => void;
   onResizeStart: (key: SortKey, e: ReactMouseEvent) => void;
   onAutoFit: (key: SortKey) => void;
-  didResizeRef: RefObject<boolean>;
   onReorderStart: (key: SortKey, e: ReactMouseEvent) => void;
   dragging: boolean;
   dropBefore: boolean;
@@ -55,13 +49,7 @@ function SortTh({
       } ${dropAfter ? "col-drop-after" : ""}`}
       aria-sort={ariaSort}
       onMouseDown={(e) => onReorderStart(sortKey, e)}
-      onClick={() => {
-        if (didResizeRef.current) {
-          didResizeRef.current = false;
-          return;
-        }
-        onSort(sortKey);
-      }}
+      onClick={() => onSort(sortKey)}
     >
       {label}
       {active && <span className="sort-arrow">{sort!.dir === "asc" ? "▲" : "▼"}</span>}
@@ -203,7 +191,6 @@ export function DownloadTable({
   widths,
   onResizeStart,
   onAutoFit,
-  didResizeRef,
   dragKey,
   dropIndex,
   dragRect,
@@ -226,7 +213,6 @@ export function DownloadTable({
   widths: ColumnWidths;
   onResizeStart: (key: SortKey, e: ReactMouseEvent) => void;
   onAutoFit: (key: SortKey) => void;
-  didResizeRef: RefObject<boolean>;
   /** Marks the end of the currently-rendered rows for `useInfiniteRows`'s
    *  `IntersectionObserver` to watch — rendered as an empty `<tr>` right
    *  after the real rows, never as a `.drow` (so `useMarquee`/`autoFit`/
@@ -278,7 +264,6 @@ export function DownloadTable({
                   onSort={onSort}
                   onResizeStart={onResizeStart}
                   onAutoFit={onAutoFit}
-                  didResizeRef={didResizeRef}
                   onReorderStart={onReorderStart}
                   dragging={dragKey === key}
                   dropBefore={dropIndex === i}

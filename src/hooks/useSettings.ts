@@ -12,6 +12,7 @@ import { initNotifications, setNotificationsEnabled } from "../notify";
 export function useSettings() {
   const [maxConcurrent, setMaxConcurrent] = useState(3);
   const [globalLimitMbps, setGlobalLimitMbps] = useState(0);
+  const [maxRetryAttempts, setMaxRetryAttempts] = useState(3);
   const [minimizeToTray, setMinimizeToTray] = useState(false);
   const [theme, setTheme] = useState<Theme>("system");
   const [notifications, setNotifications] = useState(true);
@@ -35,6 +36,7 @@ export function useSettings() {
         const notifications = s.notifications ?? true;
         setMaxConcurrent(s.maxConcurrent ?? 3);
         setGlobalLimitMbps(globalLimitMbps);
+        setMaxRetryAttempts(s.maxRetryAttempts ?? 3);
         setMinimizeToTray(s.minimizeToTray ?? false);
         setTheme(normalizeTheme(s.theme));
         setNotifications(notifications);
@@ -66,10 +68,17 @@ export function useSettings() {
       .catch(() => {});
   }, []);
 
+  // `save_settings` (Rust) overwrites the whole `AppSettings` struct — any
+  // field missing from this payload falls back to its `#[serde(default)]`
+  // value, not its last-saved one. Every tracked field must be listed here,
+  // even ones this particular call isn't changing (that's what `overrides`
+  // is for) — otherwise changing any ONE setting would silently reset every
+  // other one back to default on save.
   function persistSettings(overrides: Partial<AppSettings> = {}) {
     commands.saveSettings({
       maxConcurrent,
       globalLimitMbps,
+      maxRetryAttempts,
       minimizeToTray,
       theme,
       notifications,
@@ -89,6 +98,14 @@ export function useSettings() {
     setGlobalLimitMbps(v);
     commands.setGlobalSpeedLimit({ bytesPerSec: Math.round(v * 1024 * 1024) });
     persistSettings({ globalLimitMbps: v });
+  }
+
+  // Lower bound 0 (not 1, unlike setMaxActive) — 0 means auto-retry is off,
+  // matching today's behavior.
+  function setMaxRetryAttemptsSetting(n: number) {
+    const v = Math.min(10, Math.max(0, Math.round(n)));
+    setMaxRetryAttempts(v);
+    persistSettings({ maxRetryAttempts: v });
   }
 
   function setMinimizeToTraySetting(v: boolean) {
@@ -128,6 +145,7 @@ export function useSettings() {
   return {
     maxConcurrent,
     globalLimitMbps,
+    maxRetryAttempts,
     minimizeToTray,
     theme,
     notifications,
@@ -135,6 +153,7 @@ export function useSettings() {
     reduceMotion,
     setMaxActive,
     setGlobalLimit,
+    setMaxRetryAttemptsSetting,
     setMinimizeToTraySetting,
     setThemeSetting,
     setNotificationsSetting,

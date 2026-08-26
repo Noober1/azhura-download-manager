@@ -63,6 +63,7 @@ function App() {
   // (never synchronously during this render), by which point `selection`
   // is fully initialized.
   const downloadsApi = useDownloads({
+    maxRetryAttempts: settings.maxRetryAttempts,
     onItemAdded: (id) => {
       selection.anchorRef.current = id;
       selection.setSelectedIds(new Set([id]));
@@ -269,7 +270,6 @@ function App() {
           widths={columnWidths.widths}
           onResizeStart={columnWidths.startResize}
           onAutoFit={columnWidths.autoFit}
-          didResizeRef={columnWidths.didResizeRef}
           dragKey={columnOrder.dragKey}
           dropIndex={columnOrder.dropIndex}
           dragRect={columnOrder.dragRect}
@@ -301,6 +301,7 @@ function App() {
           <SettingsDialog
             maxConcurrent={settings.maxConcurrent}
             globalLimitMbps={settings.globalLimitMbps}
+            maxRetryAttempts={settings.maxRetryAttempts}
             theme={settings.theme}
             minimizeToTray={settings.minimizeToTray}
             notifications={settings.notifications}
@@ -308,6 +309,7 @@ function App() {
             reduceMotion={settings.reduceMotion}
             onSetMaxActive={settings.setMaxActive}
             onSetGlobalLimit={settings.setGlobalLimit}
+            onSetMaxRetryAttempts={settings.setMaxRetryAttemptsSetting}
             onSetTheme={settings.setThemeSetting}
             onSetMinimizeToTray={settings.setMinimizeToTraySetting}
             onSetNotifications={settings.setNotificationsSetting}

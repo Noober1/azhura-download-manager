@@ -98,6 +98,20 @@ export type DownloadItem = {
    *  spike between two samples still counts. Session-only, same as
    *  `speedHistory` above. */
   peakSpeed?: number;
+  /** Consecutive automatic retries so far this failure streak. Deliberately
+   *  does NOT reset on a fresh "started" event (see useDownloads.ts's
+   *  comment: a download that starts fine but keeps dying mid-transfer must
+   *  still hit the cap). Only reset on a real completion or a manual
+   *  user-initiated resume. Session-only, same non-persistence reasoning as
+   *  `speedHistory`. */
+  retryCount?: number;
+  /** True only during the backoff delay between a failed attempt and the
+   *  next automatic retry — `state` is "queued" the whole time (see
+   *  useScheduler's guard) so every part of the app that already treats
+   *  "queued" as active keeps working unmodified; this flag only changes
+   *  what's *displayed* (mirrors `awaitingCapture`'s exact pattern in
+   *  format.ts). */
+  retryPending?: boolean;
 };
 
 /** Emitted by the detail popup when the user clicks an action button there. */

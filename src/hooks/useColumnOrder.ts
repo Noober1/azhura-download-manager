@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import type { SortKey } from "../constants";
 import { loadColumnOrder, moveColumn, saveColumnOrder } from "../columns";
+import { suppressNextClick } from "../suppressNextClick";
 
 const DRAG_THRESHOLD_PX = 4;
 
@@ -25,11 +26,11 @@ export type DragRect = { left: number; top: number; width: number; height: numbe
  *  `<th>` than it started on. Per the UIEvents spec, the trailing `click`
  *  fires on the nearest common ancestor of the mousedown and mouseup
  *  targets — here, the `<tr>` — so `SortTh`'s own `onClick` never runs and a
- *  `didReorderRef`-style flag (the pattern `useColumnWidths` uses for resize)
- *  would never get consumed or cleared. Instead, a real reorder arms a
- *  one-shot capture-phase `click` listener on `mouseup` that stops the event
- *  before it reaches anything, so the trailing click can never be
- *  misread as a sort regardless of where it lands. */
+ *  same-element flag check (the pattern `useColumnWidths` used to use for
+ *  resize, before it hit this exact bug and adopted this same fix) would
+ *  never get consumed or cleared. Instead, a real reorder arms
+ *  `suppressNextClick()` on `mouseup`, which stops the trailing click
+ *  wherever it lands before it ever reaches anything. */
 export function useColumnOrder() {
   const [order, setOrder] = useState<SortKey[]>(loadColumnOrder);
   const [drag, setDrag] = useState<{ key: SortKey; startX: number; rect: DragRect } | null>(null);
@@ -105,16 +106,9 @@ export function useColumnOrder() {
 
         // See the module comment: the trailing click lands on whatever
         // element the drag ended over, not necessarily the header that was
-        // dragged — capture-phase + stopPropagation intercepts it wherever
-        // it lands, before SortTh's onClick (or anything else) sees it.
-        window.addEventListener(
-          "click",
-          (ev) => {
-            ev.stopPropagation();
-            ev.preventDefault();
-          },
-          { capture: true, once: true },
-        );
+        // dragged — this intercepts it wherever it lands, before SortTh's
+        // onClick (or anything else) sees it.
+        suppressNextClick();
       }
       setDrag(null);
       setDropIndex(null);

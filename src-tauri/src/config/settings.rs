@@ -26,6 +26,11 @@ pub(crate) struct AppSettings {
     /// Applied entirely on the frontend (see `src/reducedMotion.ts`); Rust
     /// only persists it.
     reduce_motion: bool,
+    /// How many times a failed download retries itself automatically before
+    /// giving up for good, with backoff between attempts. 0 = disabled
+    /// (today's behavior). Applied entirely on the frontend (see
+    /// `useDownloads.ts`); Rust only persists it.
+    max_retry_attempts: u32,
 }
 
 impl Default for AppSettings {
@@ -37,6 +42,7 @@ impl Default for AppSettings {
             theme: "system".to_string(),
             notifications: true,
             reduce_motion: false,
+            max_retry_attempts: 3,
         }
     }
 }

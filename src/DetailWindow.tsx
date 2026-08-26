@@ -280,7 +280,9 @@ export function DetailWindow() {
             will hand it back here automatically.
           </div>
         )}
-        {item.state === "error" && item.error && <p className="err selectable">{item.error}</p>}
+        {(item.state === "error" || item.retryPending) && item.error && (
+          <p className="err selectable">{item.error}</p>
+        )}
 
         <div className="detail-grid">
           <span className="detail-grid-label">URL</span>

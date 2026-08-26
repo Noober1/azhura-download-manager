@@ -8,6 +8,7 @@ import { DEFAULT_PROXY } from "../types";
 import { fallbackName } from "../format";
 import { notify } from "../notify";
 import { pushSpeedSample, SPEED_SAMPLE_INTERVAL_MS } from "../speedHistory";
+import { retryBackoffMs } from "../retryBackoff";
 
 // Progress events themselves arrive roughly every 150ms (`engine/progress.rs`'s
 // tick) — far more often than the speed history / piece map need, and a
@@ -16,11 +17,28 @@ import { pushSpeedSample, SPEED_SAMPLE_INTERVAL_MS } from "../speedHistory";
 // `SPEED_SAMPLE_INTERVAL_MS` lives in `speedHistory.ts` so `DetailWindow`
 // can use the same number to label the sparkline's timeline.
 
+// Satu-satunya pengecualian dari "retry membabi-buta tanpa klasifikasi
+// error": checksum mismatch (`engine/mod.rs`) bukan cuma gagal — Rust-nya
+// sendiri sudah menghapus resume sidecar-nya di titik itu, karena byte yang
+// salah bukan byte yang hilang, jadi tidak ada progres valid untuk
+// dilanjutkan. Retry di sini berarti mengunduh ulang SELURUH FILE dari nol
+// — dan tidak akan pernah berhasil kalau penyebabnya expected-hash yang
+// memang salah ketik. Kalau suatu saat teks pesan di Rust berubah,
+// satu-satunya efeknya pengecualian ini berhenti berlaku dan
+// checksum-mismatch kembali di-retry seperti error lain — bukan gagal
+// secara diam-diam yang berbahaya.
+const CHECKSUM_MISMATCH_PREFIX = "Checksum mismatch —";
+
 /** Owns the download list itself plus every action that mutates it: running,
  *  pausing, canceling, resuming, deleting, and applying live speed/connection
  *  changes. `onItemAdded`/`onItemsRemoved` let the caller keep table selection
  *  in sync without this hook knowing anything about selection state. */
-export function useDownloads(callbacks: {
+export function useDownloads({
+  maxRetryAttempts,
+  onItemAdded,
+  onItemsRemoved,
+}: {
+  maxRetryAttempts: number;
   onItemAdded?: (id: string) => void;
   onItemsRemoved?: (ids: Set<string>) => void;
 }) {
@@ -42,6 +60,16 @@ export function useDownloads(callbacks: {
   // `removeMany` below so it doesn't accumulate across a long session's
   // worth of finished-and-removed downloads.
   const lastSampleAtRef = useRef<Map<string, number>>(new Map());
+  // Pending auto-retry backoff timers, keyed by download id. Presence of an
+  // entry means "a retry is already scheduled for this id" — doubles as the
+  // idempotency guard in `handleDownloadError` below. Cleaned up in
+  // `removeMany` and when a timer fires.
+  const retryTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  // The exact error message a download was last finalized to "error" with —
+  // a second guard, separate from `retryTimersRef`, for the *exhausted*
+  // branch of `handleDownloadError` (see that function for why neither
+  // guard can be replaced with a check against `downloadsRef.current`).
+  const finalizedErrorRef = useRef<Map<string, string>>(new Map());
 
   const [pendingDelete, setPendingDelete] = useState<DownloadItem[] | null>(null);
   const [deleteWithFile, setDeleteWithFile] = useState(false);
@@ -78,6 +106,56 @@ export function useDownloads(callbacks: {
   // landed between two 150ms-apart progress events.
   function patchItemWith(id: string, updater: (prev: DownloadItem) => Partial<DownloadItem>) {
     setDownloads((ds) => ds.map((d) => (d.id === id ? { ...d, ...updater(d) } : d)));
+  }
+
+  // Shared entry point for every way a download can fail — see call sites
+  // below. `start_download` (Rust) always sends a `DownloadEvent::Error`
+  // over the channel before returning `Err`, *except* when
+  // `validate_download_url` rejects the URL before the channel is ever used
+  // — so a post-validation failure can be observed via both the channel
+  // event (`handleEvent`'s `"error"` case) and the rejected `invoke()`
+  // promise (`startRun`'s `catch`), with no ordering guarantee between the
+  // two, while a pre-validation failure is only ever seen via the `catch`.
+  //
+  // Idempotent against being called twice for the same failure via two
+  // ref-based guards (not a check against `downloadsRef.current`/state,
+  // which is only updated on render and so can't be trusted to reflect the
+  // first call's patch by the time the second one runs in the same tick):
+  // `retryTimersRef` for the "schedule a retry" branch, `finalizedErrorRef`
+  // for the "give up" branch.
+  function handleDownloadError(id: string, message: string) {
+    if (retryTimersRef.current.has(id)) return;
+
+    const item = downloadsRef.current.find((d) => d.id === id);
+    const attempts = item?.retryCount ?? 0;
+    const retryWouldHelp = !message.startsWith(CHECKSUM_MISMATCH_PREFIX);
+
+    if (attempts < maxRetryAttempts && retryWouldHelp) {
+      // A new failure episode starts — drop any "already finalized" marker
+      // left over from a previous episode, so a later exhausted failure
+      // isn't mistaken for a duplicate of an unrelated earlier one.
+      finalizedErrorRef.current.delete(id);
+      const delay = retryBackoffMs(attempts + 1);
+      const timer = setTimeout(() => {
+        retryTimersRef.current.delete(id);
+        patchItem(id, { retryPending: false });
+      }, delay);
+      retryTimersRef.current.set(id, timer);
+      patchItem(id, {
+        state: "queued",
+        retryPending: true,
+        retryCount: attempts + 1,
+        error: message,
+        speed: 0,
+      });
+      return;
+    }
+
+    if (finalizedErrorRef.current.get(id) === message) return;
+    finalizedErrorRef.current.set(id, message);
+
+    patchItem(id, { state: "error", error: message, speed: 0, finishedAt: Date.now() });
+    notify("Download failed", `${item?.filename ?? "Download"} — ${message}`);
   }
 
   function handleEvent(id: string, msg: DownloadEvent) {
@@ -162,23 +240,18 @@ export function useDownloads(callbacks: {
           // without clearing it here, the detail window would keep showing
           // whatever ~99%-filled map the last progress tick left behind.
           pieceMap: [],
+          // A real success ends this failure episode — the auto-retry
+          // attempt cap is about consecutive *automatic* retries, not a
+          // lifetime cap on the download.
+          retryCount: 0,
+          retryPending: false,
         });
         completedBurstRef.current += 1;
         notify("Download complete", msg.data.filename);
         break;
-      case "error": {
-        patchItem(id, {
-          state: "error",
-          error: msg.data.message,
-          speed: 0,
-          finishedAt: Date.now(),
-        });
-        // The patch above hasn't landed in `downloads` yet, so read the name
-        // from the ref rather than waiting a render for it.
-        const name = downloadsRef.current.find((d) => d.id === id)?.filename ?? "Download";
-        notify("Download failed", `${name} — ${msg.data.message}`);
+      case "error":
+        handleDownloadError(id, msg.data.message);
         break;
-      }
     }
   }
 
@@ -208,7 +281,7 @@ export function useDownloads(callbacks: {
         onEvent,
       );
     } catch (e) {
-      patchItem(item.id, { state: "error", error: String(e) });
+      handleDownloadError(item.id, String(e));
     }
   }
 
@@ -244,7 +317,7 @@ export function useDownloads(callbacks: {
       addedAt: Date.now(),
     };
     setDownloads((ds) => [item, ...ds]);
-    callbacks.onItemAdded?.(id);
+    onItemAdded?.(id);
   }
 
   function pauseMany(items: DownloadItem[]) {
@@ -258,7 +331,10 @@ export function useDownloads(callbacks: {
     setDownloads((ds) =>
       ds.map((d) => {
         if (!ids.has(d.id)) return d;
-        const base = { ...d, state: "queued" as const, error: undefined };
+        // `retryCount: 0` — manual resume is fresh user intent, so it
+        // resets the auto-retry attempt cap (which is about consecutive
+        // *automatic* retries, not a lifetime cap on the download).
+        const base = { ...d, state: "queued" as const, error: undefined, retryCount: 0 };
         // A genuine paused row still has its resume sidecar — leave `path`
         // alone so it continues where it left off.
         if (!d.missing && !d.fromHistory && !d.awaitingCapture) return base;
@@ -352,8 +428,16 @@ export function useDownloads(callbacks: {
     );
     const ids = new Set(items.map((i) => i.id));
     setDownloads((ds) => ds.filter((d) => !ids.has(d.id)));
-    ids.forEach((id) => lastSampleAtRef.current.delete(id));
-    callbacks.onItemsRemoved?.(ids);
+    ids.forEach((id) => {
+      lastSampleAtRef.current.delete(id);
+      const timer = retryTimersRef.current.get(id);
+      if (timer) {
+        clearTimeout(timer);
+        retryTimersRef.current.delete(id);
+      }
+      finalizedErrorRef.current.delete(id);
+    });
+    onItemsRemoved?.(ids);
   }
   // Single seam every delete entry point (toolbar, context menu, Delete key)
   // routes through. `items` is the full candidate selection — the dialog

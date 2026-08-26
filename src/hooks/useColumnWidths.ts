@@ -6,13 +6,21 @@ import {
   saveColumnWidths,
   type ColumnWidths,
 } from "../columns";
+import { suppressNextClick } from "../suppressNextClick";
 
 /** Drag-to-resize state for the download table's column headers, modeled on
  *  `useMarquee`: a `mousedown` on a header's resize handle arms window-level
  *  `mousemove`/`mouseup` listeners so the drag keeps tracking even if the
- *  cursor leaves the header. `didResizeRef` (read by `DownloadTable`'s sort
- *  click handler) distinguishes an actual drag from a plain click, since a
- *  drag's mouseup always fires a click right after it.
+ *  cursor leaves the header. `didResizeRef` distinguishes an actual drag
+ *  from a plain click internally (gating the 3px movement threshold below)
+ *  — it does NOT reach outside this hook. A resize drag that ends over a
+ *  *different* header than it started on fires its trailing `click` on
+ *  their nearest common ancestor (the `<tr>`, per the UIEvents spec), which
+ *  a same-element flag read in `SortTh`'s own `onClick` could never
+ *  intercept — so a real resize instead arms `suppressNextClick()` on
+ *  `mouseup`, stopping that trailing click wherever it lands (see
+ *  `useColumnOrder`'s module comment, which hit this same bug for reorder
+ *  first and uses the identical fix).
  *
  *  `order` is the column's *current* left-to-right order (from
  *  `useColumnOrder`) — `autoFit` needs it to find a column's live position in
@@ -53,6 +61,7 @@ export function useColumnWidths(order: SortKey[]) {
     }
 
     function onMouseUp() {
+      if (didResizeRef.current) suppressNextClick();
       setDrag(null);
     }
 
@@ -99,5 +108,5 @@ export function useColumnWidths(order: SortKey[]) {
     });
   }
 
-  return { widths, resizingKey: drag?.key ?? null, didResizeRef, startResize, autoFit };
+  return { widths, resizingKey: drag?.key ?? null, startResize, autoFit };
 }

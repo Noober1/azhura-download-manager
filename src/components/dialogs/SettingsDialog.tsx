@@ -6,6 +6,7 @@ import { useDialogA11y } from "../../hooks/useDialogA11y";
 export function SettingsDialog({
   maxConcurrent,
   globalLimitMbps,
+  maxRetryAttempts,
   theme,
   minimizeToTray,
   notifications,
@@ -13,6 +14,7 @@ export function SettingsDialog({
   reduceMotion,
   onSetMaxActive,
   onSetGlobalLimit,
+  onSetMaxRetryAttempts,
   onSetTheme,
   onSetMinimizeToTray,
   onSetNotifications,
@@ -22,6 +24,7 @@ export function SettingsDialog({
 }: {
   maxConcurrent: number;
   globalLimitMbps: number;
+  maxRetryAttempts: number;
   theme: Theme;
   minimizeToTray: boolean;
   notifications: boolean;
@@ -29,6 +32,7 @@ export function SettingsDialog({
   reduceMotion: boolean;
   onSetMaxActive: (n: number) => void;
   onSetGlobalLimit: (mbps: number) => void;
+  onSetMaxRetryAttempts: (n: number) => void;
   onSetTheme: (t: Theme) => void;
   onSetMinimizeToTray: (v: boolean) => void;
   onSetNotifications: (v: boolean) => void;
@@ -64,82 +68,108 @@ export function SettingsDialog({
           Settings
         </div>
         <div className="dialog-body">
-          <div className="field-row">
-            <label htmlFor="maxc">Max active downloads</label>
-            <input
-              id="maxc"
-              type="number"
-              min={1}
-              max={10}
-              value={maxConcurrent}
-              onChange={(e) => {
-                const n = Number(e.currentTarget.value);
-                if (Number.isFinite(n)) onSetMaxActive(n);
-              }}
-            />
-            <span className="field-unit">1–10</span>
-          </div>
-          <div className="field-row">
-            <label htmlFor="glim">Global speed limit</label>
-            <input
-              id="glim"
-              type="number"
-              min={0}
-              step={0.5}
-              value={globalLimitMbps}
-              onChange={(e) => onSetGlobalLimit(Number(e.currentTarget.value))}
-            />
-            <span className="field-unit">MB/s · 0 = unlimited (live)</span>
-          </div>
-          <div className="field-row">
-            <label htmlFor="theme">Color theme</label>
-            <select
-              id="theme"
-              value={theme}
-              onChange={(e) => onSetTheme(e.currentTarget.value as Theme)}
-            >
-              <option value="system">Use system setting</option>
-              <option value="dark">Dark</option>
-              <option value="light">Light</option>
-            </select>
-          </div>
-          <div className="check-row">
-            <input
-              type="checkbox"
-              id="reduce-motion"
-              checked={reduceMotion}
-              onChange={(e) => onSetReduceMotion(e.currentTarget.checked)}
-            />
-            <label htmlFor="reduce-motion">Reduce motion</label>
-          </div>
-          <div className="check-row">
-            <input
-              type="checkbox"
-              id="min-tray"
-              checked={minimizeToTray}
-              onChange={(e) => onSetMinimizeToTray(e.currentTarget.checked)}
-            />
-            <label htmlFor="min-tray">Minimize to tray</label>
-          </div>
-          <div className="check-row">
-            <input
-              type="checkbox"
-              id="run-startup"
-              checked={runAtStartup}
-              onChange={(e) => onSetRunAtStartup(e.currentTarget.checked)}
-            />
-            <label htmlFor="run-startup">Run at startup</label>
-            <span className="field-unit">Starts hidden in the tray</span>
-          </div>
-          <div className="check-row">
-            <input
-              type="checkbox"
-              id="notify"
-              checked={notifications}
-              onChange={(e) => onSetNotifications(e.currentTarget.checked)}
-            />
-            <label htmlFor="notify">Show desktop notifications</label>
-          </div>
+          <fieldset className="dialog-section">
+            <legend className="dialog-section-title">Downloads</legend>
+            <div className="field-row">
+              <label htmlFor="maxc">Max active downloads</label>
+              <input
+                id="maxc"
+                type="number"
+                min={1}
+                max={10}
+                value={maxConcurrent}
+                onChange={(e) => {
+                  const n = Number(e.currentTarget.value);
+                  if (Number.isFinite(n)) onSetMaxActive(n);
+                }}
+              />
+              <span className="field-unit">1–10</span>
+            </div>
+            <div className="field-row">
+              <label htmlFor="glim">Global speed limit</label>
+              <input
+                id="glim"
+                type="number"
+                min={0}
+                step={0.5}
+                value={globalLimitMbps}
+                onChange={(e) => onSetGlobalLimit(Number(e.currentTarget.value))}
+              />
+              <span className="field-unit">MB/s · 0 = unlimited (live)</span>
+            </div>
+            <div className="field-row">
+              <label htmlFor="retry">Max retry attempts</label>
+              <input
+                id="retry"
+                type="number"
+                min={0}
+                max={10}
+                value={maxRetryAttempts}
+                onChange={(e) => {
+                  const n = Number(e.currentTarget.value);
+                  if (Number.isFinite(n)) onSetMaxRetryAttempts(n);
+                }}
+              />
+              <span className="field-unit">0–10 · 0 = off</span>
+            </div>
+          </fieldset>
+
+          <fieldset className="dialog-section">
+            <legend className="dialog-section-title">Appearance</legend>
+            <div className="field-row">
+              <label htmlFor="theme">Color theme</label>
+              <select
+                id="theme"
+                value={theme}
+                onChange={(e) => onSetTheme(e.currentTarget.value as Theme)}
+              >
+                <option value="system">Use system setting</option>
+                <option value="dark">Dark</option>
+                <option value="light">Light</option>
+              </select>
+            </div>
+            <div className="check-row">
+              <input
+                type="checkbox"
+                id="reduce-motion"
+                checked={reduceMotion}
+                onChange={(e) => onSetReduceMotion(e.currentTarget.checked)}
+              />
+              <label htmlFor="reduce-motion">Reduce motion</label>
+            </div>
+          </fieldset>
+
+          <fieldset className="dialog-section">
+            <legend className="dialog-section-title">System</legend>
+            <div className="check-row">
+              <input
+                type="checkbox"
+                id="min-tray"
+                checked={minimizeToTray}
+                onChange={(e) => onSetMinimizeToTray(e.currentTarget.checked)}
+              />
+              <label htmlFor="min-tray">Minimize to tray</label>
+            </div>
+            <div className="check-row">
+              <input
+                type="checkbox"
+                id="run-startup"
+                checked={runAtStartup}
+                onChange={(e) => onSetRunAtStartup(e.currentTarget.checked)}
+              />
+              <label htmlFor="run-startup">Run at startup</label>
+              <span className="field-unit">Starts hidden in the tray</span>
+            </div>
+            <div className="check-row">
+              <input
+                type="checkbox"
+                id="notify"
+                checked={notifications}
+                onChange={(e) => onSetNotifications(e.currentTarget.checked)}
+              />
+              <label htmlFor="notify">Show desktop notifications</label>
+            </div>
+          </fieldset>
         </div>
         <div className="dialog-actions">
           <button className="primary-btn" onClick={onClose}>

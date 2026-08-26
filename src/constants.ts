@@ -13,6 +13,7 @@ export const DISPLAY_STATUS_RANK = {
   downloading: 0,
   verifying: 1,
   queued: 2,
+  retryPending: 2.5,
   awaitingCapture: 3,
   paused: 4,
   error: 5,
