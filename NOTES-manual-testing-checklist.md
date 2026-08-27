@@ -249,7 +249,11 @@ Langkah setup (sekali saja, lihat juga catatan Phase 4 di TODO.md):
 ## 15. Pengecekan update
 
 - [ ] Buka app dengan koneksi normal, tanpa ada versi baru → tidak ada dialog
-      apa pun (pengecekan startup sifatnya diam)
+      atau toast apa pun (pengecekan startup sifatnya diam)
+- [ ] ⚠️ Nyalakan **Run at startup**, lalu jalankan
+      `azhura-download-manager.exe --autostart` → app diam di tray, dan
+      **tidak** ada pengecekan update selama window masih tersembunyi. Klik
+      ikon tray → baru pengecekan jalan setelah window tampil
 - [ ] Settings → System → tombol **Check for updates** ada, dengan hint
       "Also checked once at startup"
 - [ ] Klik tombolnya saat sudah versi terbaru → toast "You're on the latest
@@ -263,26 +267,36 @@ Langkah setup (sekali saja, lihat juga catatan Phase 4 di TODO.md):
 ## 16. Alur update (butuh dua rilis)
 
 Uji beneran: publish `v0.2.3` lewat tag, lalu pasang installer `v0.2.2` lama.
+Alurnya sengaja **tanpa dialog modal** — download jalan diam-diam, baru
+memberi tahu setelah ada yang bisa dilakukan.
 
-- [ ] Buka app versi lama → dialog **"Version 0.2.3 is available"** muncul
-- [ ] Release notes tampil sebagai teks biasa; catatan yang sangat panjang
-      ter-scroll di dalam panel, tidak mendorong tombol keluar dari dialog
-- [ ] ⚠️ Isi release notes dengan teks yang mengandung HTML (mis.
-      `<b>test</b>`) → tampil sebagai teks mentah, **tidak** ter-render jadi
-      tebal (ini konten remote, tidak boleh jadi markup)
-- [ ] Klik **Later** → dialog tutup, app tetap jalan di versi lama
-- [ ] Buka lagi Settings → Check for updates → dialog yang sama muncul lagi
-- [ ] Klik **Install and restart** → progress bar jalan, tombol jadi disabled
-- [ ] ⚠️ Saat sedang download, tekan **Escape** dan klik backdrop → dialog
-      **tidak** tertutup (menutupnya tidak menghentikan install, cuma
-      menyembunyikan operasi yang sedang jalan)
-- [ ] Setelah selesai → app restart sendiri dan jalan di versi baru
-- [ ] Cek Settings/status bar menampilkan versi baru
-- [ ] Download yang tadi ada di daftar masih utuh setelah update (history dan
-      resume state tidak hilang)
-- [ ] Kalau server tidak mengirim ukuran file → progress bar jadi mode
-      indeterminate (bergerak menyapu), bukan nyangkut di 0%
-- [ ] Dengan **Reduce motion** ON → bar indeterminate tidak beranimasi
+- [ ] Buka app versi lama → **tidak ada dialog apa pun** yang muncul
+- [ ] Diamkan sebentar (update ter-download di latar) → muncul toast
+      **"Version 0.2.3 is ready to install."** dengan tombol **Restart now**
+- [ ] ⚠️ Selama download berlangsung, app tetap bisa dipakai normal — tidak ada
+      overlay, tidak ada yang ter-blokir
+- [ ] Muncul juga link **Restart to update** di status bar kiri bawah, di
+      sebelah nama aplikasi
+- [ ] Hover link tsb → tooltip menyebut versinya
+- [ ] Biarkan toast-nya lewat (jangan diklik) → link di status bar **tetap
+      ada**, jadi update tidak hilang begitu toast menghilang
+- [ ] Settings → Check for updates saat update sudah ter-download → toast
+      "An update is already downloaded and ready." (⚠️ bukan mengulang
+      download dari nol)
+- [ ] Klik **Restart to update** → status bar berubah jadi "Updating…", lalu
+      app restart di versi baru
+- [ ] ⚠️ **Uji dengan download aktif:** mulai satu download besar, tunggu
+      update siap, lalu klik Restart to update → setelah app hidup lagi,
+      download itu berstatus **paused** dan bisa di-**Resume** melanjutkan dari
+      posisi terakhir, bukan mengulang dari 0
+- [ ] ⚠️ Setelah update, history masih lengkap — termasuk download yang baru
+      saja selesai beberapa detik sebelum restart (ini yang dilindungi
+      `prepare_for_update`; tanpa itu, entry di dalam debounce 400ms hilang)
+- [ ] Matikan internet di tengah download update → **tidak ada toast error**
+      (download ini tidak diminta user, jadi gagalnya diam). Cek lagi lewat
+      Settings → Check for updates masih bisa memulai ulang
+- [ ] Cek manual saat ada update → toast "Downloading version 0.2.3 in the
+      background…" lalu menyusul toast siap-install
 
 ## 17. Workflow rilis
 

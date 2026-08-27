@@ -64,23 +64,37 @@ pub(crate) fn hide_to_tray(app: &tauri::AppHandle) {
     }
 }
 
-/// Tray "Quit": pause every in-flight download so its resume sidecar is
-/// flushed immediately (mirrors `pause_download`), give the periodic meta
-/// writer a moment to catch up, then actually exit.
-pub(crate) fn quit_app(app: &tauri::AppHandle) {
+/// Pause every in-flight download so its resume sidecar is flushed immediately
+/// (mirrors `pause_download`) and tell the frontend to flush its history now
+/// rather than waiting out its debounce. Shared by the tray "Quit" path and by
+/// the updater, which is about to have the installer terminate this process.
+fn begin_shutdown(app: &tauri::AppHandle) {
     app.state::<Quitting>().0.store(true, Ordering::Relaxed);
     for c in app.state::<Manager>().downloads.lock().unwrap().values() {
         c.paused.store(true, Ordering::Relaxed);
     }
-    // Lets the frontend flush its download history immediately instead of
-    // waiting out its debounce, which would otherwise eat most of the grace
-    // period below.
     let _ = app.emit_to("main", "app-quitting", ());
+}
+
+/// Tray "Quit": prepare as above, give the periodic meta writer a moment to
+/// catch up, then actually exit.
+pub(crate) fn quit_app(app: &tauri::AppHandle) {
+    begin_shutdown(app);
     let handle = app.clone();
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(Duration::from_millis(1000)).await;
         handle.exit(0);
     });
+}
+
+/// Same preparation, minus the exit: the update installer takes the process
+/// down itself moments later. Without this the installer would kill downloads
+/// mid-flight and drop whatever history hadn't been debounce-saved yet.
+/// The caller waits out the same grace period before installing.
+#[tauri::command]
+#[specta::specta]
+pub(crate) fn prepare_for_update(app: tauri::AppHandle) {
+    begin_shutdown(&app);
 }
 
 /// Fixed scale every window renders at — a deliberate ~10% bump over the

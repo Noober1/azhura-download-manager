@@ -43,7 +43,6 @@ import { DeleteDialog } from "./components/dialogs/DeleteDialog";
 import { SpeedCapDialog } from "./components/dialogs/SpeedCapDialog";
 import { ConnRestartDialog } from "./components/dialogs/ConnRestartDialog";
 import { PowerActionDialog, type PowerAction } from "./components/dialogs/PowerActionDialog";
-import { UpdateDialog } from "./components/dialogs/UpdateDialog";
 import "./App.css";
 
 function App() {
@@ -246,9 +245,6 @@ function App() {
     menu ||
     speedCapDialog ||
     pendingPower ||
-    updater.state.stage === "available" ||
-    updater.state.stage === "downloading" ||
-    updater.state.stage === "ready" ||
     downloadsApi.connRestart
   );
 
@@ -360,6 +356,16 @@ function App() {
       {/* ---- Status bar ---- */}
       <div className="statusbar">
         <span>Azhura Download Manager{version ? ` v${version}` : ""}</span>
+        {updater.state.stage === "ready" && (
+          <button
+            className="sb-update"
+            title={`Version ${updater.state.version} has been downloaded — restarting will apply it`}
+            onClick={updater.install}
+          >
+            Restart to update
+          </button>
+        )}
+        {updater.state.stage === "installing" && <span className="sb-update-note">Updating…</span>}
         {queue.held && (
           <span className="sb-hold" title="Queued downloads are waiting for the scheduled start">
             Queue starts at {settings.scheduledStartTime}
@@ -428,17 +434,6 @@ function App() {
             updateChecking={updater.state.stage === "checking"}
             onCheckForUpdates={updater.checkNow}
             onClose={() => setShowSettings(false)}
-          />
-        )}
-      </AnimatePresence>
-
-      {/* ---- Update prompt ---- */}
-      <AnimatePresence>
-        {updater.state.stage !== "idle" && updater.state.stage !== "checking" && (
-          <UpdateDialog
-            state={updater.state}
-            onInstall={updater.install}
-            onDismiss={updater.dismiss}
           />
         )}
       </AnimatePresence>
