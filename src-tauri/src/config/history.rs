@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use super::{config_dir, write_json_atomic};
 use crate::categories::retarget_legacy_path;
 use crate::config::prefs::ProxyConfig;
+use crate::config::settings::SettingsState;
 
 /// One finished download. `state` always holds the real terminal state —
 /// "missing" is never stored, it is recomputed from disk on every load so a
@@ -54,7 +55,10 @@ pub(crate) struct HistoryEntry {
 }
 
 const HISTORY_VERSION: u32 = 1;
-const HISTORY_MAX: usize = 500;
+/// Bounds on the user-configurable `history_max_entries`, applied here rather
+/// than trusting settings.json — that file is user-editable, and a 0 there
+/// would silently throw every finished download away on the next save.
+const HISTORY_MAX_BOUNDS: std::ops::RangeInclusive<usize> = 50..=5000;
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -126,9 +130,21 @@ pub(crate) async fn load_history() -> Result<HistoryLoad, String> {
 
 #[tauri::command]
 #[specta::specta]
-pub(crate) async fn save_history(mut entries: Vec<HistoryEntry>) -> Result<(), String> {
+pub(crate) async fn save_history(
+    mut entries: Vec<HistoryEntry>,
+    state: tauri::State<'_, SettingsState>,
+) -> Result<(), String> {
+    // Block-scoped so the guard is dropped before the `.await` below: holding
+    // a `std::sync::MutexGuard` across an await point makes the future
+    // non-`Send`, which `#[tauri::command]` won't accept.
+    let max = {
+        let settings = state.0.lock().unwrap();
+        (settings.history_max_entries as usize)
+            .clamp(*HISTORY_MAX_BOUNDS.start(), *HISTORY_MAX_BOUNDS.end())
+    };
+
     entries.sort_by_key(|e| std::cmp::Reverse(e.finished_at));
-    entries.truncate(HISTORY_MAX);
+    entries.truncate(max);
 
     let entries = entries
         .into_iter()

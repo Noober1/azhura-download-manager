@@ -34,6 +34,29 @@
   border-left-color: var(--danger);
 }
 
+/* `margin-left: auto` here rather than on `.toast-close`, so the pair stays
+   right-aligned as one group when an action button is present. */
+.toast-action {
+  margin-left: auto;
+  flex-shrink: 0;
+  background: none;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-card);
+  padding: 0.1rem 0.45rem;
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  color: var(--accent);
+}
+.toast-action:hover {
+  background: var(--accent);
+  color: #fff;
+}
+/* Without this the two `margin-left: auto` rules would each claim a share of
+   the free space and drift apart instead of sitting together on the right. */
+.toast-action + .toast-close {
+  margin-left: 0;
+}
+
 .toast-close {
   margin-left: auto;
   background: none;

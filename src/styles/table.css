@@ -54,6 +54,22 @@
   color: var(--faint);
 }
 
+.sb-hold {
+  margin-left: 0.75rem;
+  color: var(--accent);
+  cursor: default;
+}
+
+/* The status bar is only 22px tall, so a default-height select would blow the
+   whole strip out. */
+.sb-postqueue {
+  margin-left: 0.75rem;
+  height: 18px;
+  padding: 0 0.2rem;
+  font-size: var(--fs-xs);
+  line-height: 1;
+}
+
 .sb-grabber {
   margin-left: auto;
   display: flex;

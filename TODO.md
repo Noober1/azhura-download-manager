@@ -33,6 +33,35 @@ dependency.
       they're guaranteed not to improve and are the one failure case
       expensive enough to matter.
 
+## Done (Phase 3)
+
+- [x] **Clipboard monitoring.** `src/hooks/useClipboardWatch.ts` polls the
+      clipboard while the `clipboardWatch` setting is on and offers a copied
+      http(s) link via a toast with a **Download** button
+      (`src/toast.ts`/`src/components/Toast.tsx` gained an optional action).
+      Chosen over auto-popping the Add window because that's the intrusive
+      behavior the note below warned about. Falls back to a desktop
+      notification when the window is hidden in the tray — an in-app toast
+      there would render where nobody can see or click it.
+- [x] **Scheduling + post-queue action.** `scheduledStartEnabled` /
+      `scheduledStartTime` hold the queue until a daily time
+      (`src/queueSchedule.ts`, `src/hooks/useQueueSchedule.ts`, plus a `held`
+      guard in `useScheduler.ts`); hitting Resume overrides the hold rather
+      than leaving the button dead. The sleep/shutdown action is armed per
+      session from the status bar, never persisted, and runs behind a
+      cancellable 60s countdown (`PowerActionDialog.tsx`,
+      `src-tauri/src/power.rs`). The drain detector requires that a row which
+      *was* pending actually reached `completed` — pausing, canceling or
+      deleting the whole queue empties it too, and must never suspend the
+      machine.
+- [x] **Configurable history retention.** `historyMaxEntries` replaces the
+      hardcoded `HISTORY_MAX` (read from `SettingsState` inside
+      `save_history`, re-clamped there since settings.json is user-editable),
+      `historyRetentionDays` sweeps old rows in `useHistoryPersistence.ts`
+      (frontend-side, so the list and the file agree), and "Clear history"
+      reuses the existing delete dialog so the "also delete files" choice
+      still applies.
+
 ## Shipping / reliability
 
 - [ ] **Auto-updater.** `tauri-plugin-updater` isn't wired up
@@ -45,15 +74,5 @@ dependency.
 
 ## Features
 
-- [ ] **Clipboard monitoring.** The clipboard is only read when the Add window
-      opens (`src/hooks/useAddForm.ts`). Add an IDM-style background watcher
-      that pops the Add window (or a toast) when a downloadable URL is copied.
-      Must be a settings toggle — some people find it intrusive.
-- [ ] **Scheduling + post-queue action.** `AppSettings`
-      (`src-tauri/src/config/settings.rs`) has no time-related field at
-      all. Add "start the queue at <time>" and "sleep/shutdown once the queue
-      finishes" — the natural companion to the existing tray + autostart
-      behavior.
-- [ ] **Configurable history retention.** `HISTORY_MAX = 500` is hardcoded
-      (`src-tauri/src/config/history.rs:57`). Make it a setting, add a "clear
-      history" action, and optionally auto-drop completed entries after N days.
+Nothing queued — the three that were here shipped in Phase 3 above. The only
+remaining item is the auto-updater, which is blocked on the user.

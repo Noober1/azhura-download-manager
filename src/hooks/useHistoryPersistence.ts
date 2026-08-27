@@ -14,6 +14,7 @@ export function useHistoryPersistence(
   downloads: DownloadItem[],
   setDownloads: Dispatch<SetStateAction<DownloadItem[]>>,
   downloadsRef: RefObject<DownloadItem[]>,
+  retentionDays: number,
 ) {
   // Stays false until the history file has been read, so the save effect can't
   // fire against the empty initial state and wipe the file before the load
@@ -89,6 +90,31 @@ export function useHistoryPersistence(
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Drop history rows past the retention window. Done here rather than in
+  // Rust's `save_history` because that only prunes the *file* — the list on
+  // screen would keep showing rows the next restart silently dropped. Pruning
+  // state instead makes both agree, since the save effect below derives the
+  // file from this same list.
+  useEffect(() => {
+    if (retentionDays <= 0) return;
+    const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
+    setDownloads((ds) =>
+      ds.filter(
+        (d) =>
+          // `fromHistory` so a live row is never swept, and `finishedAt > 0`
+          // because `toHistoryEntry` writes `?? 0` for rows that predate that
+          // field — reading those as infinitely old would delete the user's
+          // oldest history for a schema gap.
+          !(d.fromHistory && (d.finishedAt ?? 0) > 0 && (d.finishedAt ?? 0) < cutoff),
+      ),
+    );
+    // Keyed on `downloads.length`, NOT `downloads`: `.filter()` returns a new
+    // array every run, so depending on the array itself would loop forever.
+    // Length is stable when nothing was pruned, and still changes when rows
+    // are restored at launch or added later.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [retentionDays, downloads.length]);
 
   // Persist finished downloads. Debounced because `downloads` churns ~7x/sec
   // per active download from progress events; the debounce also collapses

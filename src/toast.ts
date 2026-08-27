@@ -1,9 +1,13 @@
 import { useSyncExternalStore } from "react";
 
 export type ToastLevel = "error" | "info";
-export type Toast = { id: number; message: string; level: ToastLevel };
+export type ToastAction = { label: string; onClick: () => void };
+export type Toast = { id: number; message: string; level: ToastLevel; action?: ToastAction };
 
 const AUTO_DISMISS_MS = 5000;
+/** Longer for actionable toasts: 5s is enough to *read* a message, but not to
+ *  notice one, reach the mouse, and click a button before it disappears. */
+const ACTION_DISMISS_MS = 12_000;
 
 let toasts: Toast[] = [];
 const listeners = new Set<() => void>();
@@ -18,11 +22,15 @@ function notify() {
  *  three separate Vite entry points, each its own webview with its own React
  *  tree — there's no shared component tree to lift state into. Mirrors
  *  `notify.ts`'s existing module-level-state pattern for the same reason. */
-export function showToast(message: string, level: ToastLevel = "error"): void {
+export function showToast(
+  message: string,
+  level: ToastLevel = "error",
+  action?: ToastAction,
+): void {
   const id = nextId++;
-  toasts = [...toasts, { id, message, level }];
+  toasts = [...toasts, { id, message, level, action }];
   notify();
-  setTimeout(() => dismissToast(id), AUTO_DISMISS_MS);
+  setTimeout(() => dismissToast(id), action ? ACTION_DISMISS_MS : AUTO_DISMISS_MS);
 }
 
 export function dismissToast(id: number): void {

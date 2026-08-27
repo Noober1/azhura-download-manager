@@ -18,6 +18,11 @@ export function useSettings() {
   const [notifications, setNotifications] = useState(true);
   const [runAtStartup, setRunAtStartup] = useState(false);
   const [reduceMotion, setReduceMotion] = useState(false);
+  const [clipboardWatch, setClipboardWatch] = useState(false);
+  const [scheduledStartEnabled, setScheduledStartEnabled] = useState(false);
+  const [scheduledStartTime, setScheduledStartTime] = useState("02:00");
+  const [historyMaxEntries, setHistoryMaxEntries] = useState(500);
+  const [historyRetentionDays, setHistoryRetentionDays] = useState(0);
 
   useTheme();
 
@@ -42,6 +47,11 @@ export function useSettings() {
         setNotifications(notifications);
         setNotificationsEnabled(notifications);
         setReduceMotion(s.reduceMotion ?? false);
+        setClipboardWatch(s.clipboardWatch ?? false);
+        setScheduledStartEnabled(s.scheduledStartEnabled ?? false);
+        setScheduledStartTime(s.scheduledStartTime ?? "02:00");
+        setHistoryMaxEntries(s.historyMaxEntries ?? 500);
+        setHistoryRetentionDays(s.historyRetentionDays ?? 0);
         if (globalLimitMbps > 0) {
           commands.setGlobalSpeedLimit({
             bytesPerSec: Math.round(globalLimitMbps * 1024 * 1024),
@@ -83,6 +93,11 @@ export function useSettings() {
       theme,
       notifications,
       reduceMotion,
+      clipboardWatch,
+      scheduledStartEnabled,
+      scheduledStartTime,
+      historyMaxEntries,
+      historyRetentionDays,
       ...overrides,
     } as AppSettings);
   }
@@ -135,6 +150,40 @@ export function useSettings() {
     persistSettings({ reduceMotion: v });
   }
 
+  function setClipboardWatchSetting(v: boolean) {
+    setClipboardWatch(v);
+    persistSettings({ clipboardWatch: v });
+  }
+
+  function setScheduledStartEnabledSetting(v: boolean) {
+    setScheduledStartEnabled(v);
+    persistSettings({ scheduledStartEnabled: v });
+  }
+
+  // `<input type="time">` reports "" while the field is being cleared or
+  // half-typed; keeping the previous value rather than persisting garbage
+  // means `isBeforeTarget` never has to interpret a broken schedule.
+  function setScheduledStartTimeSetting(v: string) {
+    if (!/^\d{2}:\d{2}$/.test(v)) return;
+    setScheduledStartTime(v);
+    persistSettings({ scheduledStartTime: v });
+  }
+
+  // Mirrored by `HISTORY_MAX_BOUNDS` in Rust's `save_history`, which re-clamps
+  // on its side — settings.json is user-editable, so the backend can't trust
+  // this clamp to have happened.
+  function setHistoryMaxEntriesSetting(n: number) {
+    const v = Math.min(5000, Math.max(50, Math.round(n)));
+    setHistoryMaxEntries(v);
+    persistSettings({ historyMaxEntries: v });
+  }
+
+  function setHistoryRetentionDaysSetting(n: number) {
+    const v = Math.min(365, Math.max(0, Math.round(n)));
+    setHistoryRetentionDays(v);
+    persistSettings({ historyRetentionDays: v });
+  }
+
   // Optimistic: flips the checkbox immediately, then reverts it if the OS
   // call actually fails (e.g. the registry key is locked down).
   function setRunAtStartupSetting(v: boolean) {
@@ -151,6 +200,11 @@ export function useSettings() {
     notifications,
     runAtStartup,
     reduceMotion,
+    clipboardWatch,
+    scheduledStartEnabled,
+    scheduledStartTime,
+    historyMaxEntries,
+    historyRetentionDays,
     setMaxActive,
     setGlobalLimit,
     setMaxRetryAttemptsSetting,
@@ -159,5 +213,10 @@ export function useSettings() {
     setNotificationsSetting,
     setRunAtStartupSetting,
     setReduceMotionSetting,
+    setClipboardWatchSetting,
+    setScheduledStartEnabledSetting,
+    setScheduledStartTimeSetting,
+    setHistoryMaxEntriesSetting,
+    setHistoryRetentionDaysSetting,
   };
 }

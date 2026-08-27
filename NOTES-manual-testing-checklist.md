@@ -1,122 +1,241 @@
-# Checklist Manual Testing — v0.2.1 Follow-up
+# Checklist Manual Testing — Phase 1 · 2 · 3
 
-Jalankan `bun run tauri dev` lalu centang satu per satu.
+Jalankan `bun run tauri dev`, lalu centang satu per satu. Checklist ini menutup
+semua fitur yang sudah selesai di TODO.md (`## Done (Phase 1/2/3)`).
 
-## 0. Persiapan
-
-- [ ] `bun run tauri dev` berhasil start, window utama muncul tanpa error di console
-- [ ] Cek `src/bindings.ts` ter-regenerate otomatis (diff-nya harus cocok dengan yang sudah di-mirror manual — `getRunAtStartup`, `setRunAtStartup`, `launchedAtStartup`)
-
----
-
-## 1. Sortir kolom Status
-
-- [ ] Siapkan minimal 4 baris download dengan status berbeda: **Complete**, **Error**, **Paused**, dan satu **Moved/deleted** (selesaikan satu download, lalu rename/hapus filenya di File Explorer, tekan **F5** di app untuk refresh status)
-- [ ] Klik header **Status** sekali → urutan ascending: Downloading → Verifying → Queued → Waiting for browser → Paused → Error → Moved/deleted → Canceled → Complete
-- [ ] Baris "Moved / deleted" mengelompok di antara Error dan Canceled, **tidak** ikut ke posisi Complete
-- [ ] Klik header **Status** lagi → urutan kebalikannya (descending)
-- [ ] Klik ketiga kalinya → sortir kembali ke default (Date Added, terbaru dulu)
-- [ ] (Opsional) Trigger status **Waiting for browser**: download yang butuh cookie/auth, biarkan tertahan → cek dia sortir terpisah dari Paused biasa
-
-## 2. Redownload vs Resume
-
-- [ ] Buka detail popup pada baris **Moved/deleted** (double-click atau context menu → Show detail)
-  - [ ] Tombol bertuliskan **Redownload**, bukan "Resume"
-  - [ ] Teks catatan: "No longer at ... — click Redownload to fetch it again."
-  - [ ] Klik Redownload → progress mulai dari 0%, bukan lanjut dari sisa lama
-- [ ] Buka detail popup pada baris **Paused** biasa (bukan missing/history)
-  - [ ] Tombol tetap bertuliskan **Resume**
-  - [ ] Klik Resume → lanjut dari byte yang sudah ada, bukan mulai ulang
-- [ ] Klik kanan pada baris Moved/deleted → context menu item pertama bertuliskan **Redownload**
-- [ ] Klik kanan pada baris Paused biasa → context menu bertuliskan **Resume**
-- [ ] Seleksi campuran (1 Paused + 1 Moved/deleted) di context menu → cek label yang muncul (harus "Resume" karena tidak semua item redownload)
-- [ ] Hover toolbar tombol Resume/Redownload → tooltip title-nya ikut berubah sesuai seleksi
-
-## 3. Derivasi nama file
-
-Tambahkan masing-masing URL berikut lewat Add Download, biarkan selesai, lalu cek nama file akhir & folder kategori-nya:
-
-- [ ] `https://.../download?filename=sample.mp4` → tersimpan sebagai `sample.mp4` (bukan `download`), masuk folder **Videos**, icon file benar
-- [ ] URL yang server-nya kirim header `Content-Disposition: attachment; filename*=UTF-8''na%C3%AFve%20file.zip` (bisa pakai httpbin/test server sendiri) → nama file ter-decode UTF-8 dengan benar (`naïve file.zip`), masuk folder **Archives**
-- [ ] URL bare tanpa ekstensi di path (mis. `https://.../stream`) yang server-nya balas `Content-Type: video/mp4` → tersimpan dengan ekstensi `.mp4` ditambahkan otomatis
-- [ ] URL biasa (`https://.../file.zip`) → masih bekerja seperti sebelumnya (regresi check)
-- [ ] Cek preview nama file di Add window (sebelum download dimulai) sudah menampilkan nama yang masuk akal juga, bukan `download`
-
-## 4. Run at startup
-
-- [ ] Buka Settings → centang **Run at startup** → cek muncul di Task Manager → tab **Startup** (Windows) dengan status Enabled
-- [ ] Restart app (tutup dari tray, buka lagi manual) → window tetap tampil normal (bukan mode autostart)
-- [ ] Simulasikan autostart: jalankan exe dengan flag `--autostart` langsung dari terminal (`./azhura-download-manager.exe --autostart` di folder target/debug) → app **tidak** menampilkan window, langsung ke tray
-- [ ] Klik icon tray → window muncul normal
-- [ ] Balik ke Settings → uncheck **Run at startup** → cek entry hilang dari Task Manager → Startup
-- [ ] (Opsional) Reboot beneran untuk full end-to-end test kalau ada waktu
-
-## 5. Animasi (Motion)
-
-- [ ] Buka Settings dialog → overlay fade-in + panel muncul dengan scale+slide (bukan langsung snap)
-- [ ] Tutup Settings dialog → animasi exit (fade+scale out) sebelum hilang
-- [ ] Ulangi untuk **semua** dialog lain: Extensions, Delete confirmation, Speed cap custom, Connection restart confirmation
-- [ ] Klik kanan baris download → context menu muncul dengan scale+fade cepat, posisinya tetap ter-clamp dalam window (coba klik kanan dekat tepi kanan/bawah window)
-- [ ] Klik tombol toolbar (Add, Resume, Pause, dst) → ada efek "tekan" (scale down) sekilas saat diklik
-- [ ] Klik pindah kategori di sidebar (All → Active → Finished → tipe file) → indikator aksen (garis kiri) **slide** ke posisi baru, tidak loncat
-- [ ] Buka detail popup → body muncul dengan fade+slide halus setelah snapshot pertama datang
-- [ ] Di detail popup, ubah status download (mis. pause lalu resume) → label status (mode-tag) cross-fade, tidak snap langsung
-- [ ] Buka Add Download window → klik pindah tab (Link/Proxy/More Options/Advanced) → garis aksen di atas tab **slide** ke tab yang aktif
-- [ ] Isi form di salah satu tab, pindah ke tab lain lalu balik lagi → data form **tidak hilang** (tab panel tidak ter-unmount)
-- [ ] Aktifkan **Windows Settings → Aksesibilitas → Efek visual → Animation effects: OFF**, restart app → semua animasi di atas jadi instan (tidak ada transisi sama sekali)
+Kalau waktunya terbatas, kerjakan **§0 Prasyarat** dan bagian bertanda ⚠️ dulu —
+itu yang paling mungkin menyembunyikan bug yang mahal.
 
 ---
 
-## 6. Polish pass — aria-label, toast, extension fallback, migration warning, settings hint
+## 0. Prasyarat
 
-### 6a. Toast (pesan error baru)
-
-- [ ] Selesaikan satu download, lalu **pindahkan/hapus** file hasilnya dari luar app (File Explorer), tekan **F5** untuk refresh status → baris jadi "Moved/deleted"
-- [ ] Klik kanan baris tsb → **Open containing folder** → muncul toast merah "Couldn't open the containing folder — the file may have moved." di pojok kanan bawah, bukan diam saja seperti sebelumnya
-- [ ] Double-click baris yang sama (bukan lewat context menu) → toast yang sama juga muncul
-- [ ] Buka detail popup baris tsb → klik **Open folder** di situ juga → toast muncul (pesannya sedikit beda: tanpa "the file may have moved")
-- [ ] Klik **Copy link** (toolbar/context-menu/detail popup) dalam kondisi normal → **tidak** ada toast (harusnya sukses diam-diam seperti biasa)
-- [ ] Toast hilang otomatis setelah ±5 detik
-- [ ] Klik tombol **×** di toast → toast langsung hilang lebih cepat
-- [ ] Trigger 2 toast berurutan cepat (mis. double-click 2 baris missing berturut-turut) → toast bertumpuk rapi di stack, tidak saling menimpa
-- [ ] Toast muncul di jendela detail popup juga (bukan cuma window utama) saat error terjadi di situ
-- [ ] Toast tetap terlihat walau ada dialog/context menu lain yang sedang terbuka di atasnya
-
-### 6b. Extensions dialog — tombol "Copy address"
-
-- [ ] Buka Settings/toolbar → **Install browser extension**
-- [ ] Baris **Chrome, Edge, Brave, Opera** sekarang punya 2 tombol: **Install** dan **Copy address** (sebelumnya cuma Install)
-- [ ] Klik **Copy address** di baris Chrome → paste di address bar browser → dapat teks `chrome://extensions`
-- [ ] Klik **Copy address** di baris Firefox → paste → dapat teks `about:debugging#/runtime/this-firefox`
-- [ ] (Kalau browser default bukan Chrome asli, mis. Edge/Brave) klik **Install** di baris Chrome → kalaupun gagal membuka `chrome://extensions`-nya, tombol Copy address di sebelahnya tetap jadi jalan alternatif yang berfungsi
-
-### 6c. Migration warning (folder kategori lama gagal di-rename)
-
-Ini paling sulit direproduksi natural (butuh folder lama `Video/`, `Audio/`, dst yang gagal di-rename, misalnya karena sedang dipakai/permission ditolak). Cara simulasi manual:
-
-- [ ] Tutup app sepenuhnya. Di folder downloads app (biasanya `<Downloads>/AzhuraDownloadManager/`), buat folder lama **`Video`** (singular, bukan `Videos`) lalu buka salah satu file di dalamnya dengan program lain supaya folder itu terkunci/tidak bisa di-rename (atau di Windows, set permission folder itu jadi read-only/deny untuk akun sendiri)
-- [ ] Jalankan app lagi → seharusnya muncul toast merah di window utama: "Couldn't rename 1 legacy download folder — check the app log for details."
-- [ ] Cek folder `Video` (lama) masih ada di disk (tidak ke-rename paksa, tidak ada file hilang)
-- [ ] Lepas kuncian/permission folder tsb, restart app lagi → migrasi berhasil kali ini, folder `Video` berubah jadi `Videos`, **tidak** ada toast (karena tidak ada kegagalan)
-- [ ] (Regresi) Kalau tidak ada folder lama sama sekali (install baru) → app start normal, tidak ada toast apapun soal migrasi
-
-### 6d. Aksesibilitas (aria-label, role, Escape)
-
-- [ ] Buka DevTools/Accessibility inspector pada webview (atau screen reader kalau ada) → arahkan ke tombol-tombol toolbar (Add, Resume, Pause, Cancel, Delete, Settings, Refresh, puzzle) dan tombol window (minimize/maximize/close) → masing-masing punya accessible name yang masuk akal, bukan kosong
-- [ ] **Speed cap (Custom…)** dialog → tekan **Escape** → dialog tertutup (sebelumnya cuma bisa lewat klik di luar dialog atau tombol Cancel)
-- [ ] **Connection restart confirmation** dialog → tekan **Escape** → dialog tertutup dengan efek yang sama seperti klik di luar (artinya "Apply on next start", **bukan** restart sekarang)
-- [ ] Klik kanan baris download → context menu → submenu **Speed cap** dan **Connections** masih terbuka/berfungsi normal saat di-hover (perubahan aksesibilitas ini seharusnya tidak mengubah perilaku hover sama sekali)
-- [ ] Semua dialog lain (Settings, Extensions, Delete, Speed cap, Connection restart) masih bisa ditutup normal lewat tombol Cancel/Done/klik backdrop seperti biasa — regresi check, tidak ada yang berubah perilakunya
-
-### 6e. Settings — hint "1–10"
-
-- [ ] Buka Settings → field **Max active downloads** sekarang menampilkan teks kecil **"1–10"** di sebelah kanan input, sama gayanya dengan hint "MB/s · 0 = unlimited (live)" di field Global speed limit
-- [ ] Coba isi angka di luar rentang (mis. 20) lalu klik keluar dari field → nilai tetap ter-clamp ke 10 seperti sebelumnya (perilaku tidak berubah, cuma hint-nya yang baru)
+- [ ] `bun run tauri dev` start tanpa error di console
+- [ ] `src/bindings.ts` ter-regenerate otomatis saat app start (bukan hasil edit
+      tangan). Cek ada `runPowerAction`, `clipboardWatch`, `scheduledStartEnabled`,
+      `scheduledStartTime`, `historyMaxEntries`, `historyRetentionDays`
+- [ ] Siapkan beberapa URL uji: file besar (>100 MB, biar sempat pause/resume),
+      file kecil, dan satu URL yang pasti gagal (mis. host ngaco) buat tes retry
 
 ---
 
-## Regresi umum
+## ⚠️ 1. Settings round-trip — kerjakan PALING AWAL
 
-- [ ] Search box, marquee-select drag, resize kolom tabel masih normal (area ini sengaja tidak disentuh)
-- [ ] Download paralel/multi-connection tetap jalan normal, tidak ada lag terasa di tabel saat banyak download aktif sekaligus
-- [ ] Tray menu (klik kanan icon tray) masih menampilkan daftar download aktif dengan benar
+Ini nangkep kelas bug paling mahal di Phase 3: `save_settings` di Rust menimpa
+**seluruh** struct `AppSettings`, jadi satu field yang kelupaan di `persistSettings`
+(`src/hooks/useSettings.ts`) bikin setting lain diam-diam balik ke default.
+
+- [ ] Buka Settings, ubah **semua** field ke nilai non-default sekaligus:
+      Max active downloads, Global speed limit, Max retry attempts, Watch clipboard,
+      Hold the queue + jam, Color theme, Reduce motion, Minimize to tray,
+      Run at startup, Show desktop notifications, Keep at most, Drop entries after
+- [ ] Tutup app sepenuhnya (tray → Quit), buka lagi
+- [ ] **Semua** nilai tadi masih sama persis — tidak ada satu pun yang balik ke default
+- [ ] Ubah **satu** setting saja (mis. cuma theme), restart → setting lain tetap utuh
+- [ ] Cek isi `settings.json` (folder config app) memuat semua field tsb
+
+---
+
+# PHASE 1 — kolom, scroll, visualisasi detail
+
+## 2. Drag & drop reorder kolom
+
+- [ ] Drag header kolom (mis. **Size**) ke posisi lain → muncul drag ghost yang
+      mengikuti kursor, dan indikator posisi drop
+- [ ] Lepas → kolom pindah ke posisi baru
+- [ ] Restart app → urutan kolom **tetap** seperti terakhir diatur
+- [ ] ⚠️ Drag header lalu lepas → **tidak** ikut men-trigger sort pada kolom itu
+      (ini bug click-suppression yang diperbaiki; klik dan drag harus terpisah)
+- [ ] Klik header (tanpa drag) → sort tetap jalan normal
+
+## 3. Resize kolom
+
+- [ ] Drag garis pemisah antar header → lebar kolom berubah
+- [ ] Restart → lebar kolom tetap tersimpan
+- [ ] ⚠️ Selesai men-drag resize → **tidak** ikut men-trigger sort
+      (bug yang sama, diperbaiki di Phase 2 — lihat §8)
+- [ ] Double-click garis pemisah → auto-fit lebar kolom
+
+## 4. Infinite scroll
+
+Butuh daftar panjang: >60 baris (`INITIAL_ROWS = 60`, tambah 60 per batch).
+
+- [ ] Dengan >60 download di daftar, awalnya hanya ~60 baris ter-render
+- [ ] Scroll ke bawah → baris berikutnya nambah otomatis per batch, mulus tanpa
+      lompatan posisi scroll
+- [ ] Ganti kategori di sidebar / ubah sort → daftar reset ke atas dan hitungan
+      baris balik ke 60 (bukan menyisakan posisi scroll lama)
+- [ ] Tekan **End** / **Ctrl+A** / panah bawah terus-menerus → navigasi keyboard
+      tetap bisa mencapai baris yang belum ter-render (baris dipaksa render dulu)
+- [ ] Search box tetap normal saat daftar panjang
+
+## 5. Detail window — grafik kecepatan & peta piece
+
+- [ ] Buka detail popup (double-click baris aktif, atau context menu → Show detail)
+- [ ] **Speed graph**: sparkline terisi seiring waktu (sample tiap 500ms,
+      menampilkan ~30 detik terakhir), ada label peak dan timeline
+- [ ] Peak speed naik saat ada lonjakan sesaat, dan **tidak** turun lagi setelahnya
+- [ ] **Piece map**: untuk download multi-connection, muncul peta 160 slice yang
+      terisi bertahap dari beberapa titik sekaligus (bukan kiri-ke-kanan saja)
+- [ ] Download single-connection → piece map kosong/tidak tampil (memang begitu)
+- [ ] Saat download selesai → piece map bersih, tidak nyangkut di ~99%
+
+## 6. Warna tombol toolbar
+
+- [ ] Tombol **Add** dan ikon **Delete** warnanya menyatu dengan tombol toolbar
+      lain (tidak ada lagi background/warna override yang mencolok sendiri)
+
+## 7. Bug kecepatan saat resume (backend)
+
+- [ ] Download file besar sampai ~50%, **Pause**
+- [ ] **Resume** → tick progress pertama menampilkan kecepatan wajar
+- [ ] ⚠️ **Bukan** angka absurd (dulu: seluruh byte yang sudah di disk dibagi satu
+      tick 150ms, jadi kelihatan ratusan GB/s sesaat)
+
+---
+
+# PHASE 2 — settings, bug klik header, auto-retry
+
+## 8. Settings dialog bersection
+
+- [ ] Settings terbagi jadi grup berlabel. Setelah Phase 3 urutannya:
+      **Downloads → Scheduling → Appearance → System → History**
+- [ ] Tiap grup punya judul (`<legend>`) dan field-nya masuk akal di grup itu
+- [ ] Hint kecil muncul di kanan field: `1–10` (max active),
+      `MB/s · 0 = unlimited (live)`, `0–10 · 0 = off` (retry)
+- [ ] Isi angka di luar rentang (mis. max active = 20) lalu klik keluar field →
+      nilai ter-clamp ke batas (10)
+
+## 9. Bug click-suppression saat resize
+
+- [ ] ⚠️ Drag resize kolom **Status** lalu lepas → urutan sort **tidak** berubah
+- [ ] Ulangi di beberapa kolom berbeda
+- [ ] Klik biasa (tanpa drag) di header yang sama → sort tetap berubah normal
+      (perbaikannya menekan klik, bukan mematikan sort)
+
+## 10. Auto-retry download gagal
+
+Backoff: attempt 1 → 2s, 2 → 4s, 3 → 8s, 4 → 16s, 5+ → 30s (cap 30s).
+
+- [ ] Settings → **Max retry attempts** = 3
+- [ ] Mulai download dari URL yang pasti gagal → setelah gagal, baris masuk status
+      **retry pending**, bukan langsung Error final
+- [ ] Jeda antar percobaan makin lama sesuai backoff di atas
+- [ ] Setelah 3 percobaan habis → baris jadi **Error** dan berhenti mencoba
+- [ ] Set **Max retry attempts** = 0 → download gagal langsung Error, tanpa retry
+- [ ] ⚠️ **Checksum mismatch dikecualikan**: isi expected checksum yang salah pada
+      satu download, biarkan selesai → gagal checksum → **tidak** di-retry sama
+      sekali (byte yang salah tidak akan jadi benar dengan diunduh ulang)
+- [ ] Selama retry pending, baris tetap terhitung sebagai antrian aktif
+      (indikator "queued" di toolbar tidak nol)
+- [ ] Resume manual pada baris yang sedang retry-pending → hitungan retry reset
+
+---
+
+# PHASE 3 — clipboard, penjadwalan, retensi history
+
+## 11. Clipboard monitoring
+
+- [ ] Settings → **Watch clipboard for links** OFF: copy sebuah URL → tidak ada
+      reaksi apa pun
+- [ ] Nyalakan ON **saat sudah ada URL di clipboard** → ⚠️ tidak langsung muncul
+      toast (seeding: hanya link yang di-copy *setelah* ini yang ditawarkan)
+- [ ] Copy URL `https://...` baru → muncul toast "Download this link? …" dengan
+      tombol **Download**
+- [ ] Klik **Download** → window Add terbuka dengan URL **persis** yang tadi
+      di-copy sudah terisi
+- [ ] ⚠️ Copy URL, lalu **ganti** isi clipboard dengan URL lain sebelum mengklik
+      toast → yang terbuka tetap URL dari toast itu, bukan isi clipboard terbaru
+- [ ] Copy teks biasa (bukan URL) → tidak ada toast
+- [ ] Copy `mailto:...` atau `ftp://...` → tidak ada toast (hanya http/https)
+- [ ] Klik kanan satu baris → **Copy link** → tidak ada toast (URL-nya sudah ada
+      di daftar)
+- [ ] ⚠️ Pilih **beberapa** baris → **Copy link** (URL tergabung newline) →
+      tidak ada toast (kalau muncul menawarkan URL gabungan yang ngaco, itu bug)
+- [ ] Copy URL yang sama dua kali berturut-turut → toast hanya sekali
+- [ ] Toast aksi bertahan ~12 detik (lebih lama dari toast biasa yang ~5 detik)
+- [ ] ⚠️ Sembunyikan app ke tray, lalu copy URL → muncul **notifikasi desktop**
+      ("Open Azhura to download …"), bukan toast yang tak terlihat
+- [ ] Dari kondisi itu, buka app → klik **+** → URL tadi sudah terisi dari clipboard
+
+## 12. Penjadwalan antrian
+
+- [ ] Settings → **Hold the queue until a set time** ON, set jam ~2 menit ke depan
+- [ ] Field jam ter-disable saat checkbox OFF, aktif saat ON
+- [ ] Tambah download baru → statusnya **queued** dan **tidak** mulai jalan
+- [ ] Status bar menampilkan **"Queue starts at HH:MM"**
+- [ ] Tunggu sampai jam target → antrian mulai jalan sendiri (maks. ~1 menit
+      setelah jam target; pengecekan tiap menit)
+- [ ] ⚠️ Ulangi dengan hold aktif, lalu klik **Resume** manual → download langsung
+      jalan **dan** muncul toast "Scheduled start overridden…"
+      (tombol Resume tidak boleh jadi tombol mati)
+- [ ] Matikan checkbox saat sedang hold → antrian langsung lepas, chip status
+      bar hilang
+- [ ] Set jam yang **sudah lewat** hari ini (mis. sekarang 14:00, set 02:00) →
+      antrian **tidak** di-hold
+- [ ] Isi jam ngaco / kosongkan field → antrian tidak nyangkut ter-hold selamanya
+
+## 13. Aksi setelah antrian selesai (sleep / shutdown)
+
+⚠️ Bagian ini benar-benar mematikan/menidurkan komputer. **Simpan semua kerjaan
+dulu.** Kerjakan tes negatif (yang seharusnya *tidak* terjadi apa-apa) lebih dulu.
+
+Tes negatif — semua ini harus **tidak** memunculkan countdown:
+
+- [ ] Baru buka app (antrian kosong, hanya ada history) → tidak ada apa-apa
+- [ ] Set dropdown status bar ke **When done: sleep**, jalankan beberapa download,
+      lalu **Pause semua** → ⚠️ tidak ada countdown, komputer tidak tidur
+- [ ] Ulangi, lalu **Cancel semua** → ⚠️ tidak ada countdown
+- [ ] Ulangi, lalu **Delete semua** → ⚠️ tidak ada countdown
+- [ ] Ulangi dengan URL yang gagal sampai retry habis (semua jadi Error) →
+      tidak ada countdown
+
+Tes positif:
+
+- [ ] Arm **sleep**, jalankan 1 download sampai **selesai** → countdown 60 detik muncul
+- [ ] Klik **Cancel** → countdown berhenti, dropdown balik ke "When done: nothing"
+- [ ] ⚠️ Jalankan 2 download; biarkan satu **selesai**, lalu **cancel** yang kedua →
+      countdown tetap muncul (karena ada yang benar-benar selesai). Ini kasus yang
+      dulu keliru dilewati
+- [ ] ⚠️ Arm sleep, sembunyikan app ke tray, biarkan antrian selesai → window
+      **muncul sendiri** ke depan + ada notifikasi desktop, bukan tidur diam-diam
+- [ ] Escape / klik backdrop saat countdown → sama dengan Cancel (batal, bukan lanjut)
+- [ ] Restart app → dropdown selalu kembali ke **"When done: nothing"**
+      (setting ini sengaja tidak pernah disimpan)
+- [ ] Terakhir: benar-benar biarkan countdown habis → komputer tidur/shutdown
+- [ ] Catatan: kalau hibernation aktif di Windows, "sleep" bisa jadi hibernate —
+      itu keterbatasan powrprof, bukan bug
+
+## 14. Retensi history
+
+- [ ] Settings → **Keep at most** = 50; buat >50 download selesai; restart →
+      `history.json` terpotong di 50 baris terbaru
+- [ ] Isi nilai di luar rentang (mis. 10 atau 99999) → ter-clamp ke 50–5000
+- [ ] Edit manual `settings.json` jadi `"historyMaxEntries": 0`, restart, simpan
+      history → ⚠️ history **tidak** terhapus semua (Rust ikut clamp ke minimal 50)
+- [ ] **Drop entries after** = 1 hari. Tutup app, edit `history.json`: ubah
+      `finishedAt` satu baris ke timestamp >1 hari lalu. Buka app → baris itu hilang
+- [ ] ⚠️ Di file yang sama, set `finishedAt: 0` pada baris lain → baris itu
+      **tetap ada** (baris lama sebelum field ini ada tidak boleh ikut terhapus)
+- [ ] Set **Drop entries after** = 0 → tidak ada yang dihapus, berapa pun umurnya
+- [ ] Ubah nilai retensi saat app jalan → baris kedaluwarsa langsung hilang dari
+      tabel (tidak perlu restart)
+- [ ] **Clear history** → dialog delete yang biasa muncul, lengkap dengan pilihan
+      "hapus file juga"
+- [ ] Konfirmasi → semua baris selesai/error/canceled hilang; download yang sedang
+      jalan **tidak** ikut terhapus
+- [ ] Tombol Clear history disabled dan tanpa angka saat history kosong
+
+---
+
+## 15. Regresi umum
+
+- [ ] Search box, marquee-select drag, resize kolom masih normal
+- [ ] Download paralel multi-connection jalan normal, tabel tidak nge-lag saat
+      banyak download aktif
+- [ ] Tray menu masih menampilkan daftar download aktif dengan benar
+- [ ] Semua dialog masih bisa ditutup via Cancel/Done/backdrop/Escape
+- [ ] Animasi masih halus; dengan **Reduce motion** ON semua transisi jadi instan
+- [ ] Toast biasa (mis. "Couldn't open the containing folder…") masih muncul dan
+      auto-dismiss ~5 detik
+- [ ] Deep link dari browser extension masih mengisi window Add seperti biasa

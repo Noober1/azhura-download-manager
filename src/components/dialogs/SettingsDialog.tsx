@@ -12,6 +12,12 @@ export function SettingsDialog({
   notifications,
   runAtStartup,
   reduceMotion,
+  clipboardWatch,
+  scheduledStartEnabled,
+  scheduledStartTime,
+  historyMaxEntries,
+  historyRetentionDays,
+  historyCount,
   onSetMaxActive,
   onSetGlobalLimit,
   onSetMaxRetryAttempts,
@@ -20,6 +26,12 @@ export function SettingsDialog({
   onSetNotifications,
   onSetRunAtStartup,
   onSetReduceMotion,
+  onSetClipboardWatch,
+  onSetScheduledStartEnabled,
+  onSetScheduledStartTime,
+  onSetHistoryMaxEntries,
+  onSetHistoryRetentionDays,
+  onClearHistory,
   onClose,
 }: {
   maxConcurrent: number;
@@ -30,6 +42,12 @@ export function SettingsDialog({
   notifications: boolean;
   runAtStartup: boolean;
   reduceMotion: boolean;
+  clipboardWatch: boolean;
+  scheduledStartEnabled: boolean;
+  scheduledStartTime: string;
+  historyMaxEntries: number;
+  historyRetentionDays: number;
+  historyCount: number;
   onSetMaxActive: (n: number) => void;
   onSetGlobalLimit: (mbps: number) => void;
   onSetMaxRetryAttempts: (n: number) => void;
@@ -38,6 +56,12 @@ export function SettingsDialog({
   onSetNotifications: (v: boolean) => void;
   onSetRunAtStartup: (v: boolean) => void;
   onSetReduceMotion: (v: boolean) => void;
+  onSetClipboardWatch: (v: boolean) => void;
+  onSetScheduledStartEnabled: (v: boolean) => void;
+  onSetScheduledStartTime: (v: string) => void;
+  onSetHistoryMaxEntries: (n: number) => void;
+  onSetHistoryRetentionDays: (n: number) => void;
+  onClearHistory: () => void;
   onClose: () => void;
 }) {
   const panelRef = useDialogA11y<HTMLDivElement>(onClose);
@@ -112,6 +136,40 @@ export function SettingsDialog({
               />
               <span className="field-unit">0–10 · 0 = off</span>
             </div>
+            <div className="check-row">
+              <input
+                type="checkbox"
+                id="clip-watch"
+                checked={clipboardWatch}
+                onChange={(e) => onSetClipboardWatch(e.currentTarget.checked)}
+              />
+              <label htmlFor="clip-watch">Watch clipboard for links</label>
+              <span className="field-unit">Offers copied http(s) links as downloads</span>
+            </div>
+          </fieldset>
+
+          <fieldset className="dialog-section">
+            <legend className="dialog-section-title">Scheduling</legend>
+            <div className="check-row">
+              <input
+                type="checkbox"
+                id="sched-enabled"
+                checked={scheduledStartEnabled}
+                onChange={(e) => onSetScheduledStartEnabled(e.currentTarget.checked)}
+              />
+              <label htmlFor="sched-enabled">Hold the queue until a set time</label>
+            </div>
+            <div className="field-row">
+              <label htmlFor="sched-time">Start downloads at</label>
+              <input
+                id="sched-time"
+                type="time"
+                value={scheduledStartTime}
+                disabled={!scheduledStartEnabled}
+                onChange={(e) => onSetScheduledStartTime(e.currentTarget.value)}
+              />
+              <span className="field-unit">Every day · Resume overrides it</span>
+            </div>
           </fieldset>
 
           <fieldset className="dialog-section">
@@ -168,6 +226,46 @@ export function SettingsDialog({
                 onChange={(e) => onSetNotifications(e.currentTarget.checked)}
               />
               <label htmlFor="notify">Show desktop notifications</label>
+            </div>
+          </fieldset>
+
+          <fieldset className="dialog-section">
+            <legend className="dialog-section-title">History</legend>
+            <div className="field-row">
+              <label htmlFor="hist-max">Keep at most</label>
+              <input
+                id="hist-max"
+                type="number"
+                min={50}
+                max={5000}
+                step={50}
+                value={historyMaxEntries}
+                onChange={(e) => {
+                  const n = Number(e.currentTarget.value);
+                  if (Number.isFinite(n)) onSetHistoryMaxEntries(n);
+                }}
+              />
+              <span className="field-unit">50–5000 entries</span>
+            </div>
+            <div className="field-row">
+              <label htmlFor="hist-days">Drop entries after</label>
+              <input
+                id="hist-days"
+                type="number"
+                min={0}
+                max={365}
+                value={historyRetentionDays}
+                onChange={(e) => {
+                  const n = Number(e.currentTarget.value);
+                  if (Number.isFinite(n)) onSetHistoryRetentionDays(n);
+                }}
+              />
+              <span className="field-unit">0–365 days · 0 = keep forever</span>
+            </div>
+            <div className="field-row">
+              <button className="danger" disabled={historyCount === 0} onClick={onClearHistory}>
+                Clear history{historyCount > 0 ? ` (${historyCount})` : ""}
+              </button>
             </div>
           </fieldset>
         </div>

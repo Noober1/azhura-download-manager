@@ -31,6 +31,26 @@ pub(crate) struct AppSettings {
     /// (today's behavior). Applied entirely on the frontend (see
     /// `useDownloads.ts`); Rust only persists it.
     max_retry_attempts: u32,
+    /// Watch the clipboard for copied http(s) links and offer them as
+    /// downloads. Off by default: a watcher that reacts to every copy is
+    /// intrusive enough that it has to be opt-in. Applied entirely on the
+    /// frontend (see `useClipboardWatch.ts`); Rust only persists it.
+    clipboard_watch: bool,
+    /// Hold the queue until `scheduled_start_time` each day, so downloads
+    /// added in the meantime wait instead of starting. Applied entirely on
+    /// the frontend (see `queueSchedule.ts`); Rust only persists it.
+    scheduled_start_enabled: bool,
+    /// "HH:MM", 24-hour. Only meaningful when `scheduled_start_enabled`.
+    scheduled_start_time: String,
+    /// Cap on rows kept in history.json. Unlike every other field here this
+    /// one IS read by Rust — `save_history` is the only writer, so it's the
+    /// backstop behind the frontend's own retention sweep.
+    pub(crate) history_max_entries: u32,
+    /// Drop history rows finished more than this many days ago. 0 = keep
+    /// forever (the behavior before this setting existed). Applied on the
+    /// frontend, where the download list actually lives (see
+    /// `useHistoryPersistence.ts`).
+    history_retention_days: u32,
 }
 
 impl Default for AppSettings {
@@ -43,6 +63,11 @@ impl Default for AppSettings {
             notifications: true,
             reduce_motion: false,
             max_retry_attempts: 3,
+            clipboard_watch: false,
+            scheduled_start_enabled: false,
+            scheduled_start_time: "02:00".to_string(),
+            history_max_entries: 500,
+            history_retention_days: 0,
         }
     }
 }

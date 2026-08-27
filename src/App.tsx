@@ -9,10 +9,14 @@ import { commands } from "./bindings";
 import type { DownloadItem } from "./types";
 import { isResumable, isRedownload } from "./format";
 import { showToast } from "./toast";
+import { notify } from "./notify";
+import { TERMINAL_STATES } from "./constants";
 import { ToastHost } from "./components/Toast";
 import { useNativeShell } from "./ui";
 import { useDownloads } from "./hooks/useDownloads";
 import { useScheduler } from "./hooks/useScheduler";
+import { useQueueSchedule } from "./hooks/useQueueSchedule";
+import { useClipboardWatch } from "./hooks/useClipboardWatch";
 import { useHistoryPersistence } from "./hooks/useHistoryPersistence";
 import { useSettings } from "./hooks/useSettings";
 import { useTrayPush } from "./hooks/useTrayPush";
@@ -37,6 +41,7 @@ import { ExtensionsDialog } from "./components/dialogs/ExtensionsDialog";
 import { DeleteDialog } from "./components/dialogs/DeleteDialog";
 import { SpeedCapDialog } from "./components/dialogs/SpeedCapDialog";
 import { ConnRestartDialog } from "./components/dialogs/ConnRestartDialog";
+import { PowerActionDialog, type PowerAction } from "./components/dialogs/PowerActionDialog";
 import "./App.css";
 
 function App() {
@@ -48,6 +53,11 @@ function App() {
   const [speedCapDialog, setSpeedCapDialog] = useState<{ items: DownloadItem[]; mbps: number } | null>(
     null,
   );
+  // What to do once the queue drains. Armed per session and never persisted —
+  // a setting that survived a restart could suspend the machine days later
+  // for a queue the user had long forgotten arming.
+  const [postQueueAction, setPostQueueAction] = useState<"none" | PowerAction>("none");
+  const [pendingPower, setPendingPower] = useState<PowerAction | null>(null);
 
   const tableWrapRef = useRef<HTMLElement>(null);
   const didDragRef = useRef(false);
@@ -114,8 +124,11 @@ function App() {
     downloadsApi.resumeMany,
   );
 
-  useScheduler(downloads, settings.maxConcurrent, downloadsApi.startRun);
-  useHistoryPersistence(downloads, setDownloads, downloadsRef);
+  const queue = useQueueSchedule(settings.scheduledStartEnabled, settings.scheduledStartTime);
+
+  useScheduler(downloads, settings.maxConcurrent, downloadsApi.startRun, queue.held);
+  useHistoryPersistence(downloads, setDownloads, downloadsRef, settings.historyRetentionDays);
+  useClipboardWatch(settings.clipboardWatch, downloadsRef);
   useTrayPush(downloadsRef);
   useDeepLinkCapture(downloadsRef, downloadsApi.addFromPayload, downloadsApi.patchItem);
   const { refresh: refreshMissing } = useMissingRefresh(downloadsRef, downloadsApi.patchItem);
@@ -150,6 +163,49 @@ function App() {
       .catch(() => {});
   }, []);
 
+  // Fires the armed post-queue action once the queue drains.
+  //
+  // Deliberately NOT a bare "pending hit zero" check: pausing, canceling or
+  // deleting every row empties the queue too, and suspending the machine
+  // because the user hit Pause would be the worst bug in the app. Requiring
+  // that a row which *was* pending actually reached "completed" is what
+  // separates "the work finished" from "the user stopped it".
+  // Accumulates every id seen pending since the last drain, rather than being
+  // replaced with the currently-pending set each pass: a download that
+  // finishes while others are still running leaves the pending set on that
+  // render, and replacing would forget it ever ran. The queue would then
+  // drain with only the *last* few ids remembered — so finishing two files
+  // and canceling a third would look like "nothing completed" and silently
+  // skip the action the user armed.
+  const pendingIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const pendingNow = downloads.filter((d) =>
+      ["downloading", "verifying", "queued"].includes(d.state),
+    );
+    for (const d of pendingNow) pendingIdsRef.current.add(d.id);
+    if (pendingNow.length > 0) return;
+
+    // Drained — this episode is over either way, so the set resets whether or
+    // not anything fires below.
+    const wasPending = pendingIdsRef.current;
+    pendingIdsRef.current = new Set();
+    if (wasPending.size === 0) return;
+    if (postQueueAction === "none") return;
+    if (!downloads.some((d) => wasPending.has(d.id) && d.state === "completed")) return;
+
+    // The countdown lives in the main window, so it has to be on screen for
+    // the user to have any chance of canceling it — draining while hidden in
+    // the tray would otherwise sleep the machine 60s later, silently.
+    const w = getCurrentWindow();
+    w.show()
+      .then(() => w.setFocus())
+      .catch(() => {});
+    const verb = postQueueAction === "sleep" ? "sleep" : "shut down";
+    notify("Downloads finished", `The computer will ${verb} in 60 seconds.`);
+    setPendingPower(postQueueAction);
+    setPostQueueAction("none"); // one shot per arming
+  }, [downloads, postQueueAction]);
+
   function handleRowContext(e: ReactMouseEvent, item: DownloadItem) {
     if (!selectedIds.has(item.id)) {
       anchorRef.current = item.id;
@@ -170,12 +226,23 @@ function App() {
     } else openDetail(item.id);
   }
 
+  // Explicitly hitting Resume outranks a pending scheduled start — otherwise
+  // the button would silently do nothing for the whole hold window.
+  function resumeWithOverride(items: DownloadItem[]) {
+    if (queue.held) {
+      queue.release();
+      showToast("Scheduled start overridden — the queue is running now.", "info");
+    }
+    downloadsApi.resumeMany(items);
+  }
+
   const anyDialogOpen = !!(
     downloadsApi.pendingDelete ||
     showSettings ||
     showExtensions ||
     menu ||
     speedCapDialog ||
+    pendingPower ||
     downloadsApi.connRestart
   );
 
@@ -186,6 +253,11 @@ function App() {
     (d) => d.state === "downloading" || d.state === "verifying",
   ).length;
   const queuedCount = downloads.filter((d) => d.state === "queued").length;
+  // What "Clear history" clears: the same terminal-state rows `historyPayload`
+  // persists to history.json.
+  const historyRows = downloads.filter((d) =>
+    (TERMINAL_STATES as readonly string[]).includes(d.state),
+  );
 
   const selectedItems = downloads.filter((d) => selectedIds.has(d.id));
   const resumableSel = selectedItems.filter(isResumable);
@@ -234,7 +306,7 @@ function App() {
         queuedCount={queuedCount}
         searchQuery={sorted.searchQuery}
         onSearchChange={sorted.setSearchQuery}
-        onResume={downloadsApi.resumeMany}
+        onResume={resumeWithOverride}
         onPause={downloadsApi.pauseMany}
         onCancel={downloadsApi.cancelMany}
         onRequestDelete={downloadsApi.requestDelete}
@@ -282,6 +354,21 @@ function App() {
       {/* ---- Status bar ---- */}
       <div className="statusbar">
         <span>Azhura Download Manager{version ? ` v${version}` : ""}</span>
+        {queue.held && (
+          <span className="sb-hold" title="Queued downloads are waiting for the scheduled start">
+            Queue starts at {settings.scheduledStartTime}
+          </span>
+        )}
+        <select
+          className="sb-postqueue"
+          aria-label="Action when the queue finishes"
+          value={postQueueAction}
+          onChange={(e) => setPostQueueAction(e.currentTarget.value as "none" | PowerAction)}
+        >
+          <option value="none">When done: nothing</option>
+          <option value="sleep">When done: sleep</option>
+          <option value="shutdown">When done: shut down</option>
+        </select>
         <span
           className="sb-grabber"
           title={
@@ -307,6 +394,12 @@ function App() {
             notifications={settings.notifications}
             runAtStartup={settings.runAtStartup}
             reduceMotion={settings.reduceMotion}
+            clipboardWatch={settings.clipboardWatch}
+            scheduledStartEnabled={settings.scheduledStartEnabled}
+            scheduledStartTime={settings.scheduledStartTime}
+            historyMaxEntries={settings.historyMaxEntries}
+            historyRetentionDays={settings.historyRetentionDays}
+            historyCount={historyRows.length}
             onSetMaxActive={settings.setMaxActive}
             onSetGlobalLimit={settings.setGlobalLimit}
             onSetMaxRetryAttempts={settings.setMaxRetryAttemptsSetting}
@@ -315,6 +408,17 @@ function App() {
             onSetNotifications={settings.setNotificationsSetting}
             onSetRunAtStartup={settings.setRunAtStartupSetting}
             onSetReduceMotion={settings.setReduceMotionSetting}
+            onSetClipboardWatch={settings.setClipboardWatchSetting}
+            onSetScheduledStartEnabled={settings.setScheduledStartEnabledSetting}
+            onSetScheduledStartTime={settings.setScheduledStartTimeSetting}
+            onSetHistoryMaxEntries={settings.setHistoryMaxEntriesSetting}
+            onSetHistoryRetentionDays={settings.setHistoryRetentionDaysSetting}
+            onClearHistory={() => {
+              // Reuses the normal delete flow rather than a parallel one, so
+              // the user still gets the "also delete the files" choice.
+              setShowSettings(false);
+              downloadsApi.requestDelete(historyRows);
+            }}
             onClose={() => setShowSettings(false)}
           />
         )}
@@ -342,7 +446,7 @@ function App() {
             canModify={selectedItems.length > 0}
             currentSpeedLimit={singleSelected?.speedLimit ?? null}
             currentConnections={singleSelected?.connections ?? null}
-            onResume={() => downloadsApi.resumeMany(resumableSel)}
+            onResume={() => resumeWithOverride(resumableSel)}
             onPause={() => downloadsApi.pauseMany(pausableSel)}
             onCancel={() => downloadsApi.cancelMany(cancelableSel)}
             onReveal={() =>
@@ -406,6 +510,22 @@ function App() {
             itemCount={downloadsApi.connRestart.items.length}
             onApplyOnNextStart={() => downloadsApi.setConnRestart(null)}
             onRestartNow={downloadsApi.confirmConnRestart}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* ---- Post-queue sleep/shutdown countdown ---- */}
+      <AnimatePresence>
+        {pendingPower && (
+          <PowerActionDialog
+            action={pendingPower}
+            onCancel={() => setPendingPower(null)}
+            onConfirm={() => {
+              commands
+                .runPowerAction(pendingPower)
+                .catch(() => showToast("Couldn't run the power action."));
+              setPendingPower(null);
+            }}
           />
         )}
       </AnimatePresence>

@@ -26,6 +26,17 @@ export function ToastHost() {
             exit="exit"
           >
             <span>{t.message}</span>
+            {t.action && (
+              <button
+                className="toast-action"
+                onClick={() => {
+                  t.action?.onClick();
+                  dismissToast(t.id);
+                }}
+              >
+                {t.action.label}
+              </button>
+            )}
             <button className="toast-close" aria-label="Dismiss" onClick={() => dismissToast(t.id)}>
               ×
             </button>

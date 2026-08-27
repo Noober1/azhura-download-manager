@@ -122,6 +122,7 @@ export const commands = {
 	setCategoryPath: (category: string, path: string) => __TAURI_INVOKE<null>("set_category_path", { category, path }),
 	loadHistory: () => __TAURI_INVOKE<HistoryLoad_Serialize>("load_history"),
 	saveHistory: (entries: HistoryEntry_Deserialize[]) => __TAURI_INVOKE<null>("save_history", { entries }),
+	runPowerAction: (action: string) => __TAURI_INVOKE<null>("run_power_action", { action }),
 	grabberStatus: () => __TAURI_INVOKE<GrabberStatus>("grabber_status"),
 };
 
@@ -150,6 +151,34 @@ export type AppSettings = {
 	 *  `useDownloads.ts`); Rust only persists it.
 	 */
 	maxRetryAttempts?: number,
+	/**
+	 *  Watch the clipboard for copied http(s) links and offer them as
+	 *  downloads. Off by default: a watcher that reacts to every copy is
+	 *  intrusive enough that it has to be opt-in. Applied entirely on the
+	 *  frontend (see `useClipboardWatch.ts`); Rust only persists it.
+	 */
+	clipboardWatch?: boolean,
+	/**
+	 *  Hold the queue until `scheduled_start_time` each day, so downloads
+	 *  added in the meantime wait instead of starting. Applied entirely on
+	 *  the frontend (see `queueSchedule.ts`); Rust only persists it.
+	 */
+	scheduledStartEnabled?: boolean,
+	/**  "HH:MM", 24-hour. Only meaningful when `scheduled_start_enabled`. */
+	scheduledStartTime?: string,
+	/**
+	 *  Cap on rows kept in history.json. Unlike every other field here this
+	 *  one IS read by Rust — `save_history` is the only writer, so it's the
+	 *  backstop behind the frontend's own retention sweep.
+	 */
+	historyMaxEntries?: number,
+	/**
+	 *  Drop history rows finished more than this many days ago. 0 = keep
+	 *  forever (the behavior before this setting existed). Applied on the
+	 *  frontend, where the download list actually lives (see
+	 *  `useHistoryPersistence.ts`).
+	 */
+	historyRetentionDays?: number,
 };
 
 export type ConnInfo = {
