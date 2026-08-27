@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { check, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { showToast } from "../toast";
+
+/** How often to re-test window visibility while the launch check is deferred.
+ *  Only ever runs on an autostart launch, and stops the moment the window is
+ *  revealed. */
+const VISIBILITY_POLL_MS = 4000;
 
 /** What the update flow is currently doing. `idle` covers both "haven't looked
  *  yet" and "looked, nothing there" — the difference only matters to the manual
@@ -112,11 +118,46 @@ export function useUpdateCheck() {
   // One silent check per launch. Deliberately not on an interval: this app can
   // sit open for days, and a background check that pops a dialog mid-download
   // would interrupt exactly when the user cares least.
+  //
+  // Held until the window is actually on screen. An autostart launch
+  // (`--autostart`) deliberately stays hidden in the tray, and a modal update
+  // prompt rendered into a hidden window is worse than useless: nobody can see
+  // or answer it, yet it still counts as an open dialog. Forcing the window
+  // open instead would override the very setting the user chose, so this waits
+  // for them to open it themselves.
   const didLaunchCheck = useRef(false);
   useEffect(() => {
     if (didLaunchCheck.current) return;
     didLaunchCheck.current = true;
-    runCheck(true);
+
+    let cancelled = false;
+    let timer: ReturnType<typeof setInterval> | undefined;
+
+    // `isVisible` failing is treated as visible: a missed update prompt is a
+    // worse outcome than one that arrives while the window happens to be
+    // hidden, and this is the ordinary (non-autostart) path.
+    async function checkIfVisible(): Promise<boolean> {
+      const visible = await getCurrentWindow()
+        .isVisible()
+        .catch(() => true);
+      if (cancelled || !visible) return false;
+      runCheck(true);
+      return true;
+    }
+
+    checkIfVisible().then((done) => {
+      if (done || cancelled) return;
+      timer = setInterval(() => {
+        checkIfVisible().then((ok) => {
+          if (ok && timer) clearInterval(timer);
+        });
+      }, VISIBILITY_POLL_MS);
+    });
+
+    return () => {
+      cancelled = true;
+      if (timer) clearInterval(timer);
+    };
   }, [runCheck]);
 
   return { state, checkNow, install, dismiss };
