@@ -67,12 +67,30 @@ dependency.
 - [x] **Auto-updater.** `tauri-plugin-updater` + `tauri-plugin-process` are
       wired up, `tauri.conf.json` gained an `updater` block pointing at the
       GitHub Releases `latest.json` feed, and `.github/workflows/release.yml`
-      builds/signs/publishes on a `v*` tag via `tauri-action`. In-app the
-      check runs once silently at launch (`src/hooks/useUpdateCheck.ts`) and
-      on demand from Settings → System, prompting through
-      `src/components/dialogs/UpdateDialog.tsx`. Deliberately no periodic
-      re-check: this app stays open for days and a dialog appearing mid-
-      download would interrupt at the worst moment.
+      builds/signs/publishes on a `v*` tag via `tauri-action`.
+
+      In-app (`src/hooks/useUpdateCheck.ts`) the check runs once at launch and
+      on demand from Settings → System. A found update downloads **silently**
+      — no dialog, no progress UI — because a prompt raised mid-download only
+      offers the user a wait. When it lands, a toast with a Restart button
+      plus a persistent `Restart to update` link in the status bar; the link
+      exists because a dismissed toast would otherwise strand a downloaded
+      update with no way back to it. Both routes go through
+      `src/components/dialogs/UpdateRestartDialog.tsx`, which names how many
+      downloads will be paused — one stray click taking the app down
+      mid-transfer is not forgivable.
+
+      Installing goes through `prepare_for_update` (`windows/mod.rs`), which
+      shares `begin_shutdown` with the tray-quit path. The installer
+      terminates the process directly, which otherwise skipped that entirely:
+      in-flight downloads died without their resume sidecars written, and any
+      history still inside the frontend's 400ms debounce was lost.
+
+      The launch check is held until the window is actually visible — an
+      autostart launch stays hidden in the tray, where the toast would fire
+      where nobody can see it. There is deliberately no periodic re-check:
+      this app stays open for days, and re-checking on a timer would only
+      discard or duplicate an already-downloaded update.
 
       Note the earlier claim here that "releases are already being cut" was
       wrong — `gh release list` and `git tag` were both empty, so no release

@@ -232,19 +232,20 @@ Tes positif:
 
 # PHASE 4 — auto-updater
 
-⚠️ **Prasyarat: signing key harus sudah diisi.** Selama `pubkey` di
-`src-tauri/tauri.conf.json` masih `REPLACE_WITH_TAURI_SIGNER_PUBLIC_KEY`, app
-tetap build dan jalan normal, tapi setiap pengecekan update akan gagal. Build
-**tidak** akan mengeluh — kegagalannya baru muncul saat runtime.
+Signing sudah di-setup (keypair `74AFA223D85BD707`, private key di luar repo,
+dua secret sudah ada di GitHub Actions). Yang masih perlu dipastikan sekali:
 
-Langkah setup (sekali saja, lihat juga catatan Phase 4 di TODO.md):
+- [ ] Secret `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` isinya cocok dengan password
+      yang mengenkripsi private key sekarang. Kalau tidak, workflow gagal di
+      tahap signing
+- [ ] Private key sudah di-backup offline — hilang berarti semua install yang
+      sudah tersebar tidak bisa lagi memverifikasi update, dan satu-satunya
+      jalan keluar buat user adalah reinstall manual
 
-1. `bunx tauri signer generate -w %USERPROFILE%\.tauri\azhura.key`
-2. Salin **public key** ke `pubkey` di `src-tauri/tauri.conf.json`
-3. Simpan isi file private key sebagai secret repo `TAURI_SIGNING_PRIVATE_KEY`,
-   dan passwordnya sebagai `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
-4. Backup private key offline — hilang berarti semua install yang sudah
-   tersebar tidak bisa lagi memverifikasi update
+⚠️ Kalau suatu saat pubkey diganti: build dan signing **tetap hijau** walau
+pubkey-nya salah pasangan. Kegagalannya muncul di sisi *client* saat update,
+jadi perubahan key wajib diuji lewat rilis beneran, bukan lewat build yang
+lolos.
 
 ## 15. Pengecekan update
 
