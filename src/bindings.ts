@@ -123,7 +123,13 @@ export const commands = {
 	loadHistory: () => __TAURI_INVOKE<HistoryLoad_Serialize>("load_history"),
 	saveHistory: (entries: HistoryEntry_Deserialize[]) => __TAURI_INVOKE<null>("save_history", { entries }),
 	runPowerAction: (action: string) => __TAURI_INVOKE<null>("run_power_action", { action }),
-	prepareForUpdate: () => __TAURI_INVOKE<null>("prepare_for_update"),
+	/**
+	 *  Same preparation, minus the exit: the update installer takes the process
+	 *  down itself moments later. Without this the installer would kill downloads
+	 *  mid-flight and drop whatever history hadn't been debounce-saved yet.
+	 *  The caller waits out the same grace period before installing.
+	 */
+	prepareForUpdate: () => __TAURI_INVOKE<void>("prepare_for_update"),
 	grabberStatus: () => __TAURI_INVOKE<GrabberStatus>("grabber_status"),
 };
 
