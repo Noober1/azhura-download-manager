@@ -80,14 +80,17 @@ dependency.
       updater is a prerequisite for the *first* release rather than a fix for
       stranded users.
 
-      **Still needs the user before it works:** a signing keypair
-      (`bunx tauri signer generate`), the public half pasted over
-      `pubkey: "REPLACE_WITH_TAURI_SIGNER_PUBLIC_KEY"` in
-      `src-tauri/tauri.conf.json`, and the private half plus its password
-      stored as the `TAURI_SIGNING_PRIVATE_KEY` /
-      `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` repo secrets. A wrong or
-      placeholder pubkey builds fine and only fails at update time, so this
-      cannot be left half-done.
+      Signing is set up: the keypair lives outside the repo, the public half
+      is in `pubkey` above, and the private half plus its password are the
+      `TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` repo
+      secrets. Note a wrong pubkey builds and signs cleanly and only fails on
+      the *client* at update time, so any future key change has to be
+      verified against a real release, not against a green build.
+
+      The signing key is a permanent trust anchor: once a release ships, its
+      public half is baked into every install and cannot be rotated without
+      making every user reinstall by hand. Keep the private key backed up
+      offline, and never let it reach a log, a terminal, or a transcript.
 
 ## Features
 
