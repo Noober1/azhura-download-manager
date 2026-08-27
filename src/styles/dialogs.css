@@ -16,7 +16,9 @@
   max-width: 440px;
   background: var(--canvas);
   border: 1px solid var(--border-strong);
-  border-radius: var(--radius-panel);
+  /* Square: the head and actions bars run edge to edge with their own fills,
+     so a rounded frame left their corners sitting proud of the curve. */
+  border-radius: 0;
   box-shadow: var(--sh-float);
   /* The overlay centers its child, so a dialog taller than the window spills
      out of *both* ends and loses its title and its buttons at once — the main

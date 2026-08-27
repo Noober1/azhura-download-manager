@@ -11,8 +11,7 @@
   --bw: 1px;
   --bw-lg: 1px;
   --radius-field: 2px;
-  --radius-card: 5px;
-  --radius-panel: 6px; /* floating surfaces: dialog, ctx-menu, toast */
+  --radius-card: 5px; /* floating surfaces: ctx-menu, toast */
   /* Kept as tokens (rather than deleted) because dozens of rules below still
      reference them; the neobrutalist offset shadow is simply gone now. */
   --sh-sm: none;
