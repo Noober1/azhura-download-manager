@@ -32,7 +32,11 @@ export type UpdateState = {
 
 const IDLE: UpdateState = { stage: "idle", version: null, percent: 0 };
 
-export function useUpdateCheck() {
+/** `onRequestInstall` fires when the user accepts the ready-toast. It asks for
+ *  the restart rather than performing it: restarting interrupts whatever is
+ *  downloading, so the decision belongs behind a confirmation the caller owns
+ *  (it's the one that knows how many downloads are in flight). */
+export function useUpdateCheck(onRequestInstall: () => void) {
   const [state, setState] = useState<UpdateState>(IDLE);
 
   // The `Update` handle owns the downloaded package; it has to survive from the
@@ -42,9 +46,9 @@ export function useUpdateCheck() {
   const updateRef = useRef<Update | null>(null);
 
   // Declared up front so the callbacks below can reach the latest values
-  // without taking each other as dependencies. Assigned further down, once
-  // the values they mirror exist.
-  const installRef = useRef<() => void>(() => {});
+  // without taking each other as dependencies.
+  const requestInstallRef = useRef(onRequestInstall);
+  requestInstallRef.current = onRequestInstall;
   const stageRef = useRef<UpdateStage>("idle");
   stageRef.current = state.stage;
 
@@ -79,9 +83,10 @@ export function useUpdateCheck() {
     setState({ stage: "ready", version: update.version, percent: 100 });
     showToast(`Version ${update.version} is ready to install.`, "info", {
       label: "Restart now",
-      // Read off the ref rather than closing over a local `install`: this
-      // toast can sit on screen while the rest of the flow moves on.
-      onClick: () => installRef.current(),
+      // Opens the confirmation rather than installing outright — this toast
+      // can be clicked while a download is mid-flight. Read off the ref
+      // because the toast outlives the render that created it.
+      onClick: () => requestInstallRef.current(),
     });
   }, []);
 
@@ -156,8 +161,6 @@ export function useUpdateCheck() {
       showToast("Update installed — restart to finish.", "info");
     }
   }, []);
-
-  installRef.current = install;
 
   // One silent check per launch. Deliberately not on an interval: this app can
   // sit open for days, and re-checking on a timer would mean discarding or

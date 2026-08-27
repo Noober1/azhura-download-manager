@@ -43,6 +43,7 @@ import { DeleteDialog } from "./components/dialogs/DeleteDialog";
 import { SpeedCapDialog } from "./components/dialogs/SpeedCapDialog";
 import { ConnRestartDialog } from "./components/dialogs/ConnRestartDialog";
 import { PowerActionDialog, type PowerAction } from "./components/dialogs/PowerActionDialog";
+import { UpdateRestartDialog } from "./components/dialogs/UpdateRestartDialog";
 import "./App.css";
 
 function App() {
@@ -59,6 +60,10 @@ function App() {
   // for a queue the user had long forgotten arming.
   const [postQueueAction, setPostQueueAction] = useState<"none" | PowerAction>("none");
   const [pendingPower, setPendingPower] = useState<PowerAction | null>(null);
+  // Restarting to apply an update interrupts whatever is downloading, so it
+  // always goes through a confirmation — even though the downloads are only
+  // paused, not lost.
+  const [confirmRestart, setConfirmRestart] = useState(false);
 
   const tableWrapRef = useRef<HTMLElement>(null);
   const didDragRef = useRef(false);
@@ -130,7 +135,7 @@ function App() {
   useScheduler(downloads, settings.maxConcurrent, downloadsApi.startRun, queue.held);
   useHistoryPersistence(downloads, setDownloads, downloadsRef, settings.historyRetentionDays);
   useClipboardWatch(settings.clipboardWatch, downloadsRef);
-  const updater = useUpdateCheck();
+  const updater = useUpdateCheck(() => setConfirmRestart(true));
   useTrayPush(downloadsRef);
   useDeepLinkCapture(downloadsRef, downloadsApi.addFromPayload, downloadsApi.patchItem);
   const { refresh: refreshMissing } = useMissingRefresh(downloadsRef, downloadsApi.patchItem);
@@ -245,6 +250,7 @@ function App() {
     menu ||
     speedCapDialog ||
     pendingPower ||
+    confirmRestart ||
     downloadsApi.connRestart
   );
 
@@ -360,7 +366,7 @@ function App() {
           <button
             className="sb-update"
             title={`Version ${updater.state.version} has been downloaded — restarting will apply it`}
-            onClick={updater.install}
+            onClick={() => setConfirmRestart(true)}
           >
             Restart to update
           </button>
@@ -434,6 +440,22 @@ function App() {
             updateChecking={updater.state.stage === "checking"}
             onCheckForUpdates={updater.checkNow}
             onClose={() => setShowSettings(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* ---- Update restart confirmation ---- */}
+      <AnimatePresence>
+        {confirmRestart && (
+          <UpdateRestartDialog
+            version={updater.state.version}
+            activeCount={activeCount}
+            queuedCount={queuedCount}
+            onCancel={() => setConfirmRestart(false)}
+            onConfirm={() => {
+              setConfirmRestart(false);
+              updater.install();
+            }}
           />
         )}
       </AnimatePresence>

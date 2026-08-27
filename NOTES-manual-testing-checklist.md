@@ -283,12 +283,23 @@ memberi tahu setelah ada yang bisa dilakukan.
 - [ ] Settings → Check for updates saat update sudah ter-download → toast
       "An update is already downloaded and ready." (⚠️ bukan mengulang
       download dari nol)
-- [ ] Klik **Restart to update** → status bar berubah jadi "Updating…", lalu
-      app restart di versi baru
+- [ ] Klik **Restart to update** → muncul dialog konfirmasi
+      **"Restart to install version 0.2.3?"**, bukan langsung restart
+- [ ] Klik tombol **Restart now** di toast → dialog konfirmasi yang sama
+      muncul (dua jalur masuk, satu konfirmasi)
+- [ ] Klik **Cancel** / Escape / klik backdrop → tidak jadi restart, link di
+      status bar tetap ada
+- [ ] ⚠️ Buka dialog saat ada **download aktif atau queued** → dialog
+      menyebutkan jumlahnya, mis. "2 downloads will be paused first and can be
+      resumed afterwards"
+- [ ] Buka dialog saat tidak ada download sama sekali → baris jumlah itu
+      **tidak** muncul
+- [ ] Konfirmasi **Restart now** → status bar jadi "Updating…", app restart di
+      versi baru
 - [ ] ⚠️ **Uji dengan download aktif:** mulai satu download besar, tunggu
-      update siap, lalu klik Restart to update → setelah app hidup lagi,
-      download itu berstatus **paused** dan bisa di-**Resume** melanjutkan dari
-      posisi terakhir, bukan mengulang dari 0
+      update siap, konfirmasi restart → setelah app hidup lagi, download itu
+      berstatus **paused** dan bisa di-**Resume** melanjutkan dari posisi
+      terakhir, bukan mengulang dari 0
 - [ ] ⚠️ Setelah update, history masih lengkap — termasuk download yang baru
       saja selesai beberapa detik sebelum restart (ini yang dilindungi
       `prepare_for_update`; tanpa itu, entry di dalam debounce 400ms hilang)
