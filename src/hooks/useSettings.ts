@@ -23,6 +23,7 @@ export function useSettings() {
   const [scheduledStartTime, setScheduledStartTime] = useState("02:00");
   const [historyMaxEntries, setHistoryMaxEntries] = useState(500);
   const [historyRetentionDays, setHistoryRetentionDays] = useState(0);
+  const [autoInstallUpdates, setAutoInstallUpdates] = useState(true);
 
   useTheme();
 
@@ -52,6 +53,7 @@ export function useSettings() {
         setScheduledStartTime(s.scheduledStartTime ?? "02:00");
         setHistoryMaxEntries(s.historyMaxEntries ?? 500);
         setHistoryRetentionDays(s.historyRetentionDays ?? 0);
+        setAutoInstallUpdates(s.autoInstallUpdates ?? true);
         if (globalLimitMbps > 0) {
           commands.setGlobalSpeedLimit({
             bytesPerSec: Math.round(globalLimitMbps * 1024 * 1024),
@@ -98,6 +100,7 @@ export function useSettings() {
       scheduledStartTime,
       historyMaxEntries,
       historyRetentionDays,
+      autoInstallUpdates,
       ...overrides,
     } as AppSettings);
   }
@@ -184,6 +187,11 @@ export function useSettings() {
     persistSettings({ historyRetentionDays: v });
   }
 
+  function setAutoInstallUpdatesSetting(v: boolean) {
+    setAutoInstallUpdates(v);
+    persistSettings({ autoInstallUpdates: v });
+  }
+
   // Optimistic: flips the checkbox immediately, then reverts it if the OS
   // call actually fails (e.g. the registry key is locked down).
   function setRunAtStartupSetting(v: boolean) {
@@ -205,6 +213,7 @@ export function useSettings() {
     scheduledStartTime,
     historyMaxEntries,
     historyRetentionDays,
+    autoInstallUpdates,
     setMaxActive,
     setGlobalLimit,
     setMaxRetryAttemptsSetting,
@@ -218,5 +227,6 @@ export function useSettings() {
     setScheduledStartTimeSetting,
     setHistoryMaxEntriesSetting,
     setHistoryRetentionDaysSetting,
+    setAutoInstallUpdatesSetting,
   };
 }

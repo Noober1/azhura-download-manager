@@ -47,6 +47,13 @@ jobs:
           releaseBody: "See the assets below to download and install this version."
           # Published as a draft so a broken build can be discarded before
           # anyone's updater sees it -- `releases/latest` skips drafts.
+          #
+          # The draft is also the place to mark a release critical: edit the
+          # latest.json asset to add `"critical": true` at the top level before
+          # publishing. Installed clients read it through the updater's
+          # rawJson and restart themselves instead of waiting to be told
+          # (see readCritical in src/hooks/useUpdateCheck.ts). Reserve it for
+          # fixes that genuinely can't wait -- it interrupts everyone.
           releaseDraft: true
           prerelease: false
           # Emits latest.json, the feed tauri.conf.json's updater endpoint

@@ -135,7 +135,12 @@ function App() {
   useScheduler(downloads, settings.maxConcurrent, downloadsApi.startRun, queue.held);
   useHistoryPersistence(downloads, setDownloads, downloadsRef, settings.historyRetentionDays);
   useClipboardWatch(settings.clipboardWatch, downloadsRef);
-  const updater = useUpdateCheck(() => setConfirmRestart(true));
+  const updater = useUpdateCheck(() => setConfirmRestart(true), {
+    autoInstall: settings.autoInstallUpdates,
+    inFlight: downloads.filter((d) =>
+      ["downloading", "verifying", "queued"].includes(d.state),
+    ).length,
+  });
   useTrayPush(downloadsRef);
   useDeepLinkCapture(downloadsRef, downloadsApi.addFromPayload, downloadsApi.patchItem);
   const { refresh: refreshMissing } = useMissingRefresh(downloadsRef, downloadsApi.patchItem);
@@ -438,6 +443,8 @@ function App() {
               downloadsApi.requestDelete(historyRows);
             }}
             updateChecking={updater.state.stage === "checking"}
+            autoInstallUpdates={settings.autoInstallUpdates}
+            onSetAutoInstallUpdates={settings.setAutoInstallUpdatesSetting}
             onCheckForUpdates={updater.checkNow}
             onClose={() => setShowSettings(false)}
           />
@@ -449,6 +456,7 @@ function App() {
         {confirmRestart && (
           <UpdateRestartDialog
             version={updater.state.version}
+            critical={updater.state.critical}
             activeCount={activeCount}
             queuedCount={queuedCount}
             onCancel={() => setConfirmRestart(false)}

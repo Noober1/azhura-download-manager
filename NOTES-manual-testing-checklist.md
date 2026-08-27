@@ -1,7 +1,7 @@
-# Checklist Manual Testing — Phase 1 · 2 · 3 · 4
+# Checklist Manual Testing — Phase 1 · 2 · 3 · 4 · 5
 
 Jalankan `bun run tauri dev`, lalu centang satu per satu. Checklist ini menutup
-semua fitur yang sudah selesai di TODO.md (`## Done (Phase 1/2/3/4)`).
+semua fitur yang sudah selesai di TODO.md (`## Done (Phase 1/2/3/4/5)`).
 
 Kalau waktunya terbatas, kerjakan **§0 Prasyarat** dan bagian bertanda ⚠️ dulu —
 itu yang paling mungkin menyembunyikan bug yang mahal.
@@ -30,7 +30,8 @@ Ini nangkep kelas bug paling mahal di Phase 3: `save_settings` di Rust menimpa
 - [ ] Buka Settings, ubah **semua** field ke nilai non-default sekaligus:
       Max active downloads, Global speed limit, Max retry attempts, Watch clipboard,
       Hold the queue + jam, Color theme, Reduce motion, Minimize to tray,
-      Run at startup, Show desktop notifications, Keep at most, Drop entries after
+      Run at startup, Show desktop notifications, Install updates at startup,
+      Keep at most, Drop entries after
 - [ ] Tutup app sepenuhnya (tray → Quit), buka lagi
 - [ ] **Semua** nilai tadi masih sama persis — tidak ada satu pun yang balik ke default
 - [ ] Ubah **satu** setting saja (mis. cuma theme), restart → setting lain tetap utuh
@@ -309,6 +310,50 @@ memberi tahu setelah ada yang bisa dilakukan.
       Settings → Check for updates masih bisa memulai ulang
 - [ ] Cek manual saat ada update → toast "Downloading version 0.2.3 in the
       background…" lalu menyusul toast siap-install
+
+# PHASE 5 — auto-install & update critical
+
+## 16b. Install otomatis saat startup
+
+Default `Install updates at startup` = ON (Settings → System).
+
+- [ ] Dengan setting ON dan **tidak ada download sama sekali**, buka app versi
+      lama → update ter-download diam-diam, lalu muncul toast
+      **"Installing version 0.2.3…"** dan app restart sendiri **tanpa** dialog
+      konfirmasi
+- [ ] ⚠️ Ulangi tapi **mulai satu download besar** dulu sebelum update selesai
+      ter-download → app **tidak** auto-install. Yang muncul toast biasa
+      "ready to install" + link status bar (jalur sabar)
+- [ ] ⚠️ Kasus paling penting: biarkan update mulai ter-download saat idle,
+      lalu **tambahkan download baru di tengah-tengah** sebelum selesai → tetap
+      **tidak** auto-install (jumlah download dibaca saat download update
+      selesai, bukan saat mulai)
+- [ ] Matikan setting-nya → buka app dengan update tersedia → tidak pernah
+      auto-install, selalu lewat toast + link
+- [ ] Setting-nya bertahan setelah restart (ikut §1 round-trip)
+
+## 16c. Update critical
+
+Uji dengan menyunting `latest.json` di draft release: tambahkan
+`"critical": true` di level teratas sebelum publish.
+
+- [ ] Dengan flag critical, buka app versi lama → setelah ter-download muncul
+      dialog **"Critical update 0.2.3 — restarting"** dengan hitung mundur 30 detik
+- [ ] ⚠️ Dialog itu **tidak punya tombol Cancel**
+- [ ] ⚠️ Tekan **Escape** dan klik **backdrop** → dialog **tidak** tertutup
+- [ ] Biarkan hitung mundur habis → app restart sendiri
+- [ ] Klik **Restart now** sebelum waktunya habis → langsung restart
+- [ ] ⚠️ Critical mengabaikan setting: matikan `Install updates at startup`,
+      ulangi → dialog critical **tetap** muncul
+- [ ] ⚠️ Critical tetap muncul walau ada download aktif — dan setelah restart,
+      download itu berstatus paused dan bisa di-Resume (tidak mengulang)
+- [ ] Dialog menyebutkan jumlah download yang akan ter-pause, sama seperti
+      dialog restart biasa
+- [ ] **Regresi:** publish rilis **tanpa** flag critical → alur normal
+      (toast/link atau auto-install), **bukan** dialog paksa
+- [ ] ⚠️ Isi `"critical": "true"` (string, bukan boolean) atau
+      `"critical": 1` → diperlakukan **tidak** critical. Hanya boolean `true`
+      yang dihitung — feed rusak tidak boleh memaksa restart semua orang
 
 ## 17. Workflow rilis
 

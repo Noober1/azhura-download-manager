@@ -186,6 +186,17 @@ export type AppSettings = {
 	 *  `useHistoryPersistence.ts`).
 	 */
 	historyRetentionDays?: number,
+	/**
+	 *  Apply a downloaded update at startup instead of waiting for the user to
+	 *  click through the restart prompt. On by default: a downloaded update
+	 *  that nobody ever installs is the failure mode this exists to prevent,
+	 *  and startup is the moment when restarting costs least. Only ever acts
+	 *  when nothing is downloading. An update the feed marks `critical`
+	 *  ignores this — that flag exists precisely for fixes that can't wait on
+	 *  a preference. Applied entirely on the frontend (see
+	 *  `useUpdateCheck.ts`); Rust only persists it.
+	 */
+	autoInstallUpdates?: boolean,
 };
 
 export type ConnInfo = {

@@ -51,6 +51,15 @@ pub(crate) struct AppSettings {
     /// frontend, where the download list actually lives (see
     /// `useHistoryPersistence.ts`).
     history_retention_days: u32,
+    /// Apply a downloaded update at startup instead of waiting for the user to
+    /// click through the restart prompt. On by default: a downloaded update
+    /// that nobody ever installs is the failure mode this exists to prevent,
+    /// and startup is the moment when restarting costs least. Only ever acts
+    /// when nothing is downloading. An update the feed marks `critical`
+    /// ignores this — that flag exists precisely for fixes that can't wait on
+    /// a preference. Applied entirely on the frontend (see
+    /// `useUpdateCheck.ts`); Rust only persists it.
+    auto_install_updates: bool,
 }
 
 impl Default for AppSettings {
@@ -68,6 +77,7 @@ impl Default for AppSettings {
             scheduled_start_time: "02:00".to_string(),
             history_max_entries: 500,
             history_retention_days: 0,
+            auto_install_updates: true,
         }
     }
 }

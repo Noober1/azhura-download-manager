@@ -110,6 +110,31 @@ dependency.
       making every user reinstall by hand. Keep the private key backed up
       offline, and never let it reach a log, a terminal, or a transcript.
 
+## Done (Phase 5)
+
+- [x] **Install a pending update at startup.** `autoInstallUpdates` (on by
+      default) applies a downloaded update as soon as it lands at launch,
+      **only** when nothing is downloading or queued — startup is when
+      restarting costs least, and the in-flight count is re-read at that
+      moment rather than when the download began. Otherwise it falls back to
+      the patient toast + status-bar link. Closes the real failure mode of the
+      Phase 4 design: an update that downloads perfectly and then sits
+      forever because nobody clicks the link.
+- [x] **Critical updates.** `latest.json` may carry a top-level
+      `"critical": true`; the plugin hands the parsed feed through as
+      `rawJson`, so no custom endpoint is needed to read it. Such a release
+      ignores `autoInstallUpdates` and opens a prompt with no Cancel that
+      restarts itself after 30s (`readCritical` in `useUpdateCheck.ts`,
+      `critical` in `UpdateRestartDialog.tsx`). Only a literal `true` counts —
+      this comes off the network, and a malformed feed escalating every
+      ordinary update into a forced restart is the failure that matters.
+
+      tauri-action doesn't emit the field; it's added by hand to the draft
+      release's `latest.json` before publishing (see the note in
+      `.github/workflows/release.yml`). Downloads pause and resume across the
+      restart either way, so the cost of a wrongly-flagged release is an
+      interruption, not lost work.
+
 ## Features
 
 Nothing queued — everything that was listed here has shipped. The one piece of

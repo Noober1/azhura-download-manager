@@ -19,6 +19,8 @@ export function SettingsDialog({
   historyRetentionDays,
   historyCount,
   updateChecking,
+  autoInstallUpdates,
+  onSetAutoInstallUpdates,
   onCheckForUpdates,
   onSetMaxActive,
   onSetGlobalLimit,
@@ -51,6 +53,8 @@ export function SettingsDialog({
   historyRetentionDays: number;
   historyCount: number;
   updateChecking: boolean;
+  autoInstallUpdates: boolean;
+  onSetAutoInstallUpdates: (v: boolean) => void;
   onCheckForUpdates: () => void;
   onSetMaxActive: (n: number) => void;
   onSetGlobalLimit: (mbps: number) => void;
@@ -230,6 +234,18 @@ export function SettingsDialog({
                 onChange={(e) => onSetNotifications(e.currentTarget.checked)}
               />
               <label htmlFor="notify">Show desktop notifications</label>
+            </div>
+            <div className="check-row">
+              <input
+                type="checkbox"
+                id="auto-update"
+                checked={autoInstallUpdates}
+                onChange={(e) => onSetAutoInstallUpdates(e.currentTarget.checked)}
+              />
+              <label htmlFor="auto-update">Install updates at startup</label>
+              <span className="field-unit">
+                Only when nothing is downloading · critical fixes install either way
+              </span>
             </div>
             <div className="field-row">
               <button disabled={updateChecking} onClick={onCheckForUpdates}>
