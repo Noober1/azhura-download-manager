@@ -175,6 +175,8 @@ pub fn run() {
             MacosLauncher::LaunchAgent,
             Some(vec![AUTOSTART_FLAG]),
         ))
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .manage(Manager::default())
         .manage(PendingDeepLink::default())
         .manage(SettingsState(Mutex::new(config::settings::load_settings_from_disk())))

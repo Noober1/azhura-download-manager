@@ -18,6 +18,8 @@
     "clipboard-manager:allow-write-text",
     "dialog:allow-open",
     "notification:default",
+    "updater:default",
+    "process:allow-restart",
     "opener:allow-reveal-item-in-dir",
     "opener:allow-open-path",
     {

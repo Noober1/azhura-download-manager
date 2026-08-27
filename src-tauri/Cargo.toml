@@ -26,6 +26,9 @@ tauri-plugin-notification = "2"
 tauri-plugin-deep-link = "2"
 tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 tauri-plugin-autostart = "2"
+tauri-plugin-updater = "2"
+# Only for the updater's post-install relaunch.
+tauri-plugin-process = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 specta = { version = "=2.0.0-rc.25", features = ["derive", "serde_json"] }

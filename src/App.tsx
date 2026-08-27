@@ -17,6 +17,7 @@ import { useDownloads } from "./hooks/useDownloads";
 import { useScheduler } from "./hooks/useScheduler";
 import { useQueueSchedule } from "./hooks/useQueueSchedule";
 import { useClipboardWatch } from "./hooks/useClipboardWatch";
+import { useUpdateCheck } from "./hooks/useUpdateCheck";
 import { useHistoryPersistence } from "./hooks/useHistoryPersistence";
 import { useSettings } from "./hooks/useSettings";
 import { useTrayPush } from "./hooks/useTrayPush";
@@ -42,6 +43,7 @@ import { DeleteDialog } from "./components/dialogs/DeleteDialog";
 import { SpeedCapDialog } from "./components/dialogs/SpeedCapDialog";
 import { ConnRestartDialog } from "./components/dialogs/ConnRestartDialog";
 import { PowerActionDialog, type PowerAction } from "./components/dialogs/PowerActionDialog";
+import { UpdateDialog } from "./components/dialogs/UpdateDialog";
 import "./App.css";
 
 function App() {
@@ -129,6 +131,7 @@ function App() {
   useScheduler(downloads, settings.maxConcurrent, downloadsApi.startRun, queue.held);
   useHistoryPersistence(downloads, setDownloads, downloadsRef, settings.historyRetentionDays);
   useClipboardWatch(settings.clipboardWatch, downloadsRef);
+  const updater = useUpdateCheck();
   useTrayPush(downloadsRef);
   useDeepLinkCapture(downloadsRef, downloadsApi.addFromPayload, downloadsApi.patchItem);
   const { refresh: refreshMissing } = useMissingRefresh(downloadsRef, downloadsApi.patchItem);
@@ -243,6 +246,9 @@ function App() {
     menu ||
     speedCapDialog ||
     pendingPower ||
+    updater.state.stage === "available" ||
+    updater.state.stage === "downloading" ||
+    updater.state.stage === "ready" ||
     downloadsApi.connRestart
   );
 
@@ -419,7 +425,20 @@ function App() {
               setShowSettings(false);
               downloadsApi.requestDelete(historyRows);
             }}
+            updateChecking={updater.state.stage === "checking"}
+            onCheckForUpdates={updater.checkNow}
             onClose={() => setShowSettings(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* ---- Update prompt ---- */}
+      <AnimatePresence>
+        {updater.state.stage !== "idle" && updater.state.stage !== "checking" && (
+          <UpdateDialog
+            state={updater.state}
+            onInstall={updater.install}
+            onDismiss={updater.dismiss}
           />
         )}
       </AnimatePresence>

@@ -1,0 +1,55 @@
+# Builds, signs and publishes a release when a version tag is pushed.
+#
+# The signing key never touches a developer machine at release time: the
+# private key lives in repo secrets and only this runner uses it. Losing it
+# means shipped installs can no longer verify updates and every user has to
+# reinstall by hand, so keep an offline backup.
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+# The job creates a GitHub Release and uploads assets to it.
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      # Keyed on Cargo.lock: a Tauri build from cold is several minutes of
+      # dependency compilation that almost never changes between releases.
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - run: bun install --frozen-lockfile
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "Azhura Download Manager ${{ github.ref_name }}"
+          releaseBody: "See the assets below to download and install this version."
+          # Published as a draft so a broken build can be discarded before
+          # anyone's updater sees it -- `releases/latest` skips drafts.
+          releaseDraft: true
+          prerelease: false
+          # Emits latest.json, the feed tauri.conf.json's updater endpoint
+          # points at. Without this the release ships installers that no
+          # existing install can discover.
+          includeUpdaterJson: true

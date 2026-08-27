@@ -18,6 +18,8 @@ export function SettingsDialog({
   historyMaxEntries,
   historyRetentionDays,
   historyCount,
+  updateChecking,
+  onCheckForUpdates,
   onSetMaxActive,
   onSetGlobalLimit,
   onSetMaxRetryAttempts,
@@ -48,6 +50,8 @@ export function SettingsDialog({
   historyMaxEntries: number;
   historyRetentionDays: number;
   historyCount: number;
+  updateChecking: boolean;
+  onCheckForUpdates: () => void;
   onSetMaxActive: (n: number) => void;
   onSetGlobalLimit: (mbps: number) => void;
   onSetMaxRetryAttempts: (n: number) => void;
@@ -226,6 +230,12 @@ export function SettingsDialog({
                 onChange={(e) => onSetNotifications(e.currentTarget.checked)}
               />
               <label htmlFor="notify">Show desktop notifications</label>
+            </div>
+            <div className="field-row">
+              <button disabled={updateChecking} onClick={onCheckForUpdates}>
+                {updateChecking ? "Checking…" : "Check for updates"}
+              </button>
+              <span className="field-unit">Also checked once at startup</span>
             </div>
           </fieldset>
 

@@ -62,17 +62,35 @@ dependency.
       reuses the existing delete dialog so the "also delete files" choice
       still applies.
 
-## Shipping / reliability
+## Done (Phase 4)
 
-- [ ] **Auto-updater.** `tauri-plugin-updater` isn't wired up
-      (`src-tauri/Cargo.toml:21-28`, `src-tauri/tauri.conf.json` has no
-      `updater` plugin block), yet releases are already being cut (v0.2.1 →
-      v0.2.2). Anyone who installs today never gets an update without a manual
-      re-download. Needs the plugin, signing keys, a release endpoint, and an
-      in-app "update available" prompt. **Blocked on the user providing
-      signing keys and a release endpoint** — can't be executed unattended.
+- [x] **Auto-updater.** `tauri-plugin-updater` + `tauri-plugin-process` are
+      wired up, `tauri.conf.json` gained an `updater` block pointing at the
+      GitHub Releases `latest.json` feed, and `.github/workflows/release.yml`
+      builds/signs/publishes on a `v*` tag via `tauri-action`. In-app the
+      check runs once silently at launch (`src/hooks/useUpdateCheck.ts`) and
+      on demand from Settings → System, prompting through
+      `src/components/dialogs/UpdateDialog.tsx`. Deliberately no periodic
+      re-check: this app stays open for days and a dialog appearing mid-
+      download would interrupt at the worst moment.
+
+      Note the earlier claim here that "releases are already being cut" was
+      wrong — `gh release list` and `git tag` were both empty, so no release
+      had ever been published and there are no installs in the field. The
+      updater is a prerequisite for the *first* release rather than a fix for
+      stranded users.
+
+      **Still needs the user before it works:** a signing keypair
+      (`bunx tauri signer generate`), the public half pasted over
+      `pubkey: "REPLACE_WITH_TAURI_SIGNER_PUBLIC_KEY"` in
+      `src-tauri/tauri.conf.json`, and the private half plus its password
+      stored as the `TAURI_SIGNING_PRIVATE_KEY` /
+      `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` repo secrets. A wrong or
+      placeholder pubkey builds fine and only fails at update time, so this
+      cannot be left half-done.
 
 ## Features
 
-Nothing queued — the three that were here shipped in Phase 3 above. The only
-remaining item is the auto-updater, which is blocked on the user.
+Nothing queued — everything that was listed here has shipped. The one piece of
+outstanding work is the signing-key setup noted under Phase 4, which only the
+repo owner can do.

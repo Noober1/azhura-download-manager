@@ -1,7 +1,7 @@
-# Checklist Manual Testing — Phase 1 · 2 · 3
+# Checklist Manual Testing — Phase 1 · 2 · 3 · 4
 
 Jalankan `bun run tauri dev`, lalu centang satu per satu. Checklist ini menutup
-semua fitur yang sudah selesai di TODO.md (`## Done (Phase 1/2/3)`).
+semua fitur yang sudah selesai di TODO.md (`## Done (Phase 1/2/3/4)`).
 
 Kalau waktunya terbatas, kerjakan **§0 Prasyarat** dan bagian bertanda ⚠️ dulu —
 itu yang paling mungkin menyembunyikan bug yang mahal.
@@ -14,6 +14,8 @@ itu yang paling mungkin menyembunyikan bug yang mahal.
 - [ ] `src/bindings.ts` ter-regenerate otomatis saat app start (bukan hasil edit
       tangan). Cek ada `runPowerAction`, `clipboardWatch`, `scheduledStartEnabled`,
       `scheduledStartTime`, `historyMaxEntries`, `historyRetentionDays`
+- [ ] Untuk Phase 4: signing key sudah di-setup (lihat prasyarat di §15) —
+      tanpa itu semua tes update pasti gagal
 - [ ] Siapkan beberapa URL uji: file besar (>100 MB, biar sempat pause/resume),
       file kecil, dan satu URL yang pasti gagal (mis. host ngaco) buat tes retry
 
@@ -228,7 +230,76 @@ Tes positif:
 
 ---
 
-## 15. Regresi umum
+# PHASE 4 — auto-updater
+
+⚠️ **Prasyarat: signing key harus sudah diisi.** Selama `pubkey` di
+`src-tauri/tauri.conf.json` masih `REPLACE_WITH_TAURI_SIGNER_PUBLIC_KEY`, app
+tetap build dan jalan normal, tapi setiap pengecekan update akan gagal. Build
+**tidak** akan mengeluh — kegagalannya baru muncul saat runtime.
+
+Langkah setup (sekali saja, lihat juga catatan Phase 4 di TODO.md):
+
+1. `bunx tauri signer generate -w %USERPROFILE%\.tauri\azhura.key`
+2. Salin **public key** ke `pubkey` di `src-tauri/tauri.conf.json`
+3. Simpan isi file private key sebagai secret repo `TAURI_SIGNING_PRIVATE_KEY`,
+   dan passwordnya sebagai `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
+4. Backup private key offline — hilang berarti semua install yang sudah
+   tersebar tidak bisa lagi memverifikasi update
+
+## 15. Pengecekan update
+
+- [ ] Buka app dengan koneksi normal, tanpa ada versi baru → tidak ada dialog
+      apa pun (pengecekan startup sifatnya diam)
+- [ ] Settings → System → tombol **Check for updates** ada, dengan hint
+      "Also checked once at startup"
+- [ ] Klik tombolnya saat sudah versi terbaru → toast "You're on the latest
+      version." (⚠️ bukan diam saja — tombol yang seolah tidak berefek itu bug)
+- [ ] Saat sedang mengecek, tombolnya jadi **Checking…** dan disabled
+- [ ] Matikan internet, klik Check for updates → toast merah berisi pesan error
+- [ ] ⚠️ Matikan internet lalu **restart app** → tidak ada toast error sama
+      sekali (pengecekan startup gagal secara diam-diam; offline saat buka app
+      itu hal biasa dan tidak layak mengganggu)
+
+## 16. Alur update (butuh dua rilis)
+
+Uji beneran: publish `v0.2.3` lewat tag, lalu pasang installer `v0.2.2` lama.
+
+- [ ] Buka app versi lama → dialog **"Version 0.2.3 is available"** muncul
+- [ ] Release notes tampil sebagai teks biasa; catatan yang sangat panjang
+      ter-scroll di dalam panel, tidak mendorong tombol keluar dari dialog
+- [ ] ⚠️ Isi release notes dengan teks yang mengandung HTML (mis.
+      `<b>test</b>`) → tampil sebagai teks mentah, **tidak** ter-render jadi
+      tebal (ini konten remote, tidak boleh jadi markup)
+- [ ] Klik **Later** → dialog tutup, app tetap jalan di versi lama
+- [ ] Buka lagi Settings → Check for updates → dialog yang sama muncul lagi
+- [ ] Klik **Install and restart** → progress bar jalan, tombol jadi disabled
+- [ ] ⚠️ Saat sedang download, tekan **Escape** dan klik backdrop → dialog
+      **tidak** tertutup (menutupnya tidak menghentikan install, cuma
+      menyembunyikan operasi yang sedang jalan)
+- [ ] Setelah selesai → app restart sendiri dan jalan di versi baru
+- [ ] Cek Settings/status bar menampilkan versi baru
+- [ ] Download yang tadi ada di daftar masih utuh setelah update (history dan
+      resume state tidak hilang)
+- [ ] Kalau server tidak mengirim ukuran file → progress bar jadi mode
+      indeterminate (bergerak menyapu), bukan nyangkut di 0%
+- [ ] Dengan **Reduce motion** ON → bar indeterminate tidak beranimasi
+
+## 17. Workflow rilis
+
+- [ ] Push tag `v0.2.3` → workflow **Release** jalan di GitHub Actions
+- [ ] Workflow sukses dan bikin release **draft**
+- [ ] Asset release memuat installer (`.exe`/`.msi`), file `.sig`, dan
+      **`latest.json`**
+- [ ] ⚠️ `latest.json` ada — tanpa file ini, install yang sudah tersebar tidak
+      akan pernah menemukan update
+- [ ] Publish draft-nya → `https://github.com/Noober1/azhura-download-manager/releases/latest/download/latest.json`
+      bisa diakses dan isinya versi terbaru
+- [ ] Bikin build dengan private key yang **salah** → app menolak update-nya
+      (verifikasi tanda tangan bekerja, bukan sekadar hiasan)
+
+---
+
+## 18. Regresi umum
 
 - [ ] Search box, marquee-select drag, resize kolom masih normal
 - [ ] Download paralel multi-connection jalan normal, tabel tidak nge-lag saat
