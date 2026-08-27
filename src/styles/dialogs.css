@@ -18,6 +18,16 @@
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-panel);
   box-shadow: var(--sh-float);
+  /* The overlay centers its child, so a dialog taller than the window spills
+     out of *both* ends and loses its title and its buttons at once — the main
+     window can be as short as 405px (`minHeight` in tauri.conf.json), while
+     Settings alone is well past that. Capping here and scrolling the body
+     below keeps the head and actions reachable at any window size.
+     Resolves against the overlay's content box, so its 1.5rem padding is
+     preserved as a margin. */
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Standalone add window fills its native OS window. */
@@ -42,6 +52,8 @@
   padding: 0.6rem 0.9rem;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
+  /* Pinned: only the body between them gives way when space runs short. */
+  flex-shrink: 0;
 }
 /* The popup windows put their caption buttons in this bar, and `.win-btn` is
    `height: 100%` — so it has to be padding-free vertically or the buttons end
@@ -55,6 +67,11 @@
   display: flex;
   flex-direction: column;
   gap: 0.7rem;
+  /* Absorbs the overflow when the dialog hits the cap above. `min-height: 0`
+     because a flex item's default `min-height: auto` refuses to shrink below
+     its content, which would defeat the cap entirely. */
+  overflow-y: auto;
+  min-height: 0;
 }
 .dialog-body input,
 .dialog-body textarea {
@@ -96,4 +113,7 @@
   padding: 0.75rem 0.9rem;
   background: var(--surface);
   border-top: 1px solid var(--border);
+  /* Pinned like the head — Cancel/Done must never be the part that scrolls
+     off, or a short window leaves the dialog with no visible way out. */
+  flex-shrink: 0;
 }
