@@ -3,6 +3,21 @@
 Jalankan `bun run tauri dev`, lalu centang satu per satu. Checklist ini menutup
 semua fitur yang sudah selesai di TODO.md (`## Done (Phase 1/2/3/4/5)`).
 
+Simpan file ini — ini daftar regresi yang dipakai ulang tiap perubahan besar,
+bukan checklist sekali buang.
+
+## Status per 2026-08-28 (v0.2.3, belum dirilis)
+
+- ✅ **Lolos:** Phase 1, 2, 3, dan §15 (pengecekan update)
+- ⛔ **Belum bisa diuji:** §16, §16b, §16c, §17 — semuanya butuh rilis yang
+  benar-benar terpublish. §16/16b/16c perlu **dua** rilis (satu terpasang,
+  satu lagi muncul sebagai update); §17 baru jalan setelah tag di-push.
+
+  Konsekuensinya: **seluruh mekanisme updater (Phase 4 + 5) masih belum
+  terbukti** — termasuk apakah pasangan signing key benar. Build yang hijau
+  tidak membuktikan apa pun di sini; kegagalannya baru muncul di sisi client
+  saat update. Rilis pertama sekaligus jadi ujian pertamanya.
+
 Kalau waktunya terbatas, kerjakan **§0 Prasyarat** dan bagian bertanda ⚠️ dulu —
 itu yang paling mungkin menyembunyikan bug yang mahal.
 
