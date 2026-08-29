@@ -6,17 +6,29 @@ semua fitur yang sudah selesai di TODO.md (`## Done (Phase 1/2/3/4/5)`).
 Simpan file ini — ini daftar regresi yang dipakai ulang tiap perubahan besar,
 bukan checklist sekali buang.
 
-## Status per 2026-08-28 (v0.2.3, belum dirilis)
+## Status per 2026-08-29 (v0.2.4, terpublish)
 
-- ✅ **Lolos:** Phase 1, 2, 3, dan §15 (pengecekan update)
-- ⛔ **Belum bisa diuji:** §16, §16b, §16c, §17 — semuanya butuh rilis yang
-  benar-benar terpublish. §16/16b/16c perlu **dua** rilis (satu terpasang,
-  satu lagi muncul sebagai update); §17 baru jalan setelah tag di-push.
+- ✅ **Lolos (carry-over dari v0.2.3):** Phase 1, 2, 3, dan §15 (pengecekan update)
+- ✅ **§17 (workflow rilis) — terverifikasi untuk v0.2.4:** tag `v0.2.4` di-push,
+  workflow **Release** sukses (~11 menit), draft berisi installer `.exe`/`.msi`
+  + `.sig` + `latest.json`, draft sudah di-publish, dan
+  `releases/latest/download/latest.json` sudah dicek bisa diakses dan
+  melaporkan versi `0.2.4` yang benar. Satu-satunya item §17 yang masih belum
+  diuji: build sengaja dengan private key yang salah.
+- ⛔ **Baru sekarang bisa diuji, tapi belum dijalankan:** §16, §16b, §16c.
+  `v0.2.3` **dan** `v0.2.4` sama-sama sudah published — ini pertama kalinya ada
+  dua rilis nyata sekaligus, jadi alur update beneran (pasang installer
+  `v0.2.3`, biarkan menemukan `v0.2.4`) akhirnya bisa dieksekusi. Belum ada
+  yang menjalankannya.
 
-  Konsekuensinya: **seluruh mekanisme updater (Phase 4 + 5) masih belum
-  terbukti** — termasuk apakah pasangan signing key benar. Build yang hijau
-  tidak membuktikan apa pun di sini; kegagalannya baru muncul di sisi client
-  saat update. Rilis pertama sekaligus jadi ujian pertamanya.
+  Konsekuensinya: **perilaku client saat menerima update (Phase 4 + 5) masih
+  belum terbukti** — termasuk apakah pasangan signing key benar. §17 yang
+  hijau cuma membuktikan pipeline rilisnya jalan, bukan bahwa app yang sudah
+  terpasang bisa memverifikasi dan memasang update itu.
+- 🆕 **Belum diuji manual sama sekali:** §19 (tooltip kustom, shortcut
+  keyboard, animasi ikon — baru di v0.2.4). Lolos build + test otomatis, dan
+  delay tooltip 500ms sudah dikonfirmasi manual sekilas, tapi checklist
+  lengkapnya di §19 belum dijalankan satu per satu.
 
 Kalau waktunya terbatas, kerjakan **§0 Prasyarat** dan bagian bertanda ⚠️ dulu —
 itu yang paling mungkin menyembunyikan bug yang mahal.
@@ -283,13 +295,15 @@ lolos.
 
 ## 16. Alur update (butuh dua rilis)
 
-Uji beneran: publish `v0.2.3` lewat tag, lalu pasang installer `v0.2.2` lama.
-Alurnya sengaja **tanpa dialog modal** — download jalan diam-diam, baru
-memberi tahu setelah ada yang bisa dilakukan.
+`v0.2.3` dan `v0.2.4` sudah sama-sama published — tinggal pasang installer
+`v0.2.3` lama, lalu jalankan langkah-langkah di bawah dan lihat apakah
+ia menemukan `v0.2.4` sebagai update. Alurnya sengaja **tanpa dialog modal**
+— download jalan diam-diam, baru memberi tahu setelah ada yang bisa
+dilakukan.
 
 - [ ] Buka app versi lama → **tidak ada dialog apa pun** yang muncul
 - [ ] Diamkan sebentar (update ter-download di latar) → muncul toast
-      **"Version 0.2.3 is ready to install."** dengan tombol **Restart now**
+      **"Version 0.2.4 is ready to install."** dengan tombol **Restart now**
 - [ ] ⚠️ Selama download berlangsung, app tetap bisa dipakai normal — tidak ada
       overlay, tidak ada yang ter-blokir
 - [ ] Muncul juga link **Restart to update** di status bar kiri bawah, di
@@ -301,7 +315,7 @@ memberi tahu setelah ada yang bisa dilakukan.
       "An update is already downloaded and ready." (⚠️ bukan mengulang
       download dari nol)
 - [ ] Klik **Restart to update** → muncul dialog konfirmasi
-      **"Restart to install version 0.2.3?"**, bukan langsung restart
+      **"Restart to install version 0.2.4?"**, bukan langsung restart
 - [ ] Klik tombol **Restart now** di toast → dialog konfirmasi yang sama
       muncul (dua jalur masuk, satu konfirmasi)
 - [ ] Klik **Cancel** / Escape / klik backdrop → tidak jadi restart, link di
@@ -323,7 +337,7 @@ memberi tahu setelah ada yang bisa dilakukan.
 - [ ] Matikan internet di tengah download update → **tidak ada toast error**
       (download ini tidak diminta user, jadi gagalnya diam). Cek lagi lewat
       Settings → Check for updates masih bisa memulai ulang
-- [ ] Cek manual saat ada update → toast "Downloading version 0.2.3 in the
+- [ ] Cek manual saat ada update → toast "Downloading version 0.2.4 in the
       background…" lalu menyusul toast siap-install
 
 # PHASE 5 — auto-install & update critical
@@ -334,7 +348,7 @@ Default `Install updates at startup` = ON (Settings → System).
 
 - [ ] Dengan setting ON dan **tidak ada download sama sekali**, buka app versi
       lama → update ter-download diam-diam, lalu muncul toast
-      **"Installing version 0.2.3…"** dan app restart sendiri **tanpa** dialog
+      **"Installing version 0.2.4…"** dan app restart sendiri **tanpa** dialog
       konfirmasi
 - [ ] ⚠️ Ulangi tapi **mulai satu download besar** dulu sebelum update selesai
       ter-download → app **tidak** auto-install. Yang muncul toast biasa
@@ -353,7 +367,7 @@ Uji dengan menyunting `latest.json` di draft release: tambahkan
 `"critical": true` di level teratas sebelum publish.
 
 - [ ] Dengan flag critical, buka app versi lama → setelah ter-download muncul
-      dialog **"Critical update 0.2.3 — restarting"** dengan hitung mundur 30 detik
+      dialog **"Critical update 0.2.4 — restarting"** dengan hitung mundur 30 detik
 - [ ] ⚠️ Dialog itu **tidak punya tombol Cancel**
 - [ ] ⚠️ Tekan **Escape** dan klik **backdrop** → dialog **tidak** tertutup
 - [ ] Biarkan hitung mundur habis → app restart sendiri
@@ -372,7 +386,7 @@ Uji dengan menyunting `latest.json` di draft release: tambahkan
 
 ## 17. Workflow rilis
 
-- [ ] Push tag `v0.2.3` → workflow **Release** jalan di GitHub Actions
+- [ ] Push tag `v0.2.4` → workflow **Release** jalan di GitHub Actions
 - [ ] Workflow sukses dan bikin release **draft**
 - [ ] Asset release memuat installer (`.exe`/`.msi`), file `.sig`, dan
       **`latest.json`**
@@ -396,3 +410,64 @@ Uji dengan menyunting `latest.json` di draft release: tambahkan
 - [ ] Toast biasa (mis. "Couldn't open the containing folder…") masih muncul dan
       auto-dismiss ~5 detik
 - [ ] Deep link dari browser extension masih mengisi window Add seperti biasa
+
+---
+
+## 19. Tooltip kustom, shortcut keyboard, dan animasi ikon (baru di v0.2.4)
+
+Belum pernah diuji manual satu per satu — cuma delay tooltip yang sudah
+dicek sekilas selama development.
+
+**Tooltip:**
+
+- [ ] Hover tiap tombol toolbar (sidebar toggle, Add, Resume, Pause, Cancel,
+      Delete, Settings, Refresh, Extensions) → bubble kustom muncul setelah
+      ~500ms, bukan tooltip bawaan OS
+- [ ] ⚠️ Delay 500ms **konsisten** walau pindah hover cepat antar beberapa
+      tombol berurutan (tidak ada tombol yang muncul instan)
+- [ ] Hover nama file/path panjang di tabel unduhan → teks wrap rapi di
+      dalam bubble, **tidak** meluber keluar lebar maksimum
+- [ ] Collapse sidebar, hover salah satu ikon kategori → tooltip muncul di
+      sisi **kanan** ikon, berisi label + jumlah
+- [ ] Hover lalu scroll tabel / klik / tekan Escape / pindah window (alt-tab)
+      → tooltip langsung hilang, tidak ada yang nyangkut di layar
+- [ ] Buka window Add / Details / Archive / About → tooltip kustom juga
+      jalan di sana (bukan cuma window utama)
+- [ ] Tidak ada satupun tooltip bawaan OS (kotak kuning bergaris) yang
+      nongol berbarengan di elemen manapun
+
+**Shortcut keyboard:**
+
+- [ ] `Ctrl+B` toggle sidebar, `Ctrl+N` buka window Add
+- [ ] `Ctrl+,` buka Settings, `Ctrl+Shift+X` buka dialog Extensions
+- [ ] `Ctrl+/` buka dialog **Keyboard shortcuts**, bisa ditutup lewat
+      Escape/backdrop/tombol Close
+- [ ] Pilih satu baris aktif, tekan `Space` → pause; tekan lagi → resume
+- [ ] ⚠️ Pilih campuran (ada yang aktif, ada yang paused), tekan `Space` →
+      yang **pause** duluan yang jalan (bukan resume), supaya aksi ambigu
+      selalu ke arah yang gampang dibalik
+- [ ] Pilih satu/banyak baris, `Ctrl+C` → link ter-copy ke clipboard (coba
+      paste ke Notepad)
+- [ ] Pilih satu baris, `Alt+Enter` → buka detail popup
+- [ ] ⚠️ Klik ke dalam search box lalu ketik huruf `b`, `n`, koma, atau `/`
+      → karakter itu **muncul di search box**, tidak ada shortcut yang
+      ke-trigger
+- [ ] ⚠️ Buka Settings/Extensions/dialog lain lalu tekan shortcut manapun di
+      atas → **tidak ada efek** (dialog yang lagi terbuka pegang kendali
+      keyboard penuh)
+- [ ] Shortcut lama masih normal: `Ctrl+F` fokus search, `F5` refresh status
+      file, `Ctrl+A`/panah/Home/End/Delete/Enter di tabel
+
+**Animasi ikon:**
+
+- [ ] Klik toggle sidebar berulang kali → ikon panel di toolbar ikut
+      terisi/mengosong dan garis pembatasnya bergeser, sinkron dengan
+      lebar sidebar yang sebenarnya
+- [ ] Hover ikon kategori di sidebar → sedikit membesar; klik → sedikit
+      mengecil sesaat; pindah kategori aktif → ikon yang baru aktif "pop"
+      seiring highlight-nya slide ke situ
+- [ ] Klik tombol Refresh berkali-kali cepat → ikon terus berputar
+      menambah rotasi (bukan reset ke 0 tiap klik, tidak tersendat)
+- [ ] Settings → **Reduce motion** ON → semua animasi ikon di atas berhenti
+      total (langsung ke state akhir), tapi tooltip tetap muncul/hilang
+      (cuma fade, tanpa scale/slide)
