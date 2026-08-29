@@ -16,6 +16,11 @@
   flex-direction: column;
   gap: 0;
   overflow-y: auto;
+  overflow-x: hidden;
+  transition: width var(--dur-3) var(--ease-standard);
+}
+.sidebar.collapsed {
+  width: 40px;
 }
 
 .side-title {
@@ -26,6 +31,16 @@
   letter-spacing: 0.05em;
   color: var(--faint);
   padding: 0 0.75rem 0.5rem;
+}
+/* The first section header already gets its breathing room from `.sidebar`'s
+   own top padding — every header after it sits right below the previous
+   section's last row with nothing else to separate the two, so it needs its
+   own top margin instead. */
+.side-title:not(:first-child) {
+  margin-top: 0.75rem;
+}
+.sidebar.collapsed .side-title {
+  display: none;
 }
 
 /* Explorer rows: flat, full-bleed, with the active one marked by VS Code's
@@ -69,9 +84,24 @@
   z-index: 1;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 0.55rem;
   width: 100%;
   height: 100%;
+}
+.cat-icon {
+  display: flex;
+  flex-shrink: 0;
+  color: var(--faint);
+}
+.cat.active .cat-icon {
+  color: inherit;
+}
+.cat-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .cat.active,
 .cat.active:hover {
@@ -81,6 +111,7 @@
   color: #fff;
 }
 .cat-n {
+  flex-shrink: 0;
   font-family: var(--font-mono);
   font-size: var(--fs-xs);
   font-variant-numeric: tabular-nums;
@@ -89,4 +120,19 @@
 .cat.active .cat-n {
   color: inherit;
   opacity: 0.8;
+}
+
+/* Collapsed: an icon-only rail — center the icon, drop the label/count text
+   and the row's own horizontal padding (the icon centers in the full 40px
+   instead). */
+.sidebar.collapsed .cat {
+  padding: 0;
+}
+.sidebar.collapsed .cat-content {
+  justify-content: center;
+  gap: 0;
+}
+.sidebar.collapsed .cat-label,
+.sidebar.collapsed .cat-n {
+  display: none;
 }

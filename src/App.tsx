@@ -3,11 +3,11 @@ import { flushSync } from "react-dom";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getVersion } from "@tauri-apps/api/app";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { AnimatePresence } from "motion/react";
 import { commands } from "./bindings";
 import type { DownloadItem } from "./types";
-import { isResumable, isRedownload } from "./format";
+import { isResumable, isRedownload, looksLikeUrl } from "./format";
 import { showToast } from "./toast";
 import { notify } from "./notify";
 import { TERMINAL_STATES } from "./constants";
@@ -37,6 +37,7 @@ import { Toolbar } from "./components/Toolbar";
 import { Sidebar } from "./components/Sidebar";
 import { DownloadTable } from "./components/DownloadTable";
 import { ContextMenu } from "./components/ContextMenu";
+import { TableContextMenu } from "./components/TableContextMenu";
 import { SettingsDialog } from "./components/dialogs/SettingsDialog";
 import { ExtensionsDialog } from "./components/dialogs/ExtensionsDialog";
 import { DeleteDialog } from "./components/dialogs/DeleteDialog";
@@ -50,7 +51,11 @@ function App() {
   const [version, setVersion] = useState("");
   const [showSettings, setShowSettings] = useState(false);
   const [showExtensions, setShowExtensions] = useState(false);
-  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; kind: "row" | "empty" } | null>(null);
+  // Read fresh each time the empty-space menu opens, rather than kept live
+  // via a poller (unlike `useClipboardWatch`) — this only needs to be
+  // correct at the moment the menu appears, not continuously.
+  const [clipboardUrl, setClipboardUrl] = useState<string | null>(null);
   // Custom… speed-cap dialog, opened from the context menu's submenu.
   const [speedCapDialog, setSpeedCapDialog] = useState<{ items: DownloadItem[]; mbps: number } | null>(
     null,
@@ -223,7 +228,18 @@ function App() {
       anchorRef.current = item.id;
       setSelectedIds(new Set([item.id]));
     }
-    setMenu({ x: e.clientX, y: e.clientY });
+    setMenu({ x: e.clientX, y: e.clientY, kind: "row" });
+  }
+
+  // Right-click on empty table space (not over a row) — see
+  // `onTableContextMenu` on `DownloadTable`. Deliberately doesn't touch the
+  // current selection; "Select all" is right there in the menu if that's
+  // what's wanted instead.
+  function handleEmptyContext(e: ReactMouseEvent) {
+    setMenu({ x: e.clientX, y: e.clientY, kind: "empty" });
+    readText()
+      .then((text) => setClipboardUrl(looksLikeUrl(text.trim()) ? text.trim() : null))
+      .catch(() => setClipboardUrl(null));
   }
 
   // Completed + still on disk → reveal its folder; otherwise there's nothing
@@ -269,6 +285,14 @@ function App() {
   // What "Clear history" clears: the same terminal-state rows `historyPayload`
   // persists to history.json.
   const historyRows = downloads.filter((d) =>
+    (TERMINAL_STATES as readonly string[]).includes(d.state),
+  );
+  // Same idea, but scoped to whichever sidebar category is selected — what
+  // the empty-space context menu's "Clear history" clears. Deliberately
+  // pre-search (`sorted.categoryRows`, not `sorted.rows`): the search box is
+  // a transient text filter, not something a destructive bulk action should
+  // be scoped by.
+  const clearableRows = sorted.categoryRows.filter((d) =>
     (TERMINAL_STATES as readonly string[]).includes(d.state),
   );
 
@@ -326,6 +350,8 @@ function App() {
         onRefresh={refreshMissing}
         onShowSettings={() => setShowSettings(true)}
         onShowExtensions={() => setShowExtensions(true)}
+        sidebarCollapsed={settings.sidebarCollapsed}
+        onToggleSidebar={() => settings.setSidebarCollapsedSetting(!settings.sidebarCollapsed)}
       />
 
       {/* ---- Body: sidebar + table ---- */}
@@ -337,12 +363,14 @@ function App() {
           activeCount={sorted.activeItems.length}
           finishedCount={sorted.finishedItems.length}
           categoryCounts={sorted.categoryCounts}
+          collapsed={settings.sidebarCollapsed}
         />
 
         <DownloadTable
           tableWrapRef={tableWrapRef}
           onTableMouseDown={marquee.handleTableMouseDown}
           onTableClick={marquee.handleTableClick}
+          onTableContextMenu={handleEmptyContext}
           sort={sorted.sort}
           onSort={sorted.toggleSort}
           rows={infiniteRows.visibleRows}
@@ -366,7 +394,9 @@ function App() {
 
       {/* ---- Status bar ---- */}
       <div className="statusbar">
-        <span>Azhura Download Manager{version ? ` v${version}` : ""}</span>
+        <button className="sb-about" title="About Azhura Download Manager" onClick={() => commands.openAboutWindow()}>
+          Azhura Download Manager{version ? ` v${version}` : ""}
+        </button>
         {updater.state.stage === "ready" && (
           <button
             className="sb-update"
@@ -403,6 +433,11 @@ function App() {
           <span className={`sb-dot ${grabber.running ? "on" : "off"}`} />
           {grabber.running ? `Grabber active · :${grabber.port}` : "Grabber inactive"}
         </span>
+        {import.meta.env.DEV && (
+          <span className="sb-dev" title="Running a development build (tauri dev)">
+            dev
+          </span>
+        )}
       </div>
 
       {/* ---- Settings dialog ---- */}
@@ -475,7 +510,7 @@ function App() {
 
       {/* ---- Row context menu ---- */}
       <AnimatePresence>
-        {menu && (
+        {menu?.kind === "row" && (
           <ContextMenu
             x={menu.x}
             y={menu.y}
@@ -514,6 +549,24 @@ function App() {
             }
             onConnections={(n) => downloadsApi.applyConnections(selectedItems, n)}
             onDelete={() => downloadsApi.requestDelete(selectedItems)}
+            onClose={() => setMenu(null)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* ---- Empty-space context menu ---- */}
+      <AnimatePresence>
+        {menu?.kind === "empty" && (
+          <TableContextMenu
+            x={menu.x}
+            y={menu.y}
+            clipboardUrl={clipboardUrl}
+            selectableCount={sorted.rows.length}
+            clearableCount={clearableRows.length}
+            onSelectAll={() => setSelectedIds(new Set(sorted.rows.map((d) => d.id)))}
+            onRefresh={refreshMissing}
+            onClearHistory={() => downloadsApi.requestDelete(clearableRows)}
+            onOpenSettings={() => setShowSettings(true)}
             onClose={() => setMenu(null)}
           />
         )}

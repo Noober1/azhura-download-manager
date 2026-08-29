@@ -5,6 +5,23 @@ import { broadcastTheme, normalizeTheme, useTheme } from "../theme";
 import { broadcastReducedMotion } from "../reducedMotion";
 import { initNotifications, setNotificationsEnabled } from "../notify";
 
+const SIDEBAR_COLLAPSED_KEY = "adm-sidebar-collapsed";
+
+/** Paint-time mirror of `sidebarCollapsed`, read synchronously so the sidebar
+ *  never renders expanded-then-snaps-closed for a user who persisted
+ *  collapsed — the same localStorage-mirror/settings.json-source-of-truth
+ *  split `src/theme.ts` and `src/reducedMotion.ts` use, just without needing
+ *  a pre-paint script or a broadcast to sibling windows (the sidebar only
+ *  exists in the main window, and this hook's own state is read during the
+ *  first render, not before it). */
+function readSidebarCollapsedMirror(): boolean {
+  try {
+    return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 /** App-wide settings persisted to settings.json — scheduler knobs, tray
  *  behavior, theme, notifications, and the reduced-motion opt-in — plus the
  *  setters that keep the backend's copy (and, for theme/reduced-motion,
@@ -24,6 +41,7 @@ export function useSettings() {
   const [historyMaxEntries, setHistoryMaxEntries] = useState(500);
   const [historyRetentionDays, setHistoryRetentionDays] = useState(0);
   const [autoInstallUpdates, setAutoInstallUpdates] = useState(true);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsedMirror);
 
   useTheme();
 
@@ -54,6 +72,7 @@ export function useSettings() {
         setHistoryMaxEntries(s.historyMaxEntries ?? 500);
         setHistoryRetentionDays(s.historyRetentionDays ?? 0);
         setAutoInstallUpdates(s.autoInstallUpdates ?? true);
+        setSidebarCollapsed(s.sidebarCollapsed ?? false);
         if (globalLimitMbps > 0) {
           commands.setGlobalSpeedLimit({
             bytesPerSec: Math.round(globalLimitMbps * 1024 * 1024),
@@ -101,6 +120,7 @@ export function useSettings() {
       historyMaxEntries,
       historyRetentionDays,
       autoInstallUpdates,
+      sidebarCollapsed,
       ...overrides,
     } as AppSettings);
   }
@@ -192,6 +212,16 @@ export function useSettings() {
     persistSettings({ autoInstallUpdates: v });
   }
 
+  function setSidebarCollapsedSetting(v: boolean) {
+    setSidebarCollapsed(v);
+    try {
+      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, v ? "1" : "0");
+    } catch {
+      /* the setting still persists via settings.json either way */
+    }
+    persistSettings({ sidebarCollapsed: v });
+  }
+
   // Optimistic: flips the checkbox immediately, then reverts it if the OS
   // call actually fails (e.g. the registry key is locked down).
   function setRunAtStartupSetting(v: boolean) {
@@ -214,6 +244,7 @@ export function useSettings() {
     historyMaxEntries,
     historyRetentionDays,
     autoInstallUpdates,
+    sidebarCollapsed,
     setMaxActive,
     setGlobalLimit,
     setMaxRetryAttemptsSetting,
@@ -228,5 +259,6 @@ export function useSettings() {
     setHistoryMaxEntriesSetting,
     setHistoryRetentionDaysSetting,
     setAutoInstallUpdatesSetting,
+    setSidebarCollapsedSetting,
   };
 }

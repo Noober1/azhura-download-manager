@@ -1,7 +1,7 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
 import { SPEED_PRESETS, CONNECTION_PRESETS } from "../constants";
 import { MENU_POP } from "../motion";
+import { useContextMenuShell } from "./useContextMenuShell";
 
 /* Fixed-position right-click menu for the selected row(s). Clamps itself to
    stay inside the window and dismisses on outside click, Escape, scroll, or
@@ -59,46 +59,7 @@ export function ContextMenu({
   onDelete: () => void;
   onClose: () => void;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState({ x, y });
-  const [flip, setFlip] = useState(false);
-
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const nx = x + rect.width > window.innerWidth ? Math.max(0, window.innerWidth - rect.width - 4) : x;
-    const ny =
-      y + rect.height > window.innerHeight ? Math.max(0, window.innerHeight - rect.height - 4) : y;
-    setPos({ x: nx, y: ny });
-    // Flyouts open to the right by default (180px wide); flip them to the
-    // left instead if that would run off the screen.
-    setFlip(nx + rect.width + 180 > window.innerWidth);
-  }, [x, y]);
-
-  useEffect(() => {
-    function onMouseDown(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
-    }
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    document.addEventListener("mousedown", onMouseDown);
-    document.addEventListener("keydown", onKeyDown);
-    window.addEventListener("scroll", onClose, true);
-    window.addEventListener("blur", onClose);
-    return () => {
-      document.removeEventListener("mousedown", onMouseDown);
-      document.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("scroll", onClose, true);
-      window.removeEventListener("blur", onClose);
-    };
-  }, [onClose]);
-
-  function run(action: () => void) {
-    action();
-    onClose();
-  }
+  const { ref, pos, flip, run } = useContextMenuShell(x, y, onClose);
 
   return (
     <motion.div

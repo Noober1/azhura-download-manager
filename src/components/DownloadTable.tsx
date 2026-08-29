@@ -179,6 +179,7 @@ export function DownloadTable({
   tableWrapRef,
   onTableMouseDown,
   onTableClick,
+  onTableContextMenu,
   sort,
   onSort,
   rows,
@@ -201,6 +202,10 @@ export function DownloadTable({
   tableWrapRef: RefObject<HTMLElement | null>;
   onTableMouseDown: (e: ReactMouseEvent) => void;
   onTableClick: (e: ReactMouseEvent) => void;
+  /** Only ever fires for empty table space — every `.drow`'s own
+   *  `onContextMenu` already calls `stopPropagation()`, so a row right-click
+   *  never reaches this handler. */
+  onTableContextMenu: (e: ReactMouseEvent) => void;
   sort: { key: SortKey; dir: "asc" | "desc" } | null;
   onSort: (key: SortKey) => void;
   rows: DownloadItem[];
@@ -234,6 +239,7 @@ export function DownloadTable({
         ref={tableWrapRef}
         onMouseDown={onTableMouseDown}
         onClick={onTableClick}
+        onContextMenu={onTableContextMenu}
       >
         <table className="dtable" style={{ minWidth: totalWidth(widths) }}>
           {/* Every column but `name` is a fixed `<col>` width; `name` gets none, so

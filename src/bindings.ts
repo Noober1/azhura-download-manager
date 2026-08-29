@@ -156,6 +156,32 @@ export const commands = {
 	 */
 	closeArchiveWindow: () => __TAURI_INVOKE<void>("close_archive_window"),
 	/**
+	 *  Build (or, if one is already open, reveal and focus) the "About" popup —
+	 *  a single window, labeled `about`, triggered by clicking the app name in
+	 *  `main`'s status bar. Owned by `main` (not modal — `main` stays usable
+	 *  while it's open, like the per-download detail popups).
+	 * 
+	 *  Unlike the Archive Preview window, there's no async data to wait on —
+	 *  everything shown (version, license, repo link) is either static or a
+	 *  near-instant local read — so this builds straight to `.visible(true)`
+	 *  rather than the build-hidden/`show_*`-once-ready handshake `archive.rs`
+	 *  uses to avoid a flash of empty content while a real network scan runs.
+	 * 
+	 *  Must be `async`: a plain (blocking) command runs inline on the same
+	 *  thread that pumps WebView2's IPC messages, and creating a *new* OS window
+	 *  needs to hand off to that same thread's event loop — see the identical
+	 *  reasoning in `open_archive_window` and `open_detail_window`.
+	 */
+	openAboutWindow: () => __TAURI_INVOKE<null>("open_about_window"),
+	/**
+	 *  Destroys the About popup — created on demand, not pooled, so the next
+	 *  click just builds a fresh one.
+	 * 
+	 *  `async` for the same reason as `open_about_window`: tearing down an OS
+	 *  window is thread-affine like creating one.
+	 */
+	closeAboutWindow: () => __TAURI_INVOKE<void>("close_about_window"),
+	/**
 	 *  Push a fresh snapshot of active downloads into the tray menu, called
 	 *  roughly once a second from the frontend. Patches labels in place when the
 	 *  same set of ids is still showing (by far the common case) so the menu
@@ -247,6 +273,12 @@ export type AppSettings = {
 	 *  `useUpdateCheck.ts`); Rust only persists it.
 	 */
 	autoInstallUpdates?: boolean,
+	/**
+	 *  Sidebar shown as a full-width panel vs. a narrow icon rail. Applied
+	 *  entirely on the frontend (see `src/components/Sidebar.tsx`); Rust
+	 *  only persists it.
+	 */
+	sidebarCollapsed?: boolean,
 };
 
 export type ArchiveEntry = {

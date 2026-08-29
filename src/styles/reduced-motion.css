@@ -23,7 +23,8 @@
   textarea,
   select,
   .ctx-sub,
-  .ctx-flyout {
+  .ctx-flyout,
+  .sidebar {
     transition: none !important;
   }
   .mini-bar.indeterminate,
@@ -45,7 +46,8 @@
 :root[data-reduced-motion="on"] textarea,
 :root[data-reduced-motion="on"] select,
 :root[data-reduced-motion="on"] .ctx-sub,
-:root[data-reduced-motion="on"] .ctx-flyout {
+:root[data-reduced-motion="on"] .ctx-flyout,
+:root[data-reduced-motion="on"] .sidebar {
   transition: none !important;
 }
 :root[data-reduced-motion="on"] .mini-bar.indeterminate,

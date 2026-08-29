@@ -111,6 +111,11 @@ export function useSortedRows(downloads: DownloadItem[]) {
     toggleSort,
     activeItems,
     finishedItems,
+    // Category-filtered but pre-search — what "Clear history" (empty-space
+    // context menu) scopes to, deliberately ignoring the search box: a
+    // transient text filter shouldn't change what a destructive bulk action
+    // considers in scope.
+    categoryRows: shown,
     categoryCounts,
     rows,
     viewKey,

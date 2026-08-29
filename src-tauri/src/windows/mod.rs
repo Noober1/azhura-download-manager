@@ -1,3 +1,4 @@
+pub(crate) mod about;
 pub(crate) mod add;
 pub(crate) mod archive;
 pub(crate) mod detail;
@@ -55,6 +56,9 @@ pub(crate) fn hide_to_tray(app: &tauri::AppHandle) {
         let _ = w.hide();
     }
     if let Some(w) = app.get_webview_window("archive-preview") {
+        let _ = w.hide();
+    }
+    if let Some(w) = app.get_webview_window("about") {
         let _ = w.hide();
     }
     for (label, w) in app.webview_windows() {

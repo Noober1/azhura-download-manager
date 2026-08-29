@@ -54,6 +54,26 @@
   color: var(--faint);
 }
 
+/* Looks like the plain label it always was — only reveals it's clickable
+   on hover/focus, unlike `.sb-update` (a transient call-to-action that's
+   meant to stand out). */
+.sb-about {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.sb-about:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+.sb-about:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .sb-hold {
   margin-left: 0.75rem;
   color: var(--accent);
@@ -85,6 +105,20 @@
 }
 .sb-dot.on {
   background: var(--positive);
+}
+/* Vite dead-code-eliminates the whole `import.meta.env.DEV` block this
+   renders from — a production build never ships this string at all, so
+   there's no separate "hide in release" concern to handle here. */
+.sb-dev {
+  margin-left: 0.75rem;
+  padding: 0 0.4em;
+  border: 1px solid var(--warn);
+  border-radius: var(--radius-field);
+  color: var(--warn);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  cursor: default;
 }
 
 .dtable {

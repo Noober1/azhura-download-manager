@@ -46,6 +46,59 @@ export function Icon({ name, size = 14 }: { name: string; size?: number }) {
       </>
     ),
     winclose: <path d="M4 4l10 10M14 4L4 14" />,
+    // Sidebar category rows (Sidebar.tsx) — the three status buckets, then
+    // one per `FileCategory` in categories.ts (kept in the same order as
+    // `FILE_CATEGORIES`).
+    all: <path d="M3 5.5h12M3 9h12M3 12.5h12" />,
+    active: (
+      <>
+        <path d="M9 3v7.5M5.5 7.5L9 11l3.5-3.5" />
+        <path d="M3 14h12" />
+      </>
+    ),
+    finished: <path d="M3.5 9.5l3.5 3.5 7.5-8" />,
+    video: (
+      <>
+        <rect x="2.5" y="4" width="13" height="10" rx="1.5" />
+        <path d="M7.5 7.2v3.6l3.5-1.8z" fill="currentColor" stroke="none" />
+      </>
+    ),
+    audio: (
+      <>
+        <circle cx="6" cy="13" r="2" />
+        <path d="M8 13V4l6-1.3V11" />
+      </>
+    ),
+    program: (
+      <>
+        <rect x="2.5" y="3.5" width="13" height="11" rx="1" />
+        <path d="M5.5 7l2 2-2 2M9.5 11h3" />
+      </>
+    ),
+    docs: (
+      <>
+        <path d="M5 2.5h5l3 3v9.5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-11a1 1 0 0 1 1-1z" />
+        <path d="M10 2.5V6h3" />
+        <path d="M6 9.5h6M6 12h4" />
+      </>
+    ),
+    archive: (
+      <>
+        <rect x="2.5" y="5" width="13" height="9.5" rx="1" />
+        <path d="M2.5 5V3.5a1 1 0 0 1 1-1h11a1 1 0 0 1 1 1V5" />
+        <path d="M7.5 8.5h3" />
+      </>
+    ),
+    other: <path d="M5 2.5h5l3 3v9.5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-11a1 1 0 0 1 1-1z" />,
+    // Sidebar toggle (Toolbar.tsx) — a window split into a side panel and a
+    // main area, the standard "toggle sidebar" pictogram. Static regardless
+    // of collapsed state — the sidebar's own width change is the feedback.
+    panel: (
+      <>
+        <rect x="2.5" y="3.5" width="13" height="11" rx="1.5" />
+        <path d="M6.5 3.5v11" />
+      </>
+    ),
   };
   return (
     <svg

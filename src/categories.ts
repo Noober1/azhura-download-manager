@@ -22,6 +22,16 @@ export const CATEGORY_LABEL: Record<FileCategory, string> = {
   other: "Others",
 };
 
+/** `Icon` glyph name (see `src/ui.tsx`) for each sidebar file-type row. */
+export const CATEGORY_ICON: Record<FileCategory, string> = {
+  video: "video",
+  audio: "audio",
+  program: "program",
+  docs: "docs",
+  archive: "archive",
+  other: "other",
+};
+
 /** Folder name under the download base (`<Downloads>/AzhuraDownloadManager/<folder>`). */
 export const CATEGORY_FOLDER: Record<FileCategory, string> = {
   video: "Videos",

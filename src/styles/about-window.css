@@ -1,0 +1,49 @@
+/* ---- About window --------------------------------------------------------- */
+
+.about-body {
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+.about-name {
+  font-family: var(--font-head);
+  font-weight: 600;
+  font-size: 1.1rem;
+  color: var(--ink);
+}
+.about-version {
+  font-size: var(--fs-sm);
+  color: var(--faint);
+  margin-bottom: 0.5rem;
+}
+.about-desc {
+  margin: 0 0 0.5rem;
+  font-size: var(--fs-sm);
+  color: var(--ink-soft);
+  line-height: 1.6;
+}
+.about-row {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  font-size: var(--fs-sm);
+}
+.about-label {
+  flex-shrink: 0;
+  width: 4.5rem;
+  color: var(--faint);
+}
+.about-value {
+  color: var(--ink-soft);
+}
+.about-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.about-link:hover {
+  color: var(--accent-strong);
+}

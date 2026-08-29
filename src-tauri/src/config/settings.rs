@@ -60,6 +60,10 @@ pub(crate) struct AppSettings {
     /// a preference. Applied entirely on the frontend (see
     /// `useUpdateCheck.ts`); Rust only persists it.
     auto_install_updates: bool,
+    /// Sidebar shown as a full-width panel vs. a narrow icon rail. Applied
+    /// entirely on the frontend (see `src/components/Sidebar.tsx`); Rust
+    /// only persists it.
+    sidebar_collapsed: bool,
 }
 
 impl Default for AppSettings {
@@ -78,6 +82,7 @@ impl Default for AppSettings {
             history_max_entries: 500,
             history_retention_days: 0,
             auto_install_updates: true,
+            sidebar_collapsed: false,
         }
     }
 }

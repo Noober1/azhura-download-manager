@@ -26,6 +26,8 @@ export function Toolbar({
   onRefresh,
   onShowSettings,
   onShowExtensions,
+  sidebarCollapsed,
+  onToggleSidebar,
 }: {
   resumableSel: DownloadItem[];
   /** "Resume" or "Redownload" — see ContextMenu's `resumeLabel` prop. */
@@ -47,6 +49,8 @@ export function Toolbar({
   onRefresh: () => void;
   onShowSettings: () => void;
   onShowExtensions: () => void;
+  sidebarCollapsed: boolean;
+  onToggleSidebar: () => void;
 }) {
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -66,6 +70,17 @@ export function Toolbar({
   }, []);
   return (
     <div className="topbar" data-tauri-drag-region>
+      <motion.button
+        className="tbtn"
+        title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+        aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+        aria-expanded={!sidebarCollapsed}
+        onClick={onToggleSidebar}
+        whileTap={TAP}
+      >
+        <Icon name="panel" size={15} />
+      </motion.button>
+      <span className="tsep" />
       <motion.button
         className="tbtn"
         title="Add download"
