@@ -37,8 +37,10 @@ tauri-specta = { version = "=2.0.0-rc.25", features = ["derive", "typescript"] }
 reqwest = { version = "0.12", features = ["stream", "socks"] }
 bytes = "1"
 futures-util = "0.3"
-tokio = { version = "1", features = ["fs", "io-util", "time", "rt"] }
+tokio = { version = "1", features = ["fs", "io-util", "time", "rt", "sync"] }
 dirs = "6"
+zip = { version = "8", default-features = false }
+sevenz-rust2 = "0.22"
 sha2 = "0.10"
 sha1 = "0.10"
 md-5 = "0.10"

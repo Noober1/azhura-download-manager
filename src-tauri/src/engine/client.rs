@@ -171,6 +171,28 @@ pub(crate) async fn probe(
     }
 }
 
+/// Fetch one inclusive byte range into memory rather than streaming it to a
+/// file at an offset — the primitive `RangeReader` (see `archive/range_reader.rs`)
+/// is built on. Mirrors `worker::stream_piece`'s Range handling, minus the
+/// `If-Range` validator (a preview reads a handful of ranges over seconds,
+/// not a whole file over minutes, so a mid-scan resource change is much less
+/// likely and not worth the extra round-trip complexity here).
+pub(crate) async fn fetch_range(
+    client: &reqwest::Client,
+    url: &str,
+    headers: &[(HeaderName, HeaderValue)],
+    start: u64,
+    end: u64,
+) -> Result<bytes::Bytes, String> {
+    let range = format!("bytes={start}-{end}");
+    let req = apply_headers(client.get(url).header(reqwest::header::RANGE, range), headers);
+    let resp = req.send().await.map_err(|e| format!("Request failed: {e}"))?;
+    if resp.status() != reqwest::StatusCode::PARTIAL_CONTENT {
+        return Err(format!("Server did not honor Range (HTTP {})", resp.status()));
+    }
+    resp.bytes().await.map_err(|e| format!("Failed to read response body: {e}"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

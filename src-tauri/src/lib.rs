@@ -4,6 +4,7 @@
 // one, so fast connections naturally do more work and no connection sits idle
 // while a slow one finishes. Per-piece completion is persisted for resume.
 
+mod archive;
 mod bridge;
 mod categories;
 mod commands;
@@ -66,6 +67,7 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         commands::list_resumable,
         commands::check_paths_missing,
         commands::probe_url,
+        archive::inspect_archive,
         commands::default_download_dir,
         commands::extension_dir,
         shell_icon::shell_icon,
@@ -75,6 +77,10 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         windows::detail::open_detail_window,
         windows::detail::show_detail_window,
         windows::detail::close_detail_window,
+        windows::archive::open_archive_window,
+        windows::archive::show_archive_window,
+        windows::archive::take_archive_request,
+        windows::archive::close_archive_window,
         tray::update_tray_downloads,
         config::settings::load_settings,
         config::settings::save_settings,
@@ -180,6 +186,7 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .manage(Manager::default())
         .manage(PendingDeepLink::default())
+        .manage(windows::archive::PendingArchiveRequest::default())
         .manage(SettingsState(Mutex::new(config::settings::load_settings_from_disk())))
         .manage(PrefsState(Mutex::new(config::prefs::load_prefs_from_disk())))
         .manage(Quitting(AtomicBool::new(false)))
@@ -348,6 +355,7 @@ pub fn run() {
                         let _ = m.set_enabled(true);
                         let _ = m.set_focus();
                     }
+                    windows::archive::close_if_open(window.app_handle());
                 }
             }
             // The detail popup is reused too, and — unlike "add" — never

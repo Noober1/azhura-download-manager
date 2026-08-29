@@ -8,6 +8,8 @@ export function LinkTab({
   runProbe,
   showCheckSizeButton,
   size,
+  canPreviewArchive,
+  openArchivePreview,
 }: {
   active: boolean;
   state: Pick<AddFormState, "url" | "pendingInsecure" | "filenameEnabled" | "filenameText" | "probedFilename">;
@@ -16,6 +18,8 @@ export function LinkTab({
   runProbe: (allowInsecure: boolean) => void;
   showCheckSizeButton: boolean;
   size: string | null;
+  canPreviewArchive: boolean;
+  openArchivePreview: () => void;
 }) {
   return (
     <div className={`tab-panel ${active ? "" : "tab-hidden"}`}>
@@ -56,6 +60,11 @@ export function LinkTab({
         {showCheckSizeButton && (
           <button type="button" className="link-btn" onClick={() => runProbe(true)}>
             Check size
+          </button>
+        )}
+        {canPreviewArchive && (
+          <button type="button" className="link-btn" onClick={openArchivePreview}>
+            Preview contents
           </button>
         )}
         {size && <span className="size-readout">{size}</span>}

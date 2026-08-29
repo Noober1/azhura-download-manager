@@ -5,7 +5,7 @@ import { readText } from "@tauri-apps/plugin-clipboard-manager";
 import { open } from "@tauri-apps/plugin-dialog";
 import { commands } from "../bindings";
 import type { AddPayload, ProxyConfig, ProxyScheme } from "../types";
-import { formatBytes, isInsecureHttp, looksLikeUrl, mergeHeaders } from "../format";
+import { formatBytes, isInsecureHttp, isPreviewableArchive, looksLikeUrl, mergeHeaders } from "../format";
 import { categoryOf, categoryOfUrl, CATEGORY_FOLDER, type FileCategory } from "../categories";
 
 export type ProbeInfo = { total: number | null; supportsRanges: boolean; filename: string };
@@ -23,6 +23,11 @@ export type AddFormState = {
   probedFilename: string;
   probeStatus: ProbeStatus;
   total: number | null;
+  /** Whether the probed server honors `Range` — gates "Preview contents",
+   *  since listing an archive's contents needs partial reads. Discarded by
+   *  every earlier version of this probe; the Archive Preview feature is
+   *  the first thing that needs it. */
+  supportsRanges: boolean;
 
   // More Options tab
   savePath: string;
@@ -58,6 +63,7 @@ const initialState: AddFormState = {
   probedFilename: "",
   probeStatus: "idle",
   total: null,
+  supportsRanges: false,
   savePath: "",
   defaultDir: "",
   connections: 8,
@@ -162,6 +168,7 @@ export function useAddForm() {
       probedFilename: "",
       total: null,
       probeStatus: "idle",
+      supportsRanges: false,
       perLimitMbps: p.speedLimit > 0 ? p.speedLimit / (1024 * 1024) : 0,
       checksumText: p.checksum ?? "",
       savePath: p.savePath ?? "",
@@ -232,13 +239,14 @@ export function useAddForm() {
           total: info.total,
           probedFilename: info.filename,
           probeStatus: "done",
+          supportsRanges: info.supportsRanges,
         };
         if (!state.filenameEnabled) upd.filenameText = info.filename;
         patch(upd);
       })
       .catch(() => {
         if (requestIdRef.current !== myId) return;
-        patch({ probeStatus: "error" });
+        patch({ probeStatus: "error", supportsRanges: false });
       });
   }
 
@@ -272,7 +280,7 @@ export function useAddForm() {
   useEffect(() => {
     const u = state.url.trim();
     if (!u || !looksLikeUrl(u) || isInsecureHttp(u)) {
-      patch({ probeStatus: "idle" });
+      patch({ probeStatus: "idle", supportsRanges: false });
       return;
     }
     const t = window.setTimeout(() => runProbe(false), 600);
@@ -371,6 +379,7 @@ export function useAddForm() {
       probedFilename: "",
       total: null,
       probeStatus: "idle",
+      supportsRanges: false,
       rememberPath: false,
     });
   }
@@ -403,6 +412,32 @@ export function useAddForm() {
   const showCheckSizeButton = looksLikeUrl(state.url.trim()) && isInsecureHttp(state.url.trim());
   const size = sizeLabel();
 
+  // Gated on a completed, ranges-capable probe rather than just "looks like
+  // an archive URL": listing a remote archive's contents needs partial
+  // reads, and a server that doesn't honor `Range` can't serve those no
+  // matter what the extension promises.
+  const canPreviewArchive =
+    state.probeStatus === "done" &&
+    state.supportsRanges &&
+    isPreviewableArchive(state.probedFilename || state.url);
+
+  function openArchivePreview() {
+    const u = state.url.trim();
+    if (!u) return;
+    commands
+      .openArchiveWindow({
+        url: u,
+        allowInsecure: isInsecureHttp(u),
+        headers: mergeHeaders(state.headersText, {
+          userAgent: state.userAgent,
+          referer: state.referer,
+          cookie: state.cookieText,
+        }),
+        proxy: effectiveProxy,
+      })
+      .catch(() => {});
+  }
+
   return {
     state,
     patch,
@@ -414,6 +449,8 @@ export function useAddForm() {
     savePathPlaceholder,
     showCheckSizeButton,
     size,
+    canPreviewArchive,
+    openArchivePreview,
     runProbe,
     browseSavePath,
     send,

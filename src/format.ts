@@ -6,6 +6,39 @@ export function isInsecureHttp(url: string): boolean {
   return /^\s*http:\/\//i.test(url);
 }
 
+/** Extensions `inspect_archive`'s `detect_format` (src-tauri/src/archive/mod.rs)
+ *  recognizes by name when a server doesn't send enough of the header for a
+ *  magic-byte sniff — kept in sync with that function's fallback match, not
+ *  with `categories.ts`'s "archive" bucket (a different, UI-navigation
+ *  grouping that includes formats with no preview support, like tar/gz, and
+ *  omits some this list does, like apk/docx). */
+const PREVIEWABLE_ARCHIVE_EXTENSIONS = new Set([
+  "zip",
+  "apk",
+  "jar",
+  "epub",
+  "docx",
+  "xlsx",
+  "pptx",
+  "cbz",
+  "ipa",
+  "whl",
+  "7z",
+  "rar",
+  "iso",
+  "img",
+]);
+
+/** Whether "Preview contents" should even be offered for `nameOrUrl` — a
+ *  filename (once probed) or, before that's known, the raw URL itself. */
+export function isPreviewableArchive(nameOrUrl: string): boolean {
+  const clean = nameOrUrl.split(/[?#]/)[0];
+  const base = clean.split("/").filter(Boolean).pop() ?? clean;
+  const dot = base.lastIndexOf(".");
+  if (dot <= 0) return false;
+  return PREVIEWABLE_ARCHIVE_EXTENSIONS.has(base.slice(dot + 1).toLowerCase());
+}
+
 export function looksLikeUrl(text: string): boolean {
   try {
     return /^https?:$/.test(new URL(text).protocol);

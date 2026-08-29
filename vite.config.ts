@@ -15,6 +15,7 @@ export default defineConfig(async () => ({
         main: "index.html",
         add: "add.html",
         detail: "detail.html",
+        archive: "archive.html",
       },
     },
   },

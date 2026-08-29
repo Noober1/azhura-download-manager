@@ -1,4 +1,5 @@
 pub(crate) mod add;
+pub(crate) mod archive;
 pub(crate) mod detail;
 
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -51,6 +52,9 @@ pub(crate) fn reveal_main_window(app: &tauri::AppHandle) {
 /// running, they're just not visible.
 pub(crate) fn hide_to_tray(app: &tauri::AppHandle) {
     if let Some(w) = app.get_webview_window("add") {
+        let _ = w.hide();
+    }
+    if let Some(w) = app.get_webview_window("archive-preview") {
         let _ = w.hide();
     }
     for (label, w) in app.webview_windows() {

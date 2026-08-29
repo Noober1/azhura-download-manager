@@ -45,6 +45,13 @@ export const commands = {
 	username?: string,
 	password?: string,
 } | null) => __TAURI_INVOKE<ProbeInfo>("probe_url", { url, allowInsecure, headers, proxy }),
+	/**
+	 *  Check a remote archive's contents ahead of committing to the download,
+	 *  for the Add window's "Preview contents" button. Reuses the same
+	 *  probe/client path as `probe_url` and a real download, so a listing here
+	 *  reflects exactly what downloading the file would get.
+	 */
+	inspectArchive: (req: ArchiveRequest) => __TAURI_INVOKE<ArchiveListing>("inspect_archive", { req }),
 	/**  The default destination folder, for the Add window's "Save path" field. */
 	defaultDownloadDir: () => __TAURI_INVOKE<string>("default_download_dir"),
 	/**
@@ -105,6 +112,49 @@ export const commands = {
 	 *  inline on the IPC/UI thread either.
 	 */
 	closeDetailWindow: (id: string) => __TAURI_INVOKE<void>("close_detail_window", { id }),
+	/**
+	 *  Build (or, if one is already open, reveal and refresh) the "Preview
+	 *  archive" popup for `req`, labeled `archive-preview` — a single window,
+	 *  unlike the per-download `detail-<id>` popups, since only one preview is
+	 *  ever relevant at a time. Owned by the Add window (not `main`) so it
+	 *  floats above the modal Add dialog it was opened from, and is destroyed
+	 *  (not hidden-and-reused) when closed — see `close_archive_window`.
+	 * 
+	 *  Built hidden: the frontend calls `show_archive_window` itself once it has
+	 *  taken the stashed request and has at least a "Scanning…" state to show,
+	 *  so there's never a flash of an empty popup. When reusing an
+	 *  already-open window instead, there's no such gap to avoid — it's shown
+	 *  immediately, and `archive-window-opened` tells its already-mounted React
+	 *  tree to collect the new request and re-scan.
+	 * 
+	 *  Must be `async`: a plain (blocking) command runs inline on the same
+	 *  thread that pumps WebView2's IPC messages — i.e. the main/UI thread.
+	 *  Creating a *new* OS window needs to hand off to that same thread's event
+	 *  loop and wait for it, which can't happen while that thread is busy
+	 *  running us, so a non-async version of this command deadlocks the whole
+	 *  app the moment it tries to build the window.
+	 */
+	openArchiveWindow: (req: ArchiveRequest) => __TAURI_INVOKE<null>("open_archive_window", { req }),
+	/**
+	 *  Show + focus the preview popup once its own React tree has taken the
+	 *  stashed request and has something to display.
+	 */
+	showArchiveWindow: () => __TAURI_INVOKE<void>("show_archive_window"),
+	takeArchiveRequest: () => __TAURI_INVOKE<{
+	url: string,
+	allowInsecure: boolean,
+	headers: ([string, string])[],
+	proxy: ProxyConfig | null,
+} | null>("take_archive_request"),
+	/**
+	 *  Destroys the preview popup — created on demand, not pooled like the Add
+	 *  window, so there's nothing to hide-and-reuse here; the next "Preview
+	 *  contents" click just builds a fresh one.
+	 * 
+	 *  `async` for the same reason as `open_archive_window`: tearing down an OS
+	 *  window is thread-affine like creating one.
+	 */
+	closeArchiveWindow: () => __TAURI_INVOKE<void>("close_archive_window"),
 	/**
 	 *  Push a fresh snapshot of active downloads into the tray menu, called
 	 *  roughly once a second from the frontend. Patches labels in place when the
@@ -197,6 +247,41 @@ export type AppSettings = {
 	 *  `useUpdateCheck.ts`); Rust only persists it.
 	 */
 	autoInstallUpdates?: boolean,
+};
+
+export type ArchiveEntry = {
+	/**  Internal path, `/`-separated, no leading slash. */
+	path: string,
+	isDir: boolean,
+	size: number,
+	compressed: number | null,
+	encrypted: boolean,
+	/**  `"YYYY-MM-DD HH:MM"`, when the format records one. */
+	modified: string | null,
+};
+
+export type ArchiveListing = {
+	format: string,
+	filename: string,
+	total: number,
+	entries: ArchiveEntry[],
+	/**
+	 *  A request/byte budget was hit before the whole directory was read —
+	 *  `entries` is a partial (but not corrupt) listing.
+	 */
+	truncated: boolean,
+	/**
+	 *  The format encrypts its own file-name table (7z `-mhe`, RAR `-hp`),
+	 *  so nothing could be listed at all; `entries` is empty.
+	 */
+	encryptedNames: boolean,
+};
+
+export type ArchiveRequest = {
+	url: string,
+	allowInsecure: boolean,
+	headers: ([string, string])[],
+	proxy: ProxyConfig | null,
 };
 
 export type ConnInfo = {

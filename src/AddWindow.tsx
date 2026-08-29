@@ -86,6 +86,8 @@ export function AddWindow() {
           runProbe={form.runProbe}
           showCheckSizeButton={form.showCheckSizeButton}
           size={form.size}
+          canPreviewArchive={form.canPreviewArchive}
+          openArchivePreview={form.openArchivePreview}
         />
         <ProxyTab active={tab === "proxy"} state={state} patch={patch} />
         <MoreOptionsTab

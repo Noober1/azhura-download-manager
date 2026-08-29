@@ -51,6 +51,7 @@ pub(crate) fn submit_add(app: tauri::AppHandle, payload: serde_json::Value) -> R
         let _ = m.set_enabled(true);
         let _ = m.set_focus();
     }
+    super::archive::close_if_open(&app);
     Ok(())
 }
 
@@ -64,4 +65,5 @@ pub(crate) fn close_add_window(app: tauri::AppHandle) {
         let _ = m.set_enabled(true);
         let _ = m.set_focus();
     }
+    super::archive::close_if_open(&app);
 }
