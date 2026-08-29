@@ -1,0 +1,27 @@
+/* ---- Tooltips --------------------------------------------------------------
+   Custom `data-tip` bubbles rendered by `TooltipHost` (Tooltip.tsx), one per
+   window. Replaces the native WebView2 title tooltip everywhere — that one
+   ignores the app's theme tokens and pays the OS's own show delay on every
+   hover. z-index 90 sits above the toast stack (80) so a tooltip on a toast's
+   own action button still shows. `pointer-events: none` throughout: the
+   bubble tracks the trigger, it's never itself a target. */
+
+.tooltip-bubble {
+  position: fixed;
+  z-index: 90;
+  max-width: 280px;
+  padding: 0.3rem 0.55rem;
+  background: var(--canvas);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-card);
+  box-shadow: var(--sh-raised);
+  font-size: var(--fs-sm);
+  line-height: 1.35;
+  color: var(--ink);
+  pointer-events: none;
+  white-space: pre-line;
+  /* A file path or URL has no spaces to break at, so `pre-line` alone lets
+     it run straight past `max-width` — force a mid-word break once a line
+     has nowhere else to wrap. */
+  overflow-wrap: anywhere;
+}

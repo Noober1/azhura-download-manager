@@ -92,6 +92,9 @@
   display: flex;
   flex-shrink: 0;
   color: var(--faint);
+  /* Sidebar.tsx scales this on hover/tap/activate — without a centered
+     origin the icon would drift within its flex slot as it grows. */
+  transform-origin: center;
 }
 .cat.active .cat-icon {
   color: inherit;

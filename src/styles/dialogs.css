@@ -119,3 +119,47 @@
      off, or a short window leaves the dialog with no visible way out. */
   flex-shrink: 0;
 }
+
+/* ---- Keyboard shortcuts cheat sheet (ShortcutsDialog) --------------------- */
+
+.shortcut-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.shortcut-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0;
+}
+.shortcut-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.shortcut-row dt {
+  font-size: var(--fs-base);
+  color: var(--ink);
+}
+.shortcut-row dd {
+  margin: 0;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: var(--fs-xs);
+  color: var(--ink-soft);
+}
+kbd {
+  display: inline-block;
+  padding: 0.1rem 0.4rem;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--ink);
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-field);
+  box-shadow: none;
+}

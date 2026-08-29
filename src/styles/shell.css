@@ -52,6 +52,11 @@
   cursor: not-allowed;
   box-shadow: none;
 }
+/* Wraps the Refresh icon so its click-triggered rotation (Toolbar.tsx)
+   animates in place instead of nudging the button's own flex centering. */
+.tbtn-spin {
+  display: inline-flex;
+}
 
 .tsep {
   width: 1px;

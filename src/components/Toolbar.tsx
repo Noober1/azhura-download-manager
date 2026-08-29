@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
 import { commands } from "../bindings";
 import type { DownloadItem } from "../types";
@@ -53,6 +53,10 @@ export function Toolbar({
   onToggleSidebar: () => void;
 }) {
   const searchRef = useRef<HTMLInputElement>(null);
+  // Ticks up on every Refresh click so the icon's rotation accumulates
+  // (spin += 360°) instead of resetting mid-turn — mashing the button spins
+  // continuously rather than stuttering back to 0 on each click.
+  const [refreshSpin, setRefreshSpin] = useState(0);
 
   // Ctrl+F focuses the search box instead of WebView2's native find-in-page
   // (still suppressed separately by `useNativeShell`'s blocklist — that
@@ -72,18 +76,18 @@ export function Toolbar({
     <div className="topbar" data-tauri-drag-region>
       <motion.button
         className="tbtn"
-        title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+        data-tip={`${sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} · Ctrl+B`}
         aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
         aria-expanded={!sidebarCollapsed}
         onClick={onToggleSidebar}
         whileTap={TAP}
       >
-        <Icon name="panel" size={15} />
+        <Icon name="panel" size={15} active={!sidebarCollapsed} />
       </motion.button>
       <span className="tsep" />
       <motion.button
         className="tbtn"
-        title="Add download"
+        data-tip="Add download · Ctrl+N"
         aria-label="Add download"
         onClick={() => commands.openAddWindow()}
         whileTap={TAP}
@@ -93,7 +97,7 @@ export function Toolbar({
       <span className="tsep" />
       <motion.button
         className="tbtn"
-        title={`${resumeLabel}${resumableSel.length > 1 ? ` (${resumableSel.length})` : ""}`}
+        data-tip={`${resumeLabel}${resumableSel.length > 1 ? ` (${resumableSel.length})` : ""} · Space`}
         aria-label={`${resumeLabel}${resumableSel.length > 1 ? ` (${resumableSel.length})` : ""}`}
         disabled={resumableSel.length === 0}
         onClick={() => onResume(resumableSel)}
@@ -103,7 +107,7 @@ export function Toolbar({
       </motion.button>
       <motion.button
         className="tbtn"
-        title={`Pause${pausableSel.length > 1 ? ` (${pausableSel.length})` : ""}`}
+        data-tip={`Pause${pausableSel.length > 1 ? ` (${pausableSel.length})` : ""} · Space`}
         aria-label={`Pause${pausableSel.length > 1 ? ` (${pausableSel.length})` : ""}`}
         disabled={pausableSel.length === 0}
         onClick={() => onPause(pausableSel)}
@@ -113,7 +117,7 @@ export function Toolbar({
       </motion.button>
       <motion.button
         className="tbtn"
-        title={`Cancel${cancelableSel.length > 1 ? ` (${cancelableSel.length})` : ""}`}
+        data-tip={`Cancel${cancelableSel.length > 1 ? ` (${cancelableSel.length})` : ""}`}
         aria-label={`Cancel${cancelableSel.length > 1 ? ` (${cancelableSel.length})` : ""}`}
         disabled={cancelableSel.length === 0}
         onClick={() => onCancel(cancelableSel)}
@@ -123,7 +127,7 @@ export function Toolbar({
       </motion.button>
       <motion.button
         className="tbtn"
-        title={`Delete${deletableSel.length > 1 ? ` (${deletableSel.length})` : ""}`}
+        data-tip={`Delete${deletableSel.length > 1 ? ` (${deletableSel.length})` : ""} · Delete`}
         aria-label={`Delete${deletableSel.length > 1 ? ` (${deletableSel.length})` : ""}`}
         disabled={deletableSel.length === 0}
         onClick={() => onRequestDelete(selectedItems)}
@@ -134,7 +138,7 @@ export function Toolbar({
       <span className="tsep" />
       <motion.button
         className="tbtn"
-        title="Settings"
+        data-tip="Settings · Ctrl+,"
         aria-label="Settings"
         onClick={onShowSettings}
         whileTap={TAP}
@@ -143,12 +147,21 @@ export function Toolbar({
       </motion.button>
       <motion.button
         className="tbtn"
-        title="Refresh file status (F5)"
+        data-tip="Refresh file status · F5"
         aria-label="Refresh file status (F5)"
-        onClick={onRefresh}
+        onClick={() => {
+          setRefreshSpin((s) => s + 1);
+          onRefresh();
+        }}
         whileTap={TAP}
       >
-        <Icon name="refresh" />
+        <motion.span
+          className="tbtn-spin"
+          animate={{ rotate: refreshSpin * 360 }}
+          transition={{ duration: 0.5, ease: "easeInOut" }}
+        >
+          <Icon name="refresh" />
+        </motion.span>
       </motion.button>
 
       <input
@@ -175,7 +188,7 @@ export function Toolbar({
       </div>
       <motion.button
         className="tbtn"
-        title="Install browser extension"
+        data-tip="Install browser extension · Ctrl+Shift+X"
         aria-label="Install browser extension"
         onClick={onShowExtensions}
         whileTap={TAP}

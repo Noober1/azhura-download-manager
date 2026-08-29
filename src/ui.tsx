@@ -1,10 +1,13 @@
 import { useEffect, useState, type ReactElement } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { motion } from "motion/react";
+import { LAYOUT_SPRING } from "./motion";
 
 /* Minimal inline icons — no emoji, stroke = currentColor. `size` defaults to
    the toolbar's 14px; the empty-state badge is the one caller that scales it
-   up. */
-export function Icon({ name, size = 14 }: { name: string; size?: number }) {
+   up. `active` is only consumed by the `panel` glyph (the sidebar toggle) —
+   every other name ignores it. */
+export function Icon({ name, size = 14, active }: { name: string; size?: number; active?: boolean }) {
   const glyphs: Record<string, ReactElement> = {
     add: <path d="M9 2.5v13M2.5 9h13" />,
     tray: (
@@ -91,12 +94,29 @@ export function Icon({ name, size = 14 }: { name: string; size?: number }) {
     ),
     other: <path d="M5 2.5h5l3 3v9.5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-11a1 1 0 0 1 1-1z" />,
     // Sidebar toggle (Toolbar.tsx) — a window split into a side panel and a
-    // main area, the standard "toggle sidebar" pictogram. Static regardless
-    // of collapsed state — the sidebar's own width change is the feedback.
+    // main area, the standard "toggle sidebar" pictogram. The panel half
+    // fills in and the divider slides over when the sidebar is showing
+    // (`active`), so the icon itself previews the state instead of just
+    // sitting there while the real sidebar's width animates separately.
     panel: (
       <>
         <rect x="2.5" y="3.5" width="13" height="11" rx="1.5" />
-        <path d="M6.5 3.5v11" />
+        {/* Filled left region = the panel itself: grows wider (and fades
+            in) as the divider slides right, so the icon reads as the panel
+            *filling up to* the divider rather than an unrelated block
+            sliding underneath it. Width, not `x`, is what's animated — the
+            left edge stays pinned to the frame's inner corner. */}
+        <motion.rect
+          x="3.3"
+          y="4.3"
+          height="9.4"
+          rx="0.5"
+          fill="currentColor"
+          stroke="none"
+          animate={{ width: active ? 3.2 : 1.2, fillOpacity: active ? 0.9 : 0.5 }}
+          transition={LAYOUT_SPRING}
+        />
+        <motion.path d="M6.5 3.5v11" animate={{ x: active ? 0 : -2 }} transition={LAYOUT_SPRING} />
       </>
     ),
   };
@@ -141,7 +161,7 @@ export function WindowControls({ variant }: { variant: "full" | "close" }) {
         <>
           <button
             className="win-btn"
-            title="Minimize"
+            data-tip="Minimize"
             aria-label="Minimize"
             onClick={() => win.minimize()}
           >
@@ -149,7 +169,7 @@ export function WindowControls({ variant }: { variant: "full" | "close" }) {
           </button>
           <button
             className="win-btn"
-            title={maximized ? "Restore" : "Maximize"}
+            data-tip={maximized ? "Restore" : "Maximize"}
             aria-label={maximized ? "Restore" : "Maximize"}
             onClick={() => win.toggleMaximize()}
           >
@@ -159,7 +179,7 @@ export function WindowControls({ variant }: { variant: "full" | "close" }) {
       )}
       <button
         className="win-btn win-close"
-        title="Close"
+        data-tip="Close"
         aria-label="Close"
         onClick={() => win.close()}
       >

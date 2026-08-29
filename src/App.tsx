@@ -33,6 +33,7 @@ import { useBackendWarnings } from "./hooks/useBackendWarnings";
 import { useSelection } from "./selection/useSelection";
 import { useMarquee } from "./selection/useMarquee";
 import { useTableKeyboard } from "./selection/useTableKeyboard";
+import { useAppShortcuts } from "./hooks/useAppShortcuts";
 import { Toolbar } from "./components/Toolbar";
 import { Sidebar } from "./components/Sidebar";
 import { DownloadTable } from "./components/DownloadTable";
@@ -45,6 +46,7 @@ import { SpeedCapDialog } from "./components/dialogs/SpeedCapDialog";
 import { ConnRestartDialog } from "./components/dialogs/ConnRestartDialog";
 import { PowerActionDialog, type PowerAction } from "./components/dialogs/PowerActionDialog";
 import { UpdateRestartDialog } from "./components/dialogs/UpdateRestartDialog";
+import { ShortcutsDialog } from "./components/dialogs/ShortcutsDialog";
 import "./App.css";
 
 function App() {
@@ -69,6 +71,7 @@ function App() {
   // always goes through a confirmation — even though the downloads are only
   // paused, not lost.
   const [confirmRestart, setConfirmRestart] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
 
   const tableWrapRef = useRef<HTMLElement>(null);
   const didDragRef = useRef(false);
@@ -264,10 +267,19 @@ function App() {
     downloadsApi.resumeMany(items);
   }
 
+  // Shared by ContextMenu's "Copy link" and the Ctrl+C shortcut, so the two
+  // entry points can't drift.
+  function copyLinks(items: DownloadItem[]) {
+    writeText(items.map((i) => i.url).join("\n")).catch(() =>
+      showToast("Couldn't copy to clipboard."),
+    );
+  }
+
   const anyDialogOpen = !!(
     downloadsApi.pendingDelete ||
     showSettings ||
     showExtensions ||
+    showShortcuts ||
     menu ||
     speedCapDialog ||
     pendingPower ||
@@ -324,6 +336,23 @@ function App() {
     anchorRef,
     requestDelete: downloadsApi.requestDelete,
     scrollRowIntoView: scrollRowIntoViewEnsured,
+    openDetail,
+  });
+
+  useAppShortcuts({
+    anyDialogOpen,
+    onToggleSidebar: () => settings.setSidebarCollapsedSetting(!settings.sidebarCollapsed),
+    onAddDownload: () => commands.openAddWindow(),
+    onShowSettings: () => setShowSettings(true),
+    onShowExtensions: () => setShowExtensions(true),
+    onShowShortcuts: () => setShowShortcuts(true),
+    pausableSel,
+    resumableSel,
+    onPause: downloadsApi.pauseMany,
+    onResume: resumeWithOverride,
+    selectedItems,
+    onCopyLink: copyLinks,
+    singleSelected,
     openDetail,
   });
 
@@ -394,13 +423,19 @@ function App() {
 
       {/* ---- Status bar ---- */}
       <div className="statusbar">
-        <button className="sb-about" title="About Azhura Download Manager" onClick={() => commands.openAboutWindow()}>
+        <button
+          className="sb-about"
+          data-tip="About Azhura Download Manager"
+          data-tip-side="top"
+          onClick={() => commands.openAboutWindow()}
+        >
           Azhura Download Manager{version ? ` v${version}` : ""}
         </button>
         {updater.state.stage === "ready" && (
           <button
             className="sb-update"
-            title={`Version ${updater.state.version} has been downloaded — restarting will apply it`}
+            data-tip={`Version ${updater.state.version} has been downloaded — restarting will apply it`}
+            data-tip-side="top"
             onClick={() => setConfirmRestart(true)}
           >
             Restart to update
@@ -408,7 +443,11 @@ function App() {
         )}
         {updater.state.stage === "installing" && <span className="sb-update-note">Updating…</span>}
         {queue.held && (
-          <span className="sb-hold" title="Queued downloads are waiting for the scheduled start">
+          <span
+            className="sb-hold"
+            data-tip="Queued downloads are waiting for the scheduled start"
+            data-tip-side="top"
+          >
             Queue starts at {settings.scheduledStartTime}
           </span>
         )}
@@ -424,17 +463,18 @@ function App() {
         </select>
         <span
           className="sb-grabber"
-          title={
+          data-tip={
             grabber.running
               ? `Browser extension bridge listening on 127.0.0.1:${grabber.port}`
               : "No port in 47600–47609 was free — the browser extension falls back to the legacy URL-embedded handoff for this session."
           }
+          data-tip-side="top"
         >
           <span className={`sb-dot ${grabber.running ? "on" : "off"}`} />
           {grabber.running ? `Grabber active · :${grabber.port}` : "Grabber inactive"}
         </span>
         {import.meta.env.DEV && (
-          <span className="sb-dev" title="Running a development build (tauri dev)">
+          <span className="sb-dev" data-tip="Running a development build (tauri dev)" data-tip-side="top">
             dev
           </span>
         )}
@@ -508,6 +548,11 @@ function App() {
         {showExtensions && <ExtensionsDialog onClose={() => setShowExtensions(false)} />}
       </AnimatePresence>
 
+      {/* ---- Keyboard shortcuts cheat sheet ---- */}
+      <AnimatePresence>
+        {showShortcuts && <ShortcutsDialog onClose={() => setShowShortcuts(false)} />}
+      </AnimatePresence>
+
       {/* ---- Row context menu ---- */}
       <AnimatePresence>
         {menu?.kind === "row" && (
@@ -534,11 +579,7 @@ function App() {
                 showToast("Couldn't open the containing folder — the file may have moved."),
               )
             }
-            onCopyLink={() =>
-              writeText(selectedItems.map((i) => i.url).join("\n")).catch(() =>
-                showToast("Couldn't copy to clipboard."),
-              )
-            }
+            onCopyLink={() => copyLinks(selectedItems)}
             onShowDetail={() => singleSelected && openDetail(singleSelected.id)}
             onSpeedCap={(bytes) => downloadsApi.applySpeedCap(selectedItems, bytes)}
             onCustomSpeedCap={() =>

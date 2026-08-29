@@ -125,7 +125,7 @@ export function ArchiveWindow() {
   return (
     <div className="add-window archive-window">
       <div className="dialog-head add-head" data-tauri-drag-region>
-        <span title={listing?.filename}>
+        <span data-tip={listing?.filename}>
           {listing ? `Archive Contents — ${listing.filename}` : "Archive Contents"}
         </span>
         <WindowControls variant="close" />

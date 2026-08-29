@@ -1,14 +1,19 @@
 import { motion } from "motion/react";
 import type { Category } from "../types";
 import { FILE_CATEGORIES, CATEGORY_LABEL, CATEGORY_ICON } from "../categories";
-import { LAYOUT_SPRING } from "../motion";
+import { LAYOUT_SPRING, SPRING_POP } from "../motion";
 import { Icon } from "../ui";
 
 /* A single category row. The active one gets a `motion.div` sharing
    `layoutId="sidebar-active"` with every other row's — motion animates it
    sliding to the new position instead of the highlight just jumping.
-   `title` always carries the label+count (not just when collapsed) so the
-   two states need no separate tooltip logic. */
+   `data-tip` always carries the label+count (not just when collapsed) so the
+   two states need no separate tooltip logic; `aria-label` mirrors it since
+   the collapsed rail hides the visible label/count text entirely — without
+   it a screen reader would announce nothing but an empty button.
+   `.cat-icon` gets its own hover/tap/activate motion, independent of the
+   indicator's slide, so clicking a category reads as the icon *arriving*
+   at the highlight rather than the highlight silently appearing under it. */
 function CatButton({
   active,
   icon,
@@ -23,7 +28,13 @@ function CatButton({
   onClick: () => void;
 }) {
   return (
-    <button className={`cat ${active ? "active" : ""}`} title={`${label} (${count})`} onClick={onClick}>
+    <button
+      className={`cat ${active ? "active" : ""}`}
+      data-tip={`${label} (${count})`}
+      data-tip-side="right"
+      aria-label={`${label} (${count})`}
+      onClick={onClick}
+    >
       {active && (
         <motion.div
           className="cat-indicator"
@@ -32,9 +43,15 @@ function CatButton({
         />
       )}
       <span className="cat-content">
-        <span className="cat-icon">
+        <motion.span
+          className="cat-icon"
+          whileHover={{ scale: 1.15 }}
+          whileTap={{ scale: 0.9 }}
+          animate={{ scale: active ? [1, 1.25, 1] : 1 }}
+          transition={SPRING_POP}
+        >
           <Icon name={icon} size={15} />
-        </span>
+        </motion.span>
         <span className="cat-label">{label}</span>
         <span className="cat-n">{count}</span>
       </span>

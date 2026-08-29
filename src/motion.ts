@@ -14,7 +14,9 @@ const DUR = { fast: 0.08, base: 0.12, slow: 0.18 } as const;
 const DECEL: Transition["ease"] = [0, 0, 0, 1];
 const ACCEL: Transition["ease"] = [0.7, 0, 1, 0.5];
 
-const SPRING_POP: Transition = { type: "spring", stiffness: 400, damping: 30 };
+/** Shared "pop" spring — dialog entrances, and (below) the sidebar's hover/
+ *  tap/activate feedback and the sidebar-toggle icon's panel-fill change. */
+export const SPRING_POP: Transition = { type: "spring", stiffness: 400, damping: 30 };
 
 /** A dialog's backdrop: plain opacity fade, no transform (nothing to guide
  *  the eye toward — it's just dimming the app behind the dialog). */
@@ -72,4 +74,32 @@ export const TOAST_POP: Variants = {
   initial: { opacity: 0, y: 8, scale: 0.98 },
   animate: { opacity: 1, y: 0, scale: 1, transition: { duration: DUR.base, ease: DECEL } },
   exit: { opacity: 0, y: 4, transition: { duration: DUR.fast, ease: ACCEL } },
+};
+
+/** A tooltip bubble — same "needs to feel immediate" timing as `MENU_POP`
+ *  (it's also cursor/focus-anchored, not a modal), but each side variant
+ *  slides in *from* the anchor it's attached to rather than just scaling in
+ *  place, so it reads as pointing at its trigger. `TooltipHost` picks the
+ *  variant matching the resolved side. */
+export const TOOLTIP_POP: Record<"top" | "bottom" | "left" | "right", Variants> = {
+  top: {
+    initial: { opacity: 0, scale: 0.96, y: 4 },
+    animate: { opacity: 1, scale: 1, y: 0, transition: { duration: DUR.base, ease: DECEL } },
+    exit: { opacity: 0, scale: 0.96, y: 4, transition: { duration: DUR.fast, ease: ACCEL } },
+  },
+  bottom: {
+    initial: { opacity: 0, scale: 0.96, y: -4 },
+    animate: { opacity: 1, scale: 1, y: 0, transition: { duration: DUR.base, ease: DECEL } },
+    exit: { opacity: 0, scale: 0.96, y: -4, transition: { duration: DUR.fast, ease: ACCEL } },
+  },
+  left: {
+    initial: { opacity: 0, scale: 0.96, x: 4 },
+    animate: { opacity: 1, scale: 1, x: 0, transition: { duration: DUR.base, ease: DECEL } },
+    exit: { opacity: 0, scale: 0.96, x: 4, transition: { duration: DUR.fast, ease: ACCEL } },
+  },
+  right: {
+    initial: { opacity: 0, scale: 0.96, x: -4 },
+    animate: { opacity: 1, scale: 1, x: 0, transition: { duration: DUR.base, ease: DECEL } },
+    exit: { opacity: 0, scale: 0.96, x: -4, transition: { duration: DUR.fast, ease: ACCEL } },
+  },
 };

@@ -76,11 +76,11 @@ function ArchiveTreeRow({
         ) : (
           <FileIcon name={node.name} size={16} />
         )}
-        <span className="archive-name" title={node.name}>
+        <span className="archive-name" data-tip={node.name}>
           {node.name}
         </span>
         {node.encrypted && (
-          <span className="archive-lock" title="Encrypted" aria-hidden="true">
+          <span className="archive-lock" data-tip="Encrypted" aria-hidden="true">
             🔒
           </span>
         )}

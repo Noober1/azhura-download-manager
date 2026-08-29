@@ -57,7 +57,7 @@ export function DeleteDialog({
           {deletable.length > 1 && (
             <ul className="del-list">
               {shownNames.map((d) => (
-                <li key={d.id} title={d.filename}>
+                <li key={d.id} data-tip={d.filename}>
                   {d.filename}
                 </li>
               ))}

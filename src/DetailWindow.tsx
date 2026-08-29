@@ -137,7 +137,7 @@ export function DetailWindow() {
     <div className="add-window">
       <ToastHost />
       <div className="dialog-head add-head" data-tauri-drag-region>
-        <span title={item.filename}>Download Details — {truncate(item.filename, 32)}</span>
+        <span data-tip={item.filename}>Download Details — {truncate(item.filename, 32)}</span>
         <WindowControls variant="close" />
       </div>
 
@@ -151,7 +151,7 @@ export function DetailWindow() {
           {/* The filename needs its own element: `.detail-title` is a flex
               container now, and text-overflow doesn't apply to a bare text
               node inside one. */}
-          <span className="detail-title selectable" title={item.filename}>
+          <span className="detail-title selectable" data-tip={item.filename}>
             <FileIcon name={item.filename} size={20} />
             <span className="name-text">{item.filename}</span>
           </span>
@@ -265,12 +265,12 @@ export function DetailWindow() {
         {item.state === "verifying" && <div className="detail-note">Verifying checksum…</div>}
         {item.state === "completed" && item.checksum && <p className="ok">✓ Checksum verified</p>}
         {item.state === "completed" && !item.missing && (
-          <p className="detail-path selectable" title={item.path}>
+          <p className="detail-path selectable" data-tip={item.path}>
             Saved to {item.path}
           </p>
         )}
         {item.missing && (
-          <p className="detail-path selectable" title={item.path}>
+          <p className="detail-path selectable" data-tip={item.path}>
             No longer at {item.path} — click Redownload to fetch it again.
           </p>
         )}
@@ -286,7 +286,7 @@ export function DetailWindow() {
 
         <div className="detail-grid">
           <span className="detail-grid-label">URL</span>
-          <span className="detail-grid-value selectable" title={item.url}>
+          <span className="detail-grid-value selectable" data-tip={item.url}>
             {item.url}
           </span>
 
@@ -298,7 +298,7 @@ export function DetailWindow() {
           {item.path && (
             <>
               <span className="detail-grid-label">File path</span>
-              <span className="detail-grid-value selectable" title={item.path}>
+              <span className="detail-grid-value selectable" data-tip={item.path}>
                 {item.path}
               </span>
             </>
@@ -333,7 +333,7 @@ export function DetailWindow() {
           {item.referer && (
             <>
               <span className="detail-grid-label">Referer</span>
-              <span className="detail-grid-value selectable" title={item.referer}>
+              <span className="detail-grid-value selectable" data-tip={item.referer}>
                 {item.referer}
               </span>
             </>

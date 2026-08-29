@@ -76,7 +76,7 @@ function renderCell(key: SortKey, item: DownloadItem, pct: number | null) {
   switch (key) {
     case "name":
       return (
-        <td key={key} className={COLUMN_CLASS.name} title={item.path || item.url}>
+        <td key={key} className={COLUMN_CLASS.name} data-tip={item.path || item.url}>
           <span className="name-cell">
             <FileIcon name={item.filename} />
             <span className="name-text">{item.filename}</span>
