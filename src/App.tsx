@@ -26,6 +26,7 @@ import { useDeepLinkCapture } from "./hooks/useDeepLinkCapture";
 import { useSortedRows } from "./hooks/useSortedRows";
 import { useColumnWidths } from "./hooks/useColumnWidths";
 import { useColumnOrder } from "./hooks/useColumnOrder";
+import { useColumnVisibility } from "./hooks/useColumnVisibility";
 import { useInfiniteRows } from "./hooks/useInfiniteRows";
 import { useMissingRefresh } from "./hooks/useMissingRefresh";
 import { useGrabberStatus } from "./hooks/useGrabberStatus";
@@ -39,6 +40,7 @@ import { Sidebar } from "./components/Sidebar";
 import { DownloadTable } from "./components/DownloadTable";
 import { ContextMenu } from "./components/ContextMenu";
 import { TableContextMenu } from "./components/TableContextMenu";
+import { ColumnMenu } from "./components/ColumnMenu";
 import { SettingsDialog } from "./components/dialogs/SettingsDialog";
 import { ExtensionsDialog } from "./components/dialogs/ExtensionsDialog";
 import { DeleteDialog } from "./components/dialogs/DeleteDialog";
@@ -53,7 +55,11 @@ function App() {
   const [version, setVersion] = useState("");
   const [showSettings, setShowSettings] = useState(false);
   const [showExtensions, setShowExtensions] = useState(false);
-  const [menu, setMenu] = useState<{ x: number; y: number; kind: "row" | "empty" } | null>(null);
+  const [menu, setMenu] = useState<{
+    x: number;
+    y: number;
+    kind: "row" | "empty" | "columns";
+  } | null>(null);
   // Read fresh each time the empty-space menu opens, rather than kept live
   // via a poller (unlike `useClipboardWatch`) — this only needs to be
   // correct at the moment the menu appears, not continuously.
@@ -105,8 +111,11 @@ function App() {
   const { selectedIds, setSelectedIds, anchorRef, selectRow, scrollRowIntoView } = selection;
 
   const marquee = useMarquee(didDragRef, tableWrapRef, selectedIds, setSelectedIds);
-  const columnOrder = useColumnOrder();
-  const columnWidths = useColumnWidths(columnOrder.order);
+  const columnVisibility = useColumnVisibility();
+  const columnOrder = useColumnOrder(columnVisibility.hidden);
+  // The visible order, not the full one — everything downstream measures or
+  // renders real `<th>`/`<td>` elements, and a hidden column has neither.
+  const columnWidths = useColumnWidths(columnOrder.visible);
   const infiniteRows = useInfiniteRows(rows, tableWrapRef, sorted.viewKey);
 
   // Deterministic version of `scrollRowIntoView` for keyboard navigation
@@ -243,6 +252,13 @@ function App() {
     readText()
       .then((text) => setClipboardUrl(looksLikeUrl(text.trim()) ? text.trim() : null))
       .catch(() => setClipboardUrl(null));
+  }
+
+  // Right-click on the column headers — the only entry point to show/hide
+  // columns, so the header row must never be able to become empty (see
+  // `useColumnVisibility`).
+  function handleHeaderContext(e: ReactMouseEvent) {
+    setMenu({ x: e.clientX, y: e.clientY, kind: "columns" });
   }
 
   // Completed + still on disk → reveal its folder; otherwise there's nothing
@@ -400,6 +416,7 @@ function App() {
           onTableMouseDown={marquee.handleTableMouseDown}
           onTableClick={marquee.handleTableClick}
           onTableContextMenu={handleEmptyContext}
+          onHeaderContextMenu={handleHeaderContext}
           sort={sorted.sort}
           onSort={sorted.toggleSort}
           rows={infiniteRows.visibleRows}
@@ -408,7 +425,7 @@ function App() {
           onRowContext={handleRowContext}
           onRowDoubleClick={handleRowDoubleClick}
           marquee={marquee.marquee}
-          order={columnOrder.order}
+          order={columnOrder.visible}
           widths={columnWidths.widths}
           onResizeStart={columnWidths.startResize}
           onAutoFit={columnWidths.autoFit}
@@ -608,6 +625,21 @@ function App() {
             onRefresh={refreshMissing}
             onClearHistory={() => downloadsApi.requestDelete(clearableRows)}
             onOpenSettings={() => setShowSettings(true)}
+            onClose={() => setMenu(null)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* ---- Column show/hide menu (right-click the header row) ---- */}
+      <AnimatePresence>
+        {menu?.kind === "columns" && (
+          <ColumnMenu
+            x={menu.x}
+            y={menu.y}
+            order={columnOrder.order}
+            hidden={columnVisibility.hidden}
+            onToggle={columnVisibility.toggle}
+            onShowAll={columnVisibility.showAll}
             onClose={() => setMenu(null)}
           />
         )}

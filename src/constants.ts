@@ -2,7 +2,17 @@ export const TERMINAL_STATES = ["completed", "error", "canceled"] as const;
 /** Sent by the browser extension; re-captured on demand rather than stored. */
 export const CREDENTIAL_HEADERS = ["cookie", "authorization", "proxy-authorization"];
 
-export type SortKey = "name" | "added" | "status" | "size" | "downloaded" | "pct" | "speed";
+export type SortKey =
+  | "name"
+  | "added"
+  | "status"
+  | "size"
+  | "downloaded"
+  | "pct"
+  | "speed"
+  | "eta"
+  | "conns"
+  | "pieces";
 
 /** Sort order for the Status column, keyed by *displayed* status (see
  *  `format.ts`'s `statusRank`) rather than raw `DlState` — a `missing` or

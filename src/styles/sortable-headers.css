@@ -15,9 +15,12 @@
 
 /* ---- Column resize handles -------------------------------------------- */
 
-.dtable thead th.sortable {
-  position: relative;
-}
+/* No `position: relative` here, deliberately. `.dtable thead th` in table.css
+   is `position: sticky`, and this selector is one class more specific — so
+   re-declaring `relative` silently wins and un-sticks the header no matter
+   which file loads last (which is exactly the bug this used to cause: the
+   header scrolled away under the rows). Sticky is itself a positioned
+   ancestor, so `.col-resizer` below still anchors to the `th` without it. */
 .col-resizer {
   position: absolute;
   top: 0;

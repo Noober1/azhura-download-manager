@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import type { Category, DownloadItem } from "../types";
 import { categoryOf } from "../categories";
-import { pctOf, statusRank } from "../format";
+import { etaOf, pctOf, piecesDoneOf, statusRank } from "../format";
 import type { SortKey } from "../constants";
 
 /** Sidebar category filter + column sort, and the derived row lists both
@@ -74,6 +74,17 @@ export function useSortedRows(downloads: DownloadItem[]) {
           return pctOf(d) ?? -1;
         case "speed":
           return d.speed;
+        case "eta":
+          // Unlike every other column, "unknown" belongs at the *end* of an
+          // ascending sort here: ascending ETA means "finishing soonest
+          // first", and a row that isn't moving is the furthest thing from
+          // finishing soon. The other columns use -1 because for them
+          // unknown really is the smallest value.
+          return etaOf(d) ?? Number.MAX_SAFE_INTEGER;
+        case "conns":
+          return d.connections;
+        case "pieces":
+          return piecesDoneOf(d) ?? -1;
       }
     }
     return [...searched].sort((a, b) => {

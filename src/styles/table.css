@@ -130,6 +130,17 @@
   background: var(--canvas);
 }
 
+/* Pinned to the top of `.table-wrap` (the scroll container) so the header
+   stays readable however far down the list you scroll. Nothing else may
+   re-declare `position` on these cells — see the note in
+   sortable-headers.css, where a more specific `position: relative` used to
+   quietly cancel this out.
+
+   The bottom rule is a `box-shadow`, not just the `border-bottom`: under
+   `border-collapse: collapse` the collapsed border belongs to the table, not
+   to the sticky cell, so Chromium scrolls it away with the rows and leaves
+   the pinned header sitting on nothing. The border stays for its 1px of
+   layout height; the inset shadow is what actually stays visible. */
 .dtable thead th {
   position: sticky;
   top: 0;
@@ -145,6 +156,7 @@
   text-align: left;
   padding: 0 8px;
   border-bottom: 1px solid var(--border);
+  box-shadow: inset 0 -1px 0 var(--border);
 }
 
 .col-num {

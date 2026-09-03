@@ -1,7 +1,7 @@
-# Checklist Manual Testing — Phase 1 · 2 · 3 · 4 · 5
+# Checklist Manual Testing — Phase 1 · 2 · 3 · 4 · 5 · 6
 
 Jalankan `bun run tauri dev`, lalu centang satu per satu. Checklist ini menutup
-semua fitur yang sudah selesai di TODO.md (`## Done (Phase 1/2/3/4/5)`).
+semua fitur yang sudah selesai di TODO.md (`## Done (Phase 1/2/3/4/5/6)`).
 
 Simpan file ini — ini daftar regresi yang dipakai ulang tiap perubahan besar,
 bukan checklist sekali buang.
@@ -29,6 +29,9 @@ bukan checklist sekali buang.
   keyboard, animasi ikon — baru di v0.2.4). Lolos build + test otomatis, dan
   delay tooltip 500ms sudah dikonfirmasi manual sekilas, tapi checklist
   lengkapnya di §19 belum dijalankan satu per satu.
+- 🆕 **Belum diuji manual sama sekali:** §20 (header sticky, show/hide kolom,
+  kolom ETA/Connections/Pieces — Phase 6). Lolos `tsc` + `vitest` (124 test),
+  tapi belum ada satu pun langkah §20 yang dijalankan di app beneran.
 
 Kalau waktunya terbatas, kerjakan **§0 Prasyarat** dan bagian bertanda ⚠️ dulu —
 itu yang paling mungkin menyembunyikan bug yang mahal.
@@ -471,3 +474,80 @@ dicek sekilas selama development.
 - [ ] Settings → **Reduce motion** ON → semua animasi ikon di atas berhenti
       total (langsung ke state akhir), tapi tooltip tetap muncul/hilang
       (cuma fade, tanpa scale/slide)
+
+---
+
+## 20. Header sticky + show/hide kolom + kolom baru (baru di Phase 6)
+
+Belum pernah diuji manual. Butuh minimal ~30 baris di tabel supaya bisa
+di-scroll, dan minimal satu unduhan besar yang lagi jalan multi-koneksi
+supaya kolom ETA/Pieces ada isinya.
+
+**Header sticky:**
+
+- [ ] Scroll tabel ke bawah sampai jauh → baris header (Name, Date Added, …)
+      **tetap menempel** di atas, tidak ketutupan baris
+- [ ] Garis pembatas 1px di bawah header **ikut menempel**, tidak ikut
+      ter-scroll ke atas
+- [ ] Sambil ter-scroll, klik header untuk sort → tetap jalan (asc → desc →
+      off), panah ▲/▼ muncul di tempat yang benar
+- [ ] Sambil ter-scroll, drag handle resize di tepi kanan header → resize
+      tetap jalan, tidak ikut ke-trigger sort
+- [ ] Sambil ter-scroll, drag header untuk reorder → ghost mengikuti kursor,
+      garis drop muncul, kolom pindah saat dilepas
+- [ ] Baris yang di-select (background accent) **tidak** menimpa header saat
+      lewat di belakangnya
+- [ ] Cek di tema terang **dan** gelap: background header solid, teks baris
+      di belakangnya tidak tembus
+
+**Show/hide kolom:**
+
+- [ ] Klik kanan di baris header → menu daftar kolom muncul (bukan menu
+      "Add Download / Paste URL" milik area kosong)
+- [ ] Klik kanan di area kosong tabel → tetap menu lama, bukan menu kolom
+- [ ] Centang/uncentang satu kolom → kolom langsung hilang/muncul, dan
+      **menu tetap terbuka** (bisa matikan beberapa kolom sekaligus)
+- [ ] ⚠️ Matikan kolom satu per satu sampai tinggal satu → entry kolom
+      terakhir jadi **abu-abu dan tidak bisa diklik** (header tidak boleh
+      sampai kosong, karena itu satu-satunya jalan balik ke menu ini)
+- [ ] "Show all columns" mengembalikan semua kolom; entry-nya abu-abu kalau
+      memang tidak ada yang disembunyikan
+- [ ] Sembunyikan satu kolom → lebar tabel menyusut (scrollbar horizontal
+      berkurang), kolom Name tetap yang melar mengisi sisa ruang
+- [ ] ⚠️ Sembunyikan kolom di tengah (mis. Status), lalu drag-reorder kolom
+      lain → kolom yang pindah mendarat di tempat yang benar, tidak meleset
+      satu kolom
+- [ ] ⚠️ Setelah reorder di atas, munculkan lagi kolom yang disembunyikan →
+      dia balik di sebelah kolom yang dulu ada di depannya, bukan di ujung
+- [ ] Double-click handle resize (auto-fit) pada kolom **setelah** ada kolom
+      yang disembunyikan → yang di-fit kolom yang benar, bukan tetangganya
+- [ ] Tutup app, buka lagi → kolom yang disembunyikan tetap tersembunyi,
+      urutan dan lebar juga tetap
+
+**Kolom ETA / Connections / Pieces:**
+
+Ketiganya **hidden by default** — nyalakan dulu lewat klik kanan header
+sebelum mengerjakan bagian ini.
+
+- [ ] Install bersih (atau hapus key `adm-column-hidden` di localStorage
+      lewat devtools) → tabel muncul dengan **tujuh kolom lama saja**; ETA,
+      Connections, dan Pieces ada di menu header tapi tidak tercentang
+- [ ] Nyalakan ketiganya lewat menu header → muncul di urutan setelah Speed
+- [ ] Saat unduhan jalan, **ETA** terisi dan menghitung turun; saat
+      pause/selesai/queued berubah jadi `—`
+- [ ] ETA di kolom tabel **sama** dengan ETA di window Details untuk baris
+      yang sama (dalam satu-dua detik, karena beda tick render)
+- [ ] Klik header **ETA** untuk sort naik → yang paling cepat selesai di
+      atas, baris yang tidak jalan (`—`) di **paling bawah**
+- [ ] **Connections** menampilkan angka koneksi maksimum baris itu; ubah
+      lewat klik kanan baris → **Connections** → angkanya ikut berubah
+- [ ] Hover cell Connections saat unduhan jalan → tooltip "N of M
+      connections in use"; saat tidak jalan tidak ada tooltip
+- [ ] **Pieces** menampilkan `X / Y` dan X naik sepanjang unduhan; unduhan
+      single-connection (server tanpa range request, atau Connections = 1)
+      menampilkan `—`
+- [ ] ⚠️ Pause unduhan multi-koneksi, tutup app, buka lagi, resume →
+      angka Pieces **lanjut** dari posisi sebelumnya, bukan mulai dari 0
+- [ ] Sort by Connections dan by Pieces jalan dua arah
+- [ ] Semua tiga kolom bisa di-resize, di-reorder, dan di-hide seperti
+      kolom lama

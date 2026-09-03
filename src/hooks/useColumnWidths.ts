@@ -22,10 +22,11 @@ import { suppressNextClick } from "../suppressNextClick";
  *  `useColumnOrder`'s module comment, which hit this same bug for reorder
  *  first and uses the identical fix).
  *
- *  `order` is the column's *current* left-to-right order (from
- *  `useColumnOrder`) — `autoFit` needs it to find a column's live position in
- *  the DOM, which no longer matches the fixed `DEFAULT_COLUMN_ORDER` once
- *  columns have been dragged around. */
+ *  `order` is the *visible* left-to-right order (`useColumnOrder`'s `visible`,
+ *  not its full `order`) — `autoFit` needs it to find a column's live position
+ *  in the DOM, which matches neither the fixed `DEFAULT_COLUMN_ORDER` once
+ *  columns have been dragged around, nor the full order once any column is
+ *  hidden. */
 export function useColumnWidths(order: SortKey[]) {
   const [widths, setWidths] = useState<ColumnWidths>(loadColumnWidths);
   const [drag, setDrag] = useState<{ key: SortKey; startX: number; startWidth: number } | null>(

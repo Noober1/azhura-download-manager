@@ -1,6 +1,16 @@
 import type { MouseEvent as ReactMouseEvent, RefObject } from "react";
 import type { DownloadItem } from "../types";
-import { formatBytes, formatSpeed, pctOf, statusClass, statusLabel, formatDateAdded } from "../format";
+import {
+  formatBytes,
+  formatSpeed,
+  formatEta,
+  etaOf,
+  piecesDoneOf,
+  pctOf,
+  statusClass,
+  statusLabel,
+  formatDateAdded,
+} from "../format";
 import { FileIcon } from "../fileIcons";
 import { Icon } from "../ui";
 import type { SortKey } from "../constants";
@@ -133,6 +143,51 @@ function renderCell(key: SortKey, item: DownloadItem, pct: number | null) {
           {item.state === "downloading" ? formatSpeed(item.speed) : "—"}
         </td>
       );
+    case "eta": {
+      // Gated on "downloading" for the same reason Speed is: a paused row's
+      // last known rate is stale the moment it stops, and projecting a
+      // finish time from it would be a number that never ticks down.
+      const eta = item.state === "downloading" ? etaOf(item) : null;
+      return (
+        <td key={key} className={COLUMN_CLASS.eta}>
+          {eta !== null ? formatEta(eta) : "—"}
+        </td>
+      );
+    }
+    case "conns":
+      // The configured maximum, which is the number the Connections submenu
+      // sets and the only one that means anything for a row that isn't
+      // running. How many of them are actually live is a downloading-only
+      // fact, so it goes in the tooltip rather than the cell.
+      return (
+        <td
+          key={key}
+          className={COLUMN_CLASS.conns}
+          data-tip={
+            item.state === "downloading"
+              ? `${item.usedConnections} of ${item.connections} connections in use`
+              : undefined
+          }
+        >
+          {item.connections}
+        </td>
+      );
+    case "pieces": {
+      const done = piecesDoneOf(item);
+      return (
+        <td
+          key={key}
+          className={COLUMN_CLASS.pieces}
+          data-tip={
+            done !== null
+              ? `${done} of ${item.numPieces} pieces downloaded (${formatBytes(item.pieceSize)} each)`
+              : undefined
+          }
+        >
+          {done !== null ? `${done} / ${item.numPieces}` : "—"}
+        </td>
+      );
+    }
   }
 }
 
@@ -180,6 +235,7 @@ export function DownloadTable({
   onTableMouseDown,
   onTableClick,
   onTableContextMenu,
+  onHeaderContextMenu,
   sort,
   onSort,
   rows,
@@ -206,6 +262,9 @@ export function DownloadTable({
    *  `onContextMenu` already calls `stopPropagation()`, so a row right-click
    *  never reaches this handler. */
   onTableContextMenu: (e: ReactMouseEvent) => void;
+  /** Right-click anywhere in the header row — opens the show/hide-columns
+   *  menu. Stops propagation so `onTableContextMenu` above never also fires. */
+  onHeaderContextMenu: (e: ReactMouseEvent) => void;
   sort: { key: SortKey; dir: "asc" | "desc" } | null;
   onSort: (key: SortKey) => void;
   rows: DownloadItem[];
@@ -214,6 +273,8 @@ export function DownloadTable({
   onRowContext: (e: ReactMouseEvent, item: DownloadItem) => void;
   onRowDoubleClick: (item: DownloadItem) => void;
   marquee: { left: number; top: number; width: number; height: number } | null;
+  /** The columns actually on screen, left to right — `useColumnOrder`'s
+   *  `visible`, never its full `order`. */
   order: SortKey[];
   widths: ColumnWidths;
   onResizeStart: (key: SortKey, e: ReactMouseEvent) => void;
@@ -241,14 +302,17 @@ export function DownloadTable({
         onClick={onTableClick}
         onContextMenu={onTableContextMenu}
       >
-        <table className="dtable" style={{ minWidth: totalWidth(widths) }}>
+        <table className="dtable" style={{ minWidth: totalWidth(widths, order) }}>
           {/* Every column but `name` is a fixed `<col>` width; `name` gets none, so
               under `table-layout: fixed` it's the sole flex column — it absorbs
-              whatever space `.table-wrap` has beyond the other six columns' widths.
-              A drag or double-click auto-fit on `name`'s resizer only narrows it
-              back below that floor; while there's slack, widening/auto-fitting it
-              has no visible effect, because the rendered width is `max(wrap width,
-              minWidth)`, not `sum(widths)`. */}
+              whatever space `.table-wrap` has beyond the other visible columns'
+              widths. A drag or double-click auto-fit on `name`'s resizer only
+              narrows it back below that floor; while there's slack,
+              widening/auto-fitting it has no visible effect, because the rendered
+              width is `max(wrap width, minWidth)`, not `sum(widths)`. With `name`
+              itself hidden there is no flex column at all, and the browser shares
+              any slack out across the fixed columns instead — which is fine, since
+              nothing then depends on one column absorbing it. */}
           <colgroup>
             {order.map((key) =>
               key === "name" ? (
@@ -258,7 +322,17 @@ export function DownloadTable({
               ),
             )}
           </colgroup>
-          <thead>
+          {/* The header's own right-click opens the columns menu, and must
+              `stopPropagation` so `.table-wrap`'s `onContextMenu` (the
+              empty-space menu) doesn't also fire — the same guard `.drow`
+              already uses for the row menu. */}
+          <thead
+            onContextMenu={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onHeaderContextMenu(e);
+            }}
+          >
             <tr>
               {order.map((key, i) => (
                 <SortTh
