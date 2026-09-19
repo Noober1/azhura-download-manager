@@ -214,16 +214,24 @@ export function isRedownload(item: DownloadItem): boolean {
   return !!item.missing || !!item.fromHistory;
 }
 
-export function statusClass(item: DownloadItem): string {
+/** `heldUntil` is the scheduled start time ("HH:MM") when the scheduler is
+ *  holding the queue (`queue.held` in App.tsx) — only meaningful for a plain
+ *  `queued` row, since `awaitingCapture`/`retryPending`/`missing` all mean
+ *  something more specific already happened to this item. */
+export function statusClass(item: DownloadItem, heldUntil?: string | null): string {
   if (item.awaitingCapture) return "queued";
   if (item.retryPending) return "queued";
-  return item.missing ? "missing" : item.state;
+  if (item.missing) return "missing";
+  if (heldUntil && item.state === "queued") return "held";
+  return item.state;
 }
 
-export function statusLabel(item: DownloadItem): string {
+export function statusLabel(item: DownloadItem, heldUntil?: string | null): string {
   if (item.awaitingCapture) return "Waiting for browser";
   if (item.retryPending) return "Retrying…";
-  return item.missing ? "Moved / deleted" : STATE_LABEL[item.state];
+  if (item.missing) return "Moved / deleted";
+  if (heldUntil && item.state === "queued") return `Scheduled ${heldUntil}`;
+  return STATE_LABEL[item.state];
 }
 
 /** Sort rank for the Status column — mirrors the same `awaitingCapture` →

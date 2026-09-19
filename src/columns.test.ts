@@ -5,6 +5,7 @@ import {
   normalizeColumnWidths,
   normalizeColumnOrder,
   normalizeHiddenColumns,
+  normalizeRowDensity,
   DEFAULT_HIDDEN_COLUMNS,
   visibleOrder,
   applyVisibleOrder,
@@ -222,5 +223,19 @@ describe("moveColumn", () => {
     const order: SortKey[] = ["name", "added", "status", "size"];
     expect(moveColumn(order, -1, 2)).toBe(order);
     expect(moveColumn(order, 0, 99)).toBe(order);
+  });
+});
+
+describe("normalizeRowDensity", () => {
+  it("accepts comfortable", () => {
+    expect(normalizeRowDensity("comfortable")).toBe("comfortable");
+  });
+
+  it("falls back to compact for anything else", () => {
+    expect(normalizeRowDensity("compact")).toBe("compact");
+    expect(normalizeRowDensity("x")).toBe("compact");
+    expect(normalizeRowDensity(null)).toBe("compact");
+    expect(normalizeRowDensity(42)).toBe("compact");
+    expect(normalizeRowDensity(undefined)).toBe("compact");
   });
 });

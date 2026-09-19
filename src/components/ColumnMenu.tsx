@@ -1,6 +1,6 @@
 import { motion } from "motion/react";
 import type { SortKey } from "../constants";
-import { COLUMN_LABEL } from "../columns";
+import { COLUMN_LABEL, type RowDensity } from "../columns";
 import { MENU_POP } from "../motion";
 import { useContextMenuShell } from "./useContextMenuShell";
 
@@ -22,6 +22,8 @@ export function ColumnMenu({
   hidden,
   onToggle,
   onShowAll,
+  density,
+  onDensity,
   onClose,
 }: {
   x: number;
@@ -32,6 +34,8 @@ export function ColumnMenu({
   hidden: Set<SortKey>;
   onToggle: (key: SortKey) => void;
   onShowAll: () => void;
+  density: RowDensity;
+  onDensity: (d: RowDensity) => void;
   onClose: () => void;
 }) {
   const { ref, pos, flip, run } = useContextMenuShell(x, y, onClose);
@@ -77,6 +81,30 @@ export function ColumnMenu({
         onClick={() => run(onShowAll)}
       >
         Show all columns
+      </button>
+      <div className="ctx-sep" />
+      {/* Row height: same "toggle without closing" behavior as the column
+          checkboxes above — switching your mind between compact/comfortable
+          shouldn't need reopening the menu. */}
+      <button
+        type="button"
+        role="menuitemradio"
+        aria-checked={density === "compact"}
+        className="ctx-item"
+        onClick={() => onDensity("compact")}
+      >
+        <span className="ctx-check">{density === "compact" ? "✓" : ""}</span>
+        Compact rows
+      </button>
+      <button
+        type="button"
+        role="menuitemradio"
+        aria-checked={density === "comfortable"}
+        className="ctx-item"
+        onClick={() => onDensity("comfortable")}
+      >
+        <span className="ctx-check">{density === "comfortable" ? "✓" : ""}</span>
+        Comfortable rows
       </button>
     </motion.div>
   );

@@ -19,20 +19,28 @@ function CatButton({
   icon,
   label,
   count,
+  activeCount,
   onClick,
 }: {
   active: boolean;
   icon: string;
   label: string;
   count: number;
+  /** How many of `count` are currently downloading/verifying/queued/paused —
+   *  rendered as a small badge next to the count. Omitted (or 0) shows no
+   *  badge, so All/Active/Finished — which don't pass it — stay as before. */
+  activeCount?: number;
   onClick: () => void;
 }) {
+  const tip = activeCount
+    ? `${label} (${count}, ${activeCount} active)`
+    : `${label} (${count})`;
   return (
     <button
       className={`cat ${active ? "active" : ""}`}
-      data-tip={`${label} (${count})`}
+      data-tip={tip}
       data-tip-side="right"
-      aria-label={`${label} (${count})`}
+      aria-label={tip}
       onClick={onClick}
     >
       {active && (
@@ -53,6 +61,11 @@ function CatButton({
           <Icon name={icon} size={15} />
         </motion.span>
         <span className="cat-label">{label}</span>
+        {!!activeCount && (
+          <span className="cat-active" aria-hidden="true">
+            {activeCount}
+          </span>
+        )}
         <span className="cat-n">{count}</span>
       </span>
     </button>
@@ -66,6 +79,7 @@ export function Sidebar({
   activeCount,
   finishedCount,
   categoryCounts,
+  activeCategoryCounts,
   collapsed,
 }: {
   category: Category;
@@ -74,6 +88,9 @@ export function Sidebar({
   activeCount: number;
   finishedCount: number;
   categoryCounts: Record<string, number>;
+  /** Same shape as `categoryCounts`, restricted to active downloads — drives
+   *  each File type row's "N active" badge. */
+  activeCategoryCounts: Record<string, number>;
   /** Drives the icon-rail width only — the toggle button itself lives in
    *  the toolbar now, next to "Add download". */
   collapsed: boolean;
@@ -111,6 +128,7 @@ export function Sidebar({
           icon={CATEGORY_ICON[c]}
           label={CATEGORY_LABEL[c]}
           count={categoryCounts[c] ?? 0}
+          activeCount={activeCategoryCounts[c] ?? 0}
           onClick={() => setCategory(c)}
         />
       ))}

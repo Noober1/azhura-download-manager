@@ -3,8 +3,8 @@
    of where the selectors they touch are declared above. */
 
 ::-webkit-scrollbar {
-  width: 14px;
-  height: 14px;
+  width: 7px;
+  height: 7px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;

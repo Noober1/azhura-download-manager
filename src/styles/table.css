@@ -210,7 +210,7 @@
 }
 
 .drow td {
-  height: 24px;
+  height: var(--row-h, 24px);
   padding: 0 8px;
   border-bottom: none;
   font-size: var(--fs-base);
@@ -221,6 +221,13 @@
 }
 .drow {
   cursor: pointer;
+}
+
+/* Comfortable row height — toggled from the column header's right-click menu
+   (ColumnMenu.tsx) and persisted via useRowDensity. Only the row height
+   changes; the header stays 22px either way. */
+.table-wrap[data-density="comfortable"] {
+  --row-h: 32px;
 }
 
 /* Infinite-scroll sentinel: an empty row the IntersectionObserver in
@@ -397,6 +404,10 @@
 }
 .mode-tag.verifying {
   color: var(--accent);
+}
+.mode-tag.held {
+  color: var(--warn);
+  font-style: italic;
 }
 /* Declared last: it shares specificity with the state classes above and must
    win when a completed download's file has gone missing. */

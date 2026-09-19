@@ -51,6 +51,18 @@ export function useSortedRows(downloads: DownloadItem[]) {
     return counts;
   }, [downloads]);
 
+  // Same tally, restricted to the states `activeItems` above counts as
+  // active — feeds the sidebar's per-category "N active" badge.
+  const activeCategoryCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const d of downloads) {
+      if (!["downloading", "verifying", "queued", "paused"].includes(d.state)) continue;
+      const c = categoryOf(d.filename);
+      counts[c] = (counts[c] ?? 0) + 1;
+    }
+    return counts;
+  }, [downloads]);
+
   // `searched` ordered by the active column sort, or left as-is (newest
   // first) when `sort` is null. `Array.prototype.sort` is stable, so ties
   // keep insertion order either way.
@@ -128,6 +140,7 @@ export function useSortedRows(downloads: DownloadItem[]) {
     // considers in scope.
     categoryRows: shown,
     categoryCounts,
+    activeCategoryCounts,
     rows,
     viewKey,
   };

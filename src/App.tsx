@@ -27,6 +27,7 @@ import { useSortedRows } from "./hooks/useSortedRows";
 import { useColumnWidths } from "./hooks/useColumnWidths";
 import { useColumnOrder } from "./hooks/useColumnOrder";
 import { useColumnVisibility } from "./hooks/useColumnVisibility";
+import { useRowDensity } from "./hooks/useRowDensity";
 import { useInfiniteRows } from "./hooks/useInfiniteRows";
 import { useMissingRefresh } from "./hooks/useMissingRefresh";
 import { useGrabberStatus } from "./hooks/useGrabberStatus";
@@ -113,6 +114,7 @@ function App() {
   const marquee = useMarquee(didDragRef, tableWrapRef, selectedIds, setSelectedIds);
   const columnVisibility = useColumnVisibility();
   const columnOrder = useColumnOrder(columnVisibility.hidden);
+  const rowDensity = useRowDensity();
   // The visible order, not the full one — everything downstream measures or
   // renders real `<th>`/`<td>` elements, and a hidden column has neither.
   const columnWidths = useColumnWidths(columnOrder.visible);
@@ -408,6 +410,7 @@ function App() {
           activeCount={sorted.activeItems.length}
           finishedCount={sorted.finishedItems.length}
           categoryCounts={sorted.categoryCounts}
+          activeCategoryCounts={sorted.activeCategoryCounts}
           collapsed={settings.sidebarCollapsed}
         />
 
@@ -435,6 +438,8 @@ function App() {
           offsetX={columnOrder.offsetX}
           onReorderStart={columnOrder.startReorder}
           sentinelRef={infiniteRows.sentinelRef}
+          heldUntil={queue.held ? settings.scheduledStartTime : null}
+          density={rowDensity.density}
         />
       </div>
 
@@ -640,6 +645,8 @@ function App() {
             hidden={columnVisibility.hidden}
             onToggle={columnVisibility.toggle}
             onShowAll={columnVisibility.showAll}
+            density={rowDensity.density}
+            onDensity={rowDensity.setDensity}
             onClose={() => setMenu(null)}
           />
         )}

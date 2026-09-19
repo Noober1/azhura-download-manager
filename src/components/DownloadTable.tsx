@@ -14,7 +14,13 @@ import {
 import { FileIcon } from "../fileIcons";
 import { Icon } from "../ui";
 import type { SortKey } from "../constants";
-import { COLUMN_CLASS, COLUMN_LABEL, totalWidth, type ColumnWidths } from "../columns";
+import {
+  COLUMN_CLASS,
+  COLUMN_LABEL,
+  totalWidth,
+  type ColumnWidths,
+  type RowDensity,
+} from "../columns";
 import type { DragRect } from "../hooks/useColumnOrder";
 
 /* A sortable, reorderable column header: click cycles asc → desc → default
@@ -82,7 +88,12 @@ function SortTh({
 /** Renders one `<td>` for `key`, in the shape `Row` used to hardcode inline —
  *  moved here unchanged so both the header and the body can be driven by the
  *  same `order` array. */
-function renderCell(key: SortKey, item: DownloadItem, pct: number | null) {
+function renderCell(
+  key: SortKey,
+  item: DownloadItem,
+  pct: number | null,
+  heldUntil: string | null,
+) {
   switch (key) {
     case "name":
       return (
@@ -104,7 +115,16 @@ function renderCell(key: SortKey, item: DownloadItem, pct: number | null) {
         <td key={key} className={COLUMN_CLASS.status}>
           {/* One state class only — `.mode-tag.missing` and `.mode-tag.completed`
               have equal specificity, so both applying would be order-dependent. */}
-          <span className={`mode-tag ${statusClass(item)}`}>{statusLabel(item)}</span>
+          <span
+            className={`mode-tag ${statusClass(item, heldUntil)}`}
+            data-tip={
+              heldUntil && item.state === "queued"
+                ? "Waiting for the scheduled start"
+                : undefined
+            }
+          >
+            {statusLabel(item, heldUntil)}
+          </span>
         </td>
       );
     case "size":
@@ -201,6 +221,7 @@ function Row({
   pct,
   selected,
   order,
+  heldUntil,
   onSelect,
   onContext,
   onDoubleClick,
@@ -209,6 +230,9 @@ function Row({
   pct: number | null;
   selected: boolean;
   order: SortKey[];
+  /** Scheduled start time ("HH:MM") when the scheduler is holding the queue,
+   *  or null otherwise — see `statusLabel`/`statusClass` in format.ts. */
+  heldUntil: string | null;
   onSelect: (e: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }) => void;
   onContext: (e: ReactMouseEvent) => void;
   onDoubleClick: () => void;
@@ -225,7 +249,7 @@ function Row({
         onContext(e);
       }}
     >
-      {order.map((key) => renderCell(key, item, pct))}
+      {order.map((key) => renderCell(key, item, pct, heldUntil))}
     </tr>
   );
 }
@@ -254,6 +278,8 @@ export function DownloadTable({
   offsetX,
   onReorderStart,
   sentinelRef,
+  heldUntil,
+  density,
 }: {
   tableWrapRef: RefObject<HTMLElement | null>;
   onTableMouseDown: (e: ReactMouseEvent) => void;
@@ -292,11 +318,20 @@ export function DownloadTable({
   dragRect: DragRect | null;
   offsetX: number;
   onReorderStart: (key: SortKey, e: ReactMouseEvent) => void;
+  /** Scheduled start time ("HH:MM") when `useQueueSchedule`'s `held` is true,
+   *  or null when the queue isn't being held — threaded down to every row's
+   *  Status cell so a queued item reads "Scheduled HH:MM" instead of plain
+   *  "Queued". */
+  heldUntil: string | null;
+  /** Compact vs comfortable row height — set as `data-density` on the
+   *  scrolling wrapper so `table.css` can key `--row-h` off it. */
+  density: RowDensity;
 }) {
   return (
     <>
       <main
         className="table-wrap"
+        data-density={density}
         ref={tableWrapRef}
         onMouseDown={onTableMouseDown}
         onClick={onTableClick}
@@ -378,6 +413,7 @@ export function DownloadTable({
                   pct={pct}
                   selected={selectedRow}
                   order={order}
+                  heldUntil={heldUntil}
                   onSelect={(e) => onSelectRow(item.id, e)}
                   onContext={(e) => onRowContext(e, item)}
                   onDoubleClick={() => onRowDoubleClick(item)}

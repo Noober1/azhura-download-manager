@@ -262,3 +262,31 @@ export function applyVisibleOrder(
   }
   return out;
 }
+
+/** Table row height, persisted to localStorage the same way column
+ *  visibility is (see `loadHiddenColumns`/`saveHiddenColumns` above) — no
+ *  settings.json round trip for this either. */
+export type RowDensity = "compact" | "comfortable";
+
+export const ROW_DENSITY_KEY = "adm-row-density";
+
+export function normalizeRowDensity(value: unknown): RowDensity {
+  return value === "comfortable" ? "comfortable" : "compact";
+}
+
+export function loadRowDensity(): RowDensity {
+  try {
+    return normalizeRowDensity(localStorage.getItem(ROW_DENSITY_KEY));
+  } catch {
+    return "compact";
+  }
+}
+
+export function saveRowDensity(density: RowDensity): void {
+  try {
+    localStorage.setItem(ROW_DENSITY_KEY, density);
+  } catch {
+    /* private mode / storage disabled — density still works for this
+       session, only persistence across relaunches is lost */
+  }
+}
