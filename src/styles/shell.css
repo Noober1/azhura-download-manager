@@ -52,6 +52,12 @@
   cursor: not-allowed;
   box-shadow: none;
 }
+/* `FilterMenuButton`'s active state — a non-default filter/grouping hides or
+   reshapes rows, so make that visible at a glance the same way the
+   `<select>`s this replaced did with their own `.active` class. */
+.tbtn.active {
+  color: var(--accent);
+}
 /* Wraps the Refresh icon so its click-triggered rotation (Toolbar.tsx)
    animates in place instead of nudging the button's own flex centering. */
 .tbtn-spin {
@@ -72,18 +78,6 @@
   padding: 0 0.5em;
   font-size: var(--fs-sm);
   border-radius: var(--radius-field);
-}
-
-.status-filter {
-  height: 24px;
-  margin-right: 0.35rem;
-  font-size: var(--fs-sm);
-  border-radius: var(--radius-field);
-}
-/* A non-default filter hides rows — make that visible at a glance. */
-.status-filter.active {
-  border-color: var(--accent);
-  color: var(--accent);
 }
 
 .topbar-status {

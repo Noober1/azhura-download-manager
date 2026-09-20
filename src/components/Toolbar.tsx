@@ -4,8 +4,10 @@ import { commands } from "../bindings";
 import type { DownloadItem } from "../types";
 import { formatSpeed } from "../format";
 import { STATUS_FILTER_OPTIONS, type StatusFilter } from "../statusFilter";
+import { GROUP_BY_OPTIONS, type GroupBy } from "../grouping";
 import { Icon, WindowControls } from "../ui";
 import { TAP } from "../motion";
+import { FilterMenuButton } from "./FilterMenuButton";
 
 export function Toolbar({
   resumableSel,
@@ -18,6 +20,8 @@ export function Toolbar({
   totalSpeed,
   activeCount,
   queuedCount,
+  groupBy,
+  onGroupByChange,
   statusFilter,
   onStatusFilterChange,
   searchQuery,
@@ -43,6 +47,8 @@ export function Toolbar({
   totalSpeed: number;
   activeCount: number;
   queuedCount: number;
+  groupBy: GroupBy;
+  onGroupByChange: (v: GroupBy) => void;
   statusFilter: StatusFilter;
   onStatusFilterChange: (v: StatusFilter) => void;
   searchQuery: string;
@@ -169,19 +175,25 @@ export function Toolbar({
         </motion.span>
       </motion.button>
 
-      <select
-        className={`status-filter ${statusFilter !== "all" ? "active" : ""}`}
-        aria-label="Filter by status"
-        data-tip="Filter by status"
+      <FilterMenuButton
+        icon="group"
+        tip="Group rows"
+        ariaLabel="Group rows"
+        active={groupBy !== "none"}
+        options={GROUP_BY_OPTIONS}
+        value={groupBy}
+        onChange={onGroupByChange}
+      />
+
+      <FilterMenuButton
+        icon="filter"
+        tip="Filter by status"
+        ariaLabel="Filter by status"
+        active={statusFilter !== "all"}
+        options={STATUS_FILTER_OPTIONS}
         value={statusFilter}
-        onChange={(e) => onStatusFilterChange(e.currentTarget.value as StatusFilter)}
-      >
-        {STATUS_FILTER_OPTIONS.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
+        onChange={onStatusFilterChange}
+      />
 
       <input
         ref={searchRef}

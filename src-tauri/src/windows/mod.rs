@@ -85,12 +85,15 @@ fn begin_shutdown(app: &tauri::AppHandle) {
 }
 
 /// Tray "Quit": prepare as above, give the periodic meta writer a moment to
-/// catch up, then actually exit.
+/// catch up, install a pending update if one is waiting and the user has
+/// opted in (see `update::try_install_on_quit` — it never brings the app back
+/// afterward), then actually exit.
 pub(crate) fn quit_app(app: &tauri::AppHandle) {
     begin_shutdown(app);
     let handle = app.clone();
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(Duration::from_millis(1000)).await;
+        crate::update::try_install_on_quit(&handle);
         handle.exit(0);
     });
 }

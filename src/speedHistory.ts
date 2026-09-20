@@ -10,6 +10,11 @@ export const SPEED_SAMPLE_INTERVAL_MS = 500;
  *  of a download. */
 export const SPEED_SAMPLE_CAP = 60;
 
+/** Samples the status bar's combined graph keeps — 60s at
+ *  `SPEED_SAMPLE_INTERVAL_MS`, twice the per-download window, because this
+ *  one is about the shape of a session rather than one transfer. */
+export const TOTAL_SPEED_SAMPLE_CAP = 120;
+
 /** Ring buffer, implemented immutably: always returns a new array, with the
  *  oldest sample dropped off the front once `cap` is exceeded. */
 export function pushSpeedSample(
@@ -40,4 +45,15 @@ export function sparklinePoints(samples: number[], width: number, height: number
       return `${i * step},${y}`;
     })
     .join(" ");
+}
+
+/** Largest sample, or 0 for an empty buffer. */
+export function peakOf(samples: number[]): number {
+  return samples.length === 0 ? 0 : Math.max(...samples);
+}
+
+/** Mean of the samples, or 0 for an empty buffer. */
+export function averageOf(samples: number[]): number {
+  if (samples.length === 0) return 0;
+  return samples.reduce((sum, v) => sum + v, 0) / samples.length;
 }

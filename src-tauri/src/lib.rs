@@ -16,6 +16,7 @@ mod paths;
 mod power;
 mod shell_icon;
 mod tray;
+mod update;
 mod urls;
 mod windows;
 
@@ -40,7 +41,7 @@ use windows::{harden_webview, quit_app, reveal_main_window, Quitting};
 /// and the cold-start detection below have to agree on.
 const AUTOSTART_FLAG: &str = "--autostart";
 
-/// 31 of the app's 33 IPC-crossing commands, collected once here so both the
+/// 34 of the app's 36 IPC-crossing commands, collected once here so both the
 /// runtime invoke handler and (in debug builds) the generated
 /// `../src/bindings.ts` stay derived from the same list — order matches the
 /// old `tauri::generate_handler!` list it replaced.
@@ -103,6 +104,9 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         power::run_power_action,
         hotkey::set_global_hotkey,
         windows::prepare_for_update,
+        update::download_update,
+        update::pending_update,
+        update::install_pending_update,
         bridge::grabber_status
     ])
 }
@@ -209,6 +213,16 @@ pub fn run() {
         // checks can't collide).
         .manage(AutostartLaunch(std::env::args().any(|a| a == AUTOSTART_FLAG)))
         .setup(move |app| {
+            // Before anything else: a pending update left over from a
+            // force-kill or a reboot installs now, while no window, no
+            // socket and no tray icon exist yet — the installer is already
+            // on disk, so this only costs the spawn. Unlike hotkey
+            // registration at the end of this closure, nothing here touches
+            // a native window handle, so the early position is safe.
+            if update::try_install_on_cold_start(app.handle()) {
+                std::process::exit(0);
+            }
+
             specta_builder.mount_events(app);
 
             // Started here rather than via an eager `.manage(bridge::start())`

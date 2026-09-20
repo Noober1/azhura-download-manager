@@ -26,6 +26,7 @@ import { useTrayPush } from "./hooks/useTrayPush";
 import { useDetailWindows } from "./hooks/useDetailWindows";
 import { useDeepLinkCapture } from "./hooks/useDeepLinkCapture";
 import { useSortedRows } from "./hooks/useSortedRows";
+import { useGroupedRows } from "./hooks/useGroupedRows";
 import { useColumnWidths } from "./hooks/useColumnWidths";
 import { useColumnOrder } from "./hooks/useColumnOrder";
 import { useColumnVisibility } from "./hooks/useColumnVisibility";
@@ -34,6 +35,7 @@ import { useInfiniteRows } from "./hooks/useInfiniteRows";
 import { useMissingRefresh } from "./hooks/useMissingRefresh";
 import { useGrabberStatus } from "./hooks/useGrabberStatus";
 import { useBackendWarnings } from "./hooks/useBackendWarnings";
+import { useTotalSpeedHistory } from "./hooks/useTotalSpeedHistory";
 import { useSelection } from "./selection/useSelection";
 import { useMarquee } from "./selection/useMarquee";
 import { useTableKeyboard } from "./selection/useTableKeyboard";
@@ -52,6 +54,7 @@ import { ConnRestartDialog } from "./components/dialogs/ConnRestartDialog";
 import { PowerActionDialog, type PowerAction } from "./components/dialogs/PowerActionDialog";
 import { UpdateRestartDialog } from "./components/dialogs/UpdateRestartDialog";
 import { ShortcutsDialog } from "./components/dialogs/ShortcutsDialog";
+import { SpeedGraph } from "./components/SpeedGraph";
 import "./App.css";
 
 function App() {
@@ -108,7 +111,8 @@ function App() {
   const { downloads, setDownloads, downloadsRef } = downloadsApi;
 
   const sorted = useSortedRows(downloads);
-  const { rows } = sorted;
+  const grouped = useGroupedRows(sorted.rows);
+  const { rows } = grouped;
 
   const selection = useSelection(rows, didDragRef);
   const { selectedIds, setSelectedIds, anchorRef, selectRow, scrollRowIntoView } = selection;
@@ -120,7 +124,11 @@ function App() {
   // The visible order, not the full one — everything downstream measures or
   // renders real `<th>`/`<td>` elements, and a hidden column has neither.
   const columnWidths = useColumnWidths(columnOrder.visible);
-  const infiniteRows = useInfiniteRows(rows, tableWrapRef, sorted.viewKey);
+  // `grouped.groupBy` (not `collapsed`) rides along in the view key: changing
+  // *what* the rows are grouped into reshuffles the list and must reset the
+  // render window, but collapsing a group only shortens it — resetting the
+  // scroll position on every collapse would be hostile.
+  const infiniteRows = useInfiniteRows(rows, tableWrapRef, sorted.viewKey + grouped.groupBy);
 
   // Deterministic version of `scrollRowIntoView` for keyboard navigation
   // (Home/End/Ctrl+A/arrows in `useTableKeyboard`): if the target row is
@@ -156,12 +164,7 @@ function App() {
   useScheduler(downloads, settings.maxConcurrent, downloadsApi.startRun, queue.held);
   useHistoryPersistence(downloads, setDownloads, downloadsRef, settings.historyRetentionDays);
   useClipboardWatch(settings.clipboardWatch, downloadsRef);
-  const updater = useUpdateCheck(() => setConfirmRestart(true), {
-    autoInstall: settings.autoInstallUpdates,
-    inFlight: downloads.filter((d) =>
-      ["downloading", "verifying", "queued"].includes(d.state),
-    ).length,
-  });
+  const updater = useUpdateCheck(() => setConfirmRestart(true));
   useTrayPush(downloadsRef);
   useDeepLinkCapture(downloadsRef, downloadsApi.addFromPayload, downloadsApi.patchItem);
   const { refresh: refreshMissing } = useMissingRefresh(downloadsRef, downloadsApi.patchItem);
@@ -348,6 +351,7 @@ function App() {
   const totalSpeed = downloads
     .filter((d) => d.state === "downloading")
     .reduce((s, d) => s + d.speed, 0);
+  const totalSpeedHistory = useTotalSpeedHistory(totalSpeed);
   const activeCount = downloads.filter(
     (d) => d.state === "downloading" || d.state === "verifying",
   ).length;
@@ -428,6 +432,8 @@ function App() {
         totalSpeed={totalSpeed}
         activeCount={activeCount}
         queuedCount={queuedCount}
+        groupBy={grouped.groupBy}
+        onGroupByChange={grouped.setGroupBy}
         statusFilter={sorted.statusFilter}
         onStatusFilterChange={sorted.setStatusFilter}
         searchQuery={sorted.searchQuery}
@@ -482,6 +488,11 @@ function App() {
           sentinelRef={infiniteRows.sentinelRef}
           heldUntil={queue.held ? settings.scheduledStartTime : null}
           density={rowDensity.density}
+          headersBefore={grouped.headersBefore}
+          trailingGroups={
+            infiniteRows.visibleRows.length >= rows.length ? grouped.trailingGroups : []
+          }
+          onToggleGroup={grouped.toggleGroup}
         />
       </div>
 
@@ -495,6 +506,7 @@ function App() {
         >
           Azhura Download Manager{version ? ` v${version}` : ""}
         </button>
+        <SpeedGraph samples={totalSpeedHistory} total={totalSpeed} />
         {updater.state.stage === "ready" && (
           <button
             className="sb-update"
@@ -515,16 +527,10 @@ function App() {
             Queue starts at {settings.scheduledStartTime}
           </span>
         )}
-        <select
-          className="sb-postqueue"
-          aria-label="Action when the queue finishes"
-          value={postQueueAction}
-          onChange={(e) => setPostQueueAction(e.currentTarget.value as "none" | PowerAction)}
-        >
-          <option value="none">When done: nothing</option>
-          <option value="sleep">When done: sleep</option>
-          <option value="shutdown">When done: shut down</option>
-        </select>
+        {/* `.sb-grabber` below carries `margin-left: auto`, which pushes it
+            (and everything after it in the DOM) to the status bar's far
+            right — so this select rides along in that same right-aligned
+            cluster instead of sitting loose among the left-aligned items. */}
         <span
           className="sb-grabber"
           data-tip={
@@ -537,6 +543,16 @@ function App() {
           <span className={`sb-dot ${grabber.running ? "on" : "off"}`} />
           {grabber.running ? `Grabber active · :${grabber.port}` : "Grabber inactive"}
         </span>
+        <select
+          className="sb-postqueue"
+          aria-label="Action when the queue finishes"
+          value={postQueueAction}
+          onChange={(e) => setPostQueueAction(e.currentTarget.value as "none" | PowerAction)}
+        >
+          <option value="none">When done: nothing</option>
+          <option value="sleep">When done: sleep</option>
+          <option value="shutdown">When done: shut down</option>
+        </select>
         {import.meta.env.DEV && (
           <span className="sb-dev" data-tip="Running a development build (tauri dev)" data-tip-side="top">
             dev
@@ -671,9 +687,9 @@ function App() {
             x={menu.x}
             y={menu.y}
             clipboardUrl={clipboardUrl}
-            selectableCount={sorted.rows.length}
+            selectableCount={rows.length}
             clearableCount={clearableRows.length}
-            onSelectAll={() => setSelectedIds(new Set(sorted.rows.map((d) => d.id)))}
+            onSelectAll={() => setSelectedIds(new Set(rows.map((d) => d.id)))}
             onRefresh={refreshMissing}
             onClearHistory={() => downloadsApi.requestDelete(clearableRows)}
             onOpenSettings={() => setShowSettings(true)}

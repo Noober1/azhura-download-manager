@@ -74,6 +74,31 @@
   outline-offset: 2px;
 }
 
+/* Combined-speed sparkline (see `SpeedGraph.tsx`) — hidden entirely while
+   idle, so it costs nothing in the common case. */
+.sb-graph {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-left: 0.75rem;
+  cursor: default;
+}
+.sb-graph svg {
+  display: block;
+  overflow: visible;
+}
+.sb-graph polyline {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+.sb-speed {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
+}
+
 .sb-hold {
   margin-left: 0.75rem;
   color: var(--accent);
@@ -249,6 +274,59 @@
 }
 .drow .col-name {
   font-weight: 400;
+}
+
+/* Group header row (see `useGroupedRows`) — visually distinct from a data
+   row, never a `.drow` itself (see `.row-sentinel`'s comment above for why:
+   marquee/auto-fit/scroll-into-view all sweep `.drow`, and a header is
+   neither selectable nor measurable). */
+.group-row td {
+  padding: 0;
+  border-bottom: 1px solid var(--border);
+}
+.group-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0.3rem 8px;
+  border: 0;
+  background: var(--surface-2);
+  font: inherit;
+  font-weight: 600;
+  font-size: var(--fs-xs);
+  color: var(--ink-soft);
+  text-align: left;
+  cursor: pointer;
+}
+.group-toggle:hover {
+  color: var(--ink);
+}
+.group-toggle:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+.group-chevron {
+  flex-shrink: 0;
+  width: 0.9rem;
+  text-align: center;
+  color: var(--faint);
+  font-size: 0.7rem;
+  transition: transform var(--dur-2) var(--ease-standard);
+}
+.group-chevron.expanded {
+  transform: rotate(90deg);
+}
+.group-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.group-count {
+  flex-shrink: 0;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
 }
 
 .cell-pct {

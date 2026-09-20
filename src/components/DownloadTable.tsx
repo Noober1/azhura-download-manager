@@ -1,4 +1,4 @@
-import type { MouseEvent as ReactMouseEvent, RefObject } from "react";
+import { Fragment, type MouseEvent as ReactMouseEvent, type RefObject } from "react";
 import type { DownloadItem } from "../types";
 import {
   formatBytes,
@@ -22,6 +22,7 @@ import {
   type RowDensity,
 } from "../columns";
 import type { DragRect } from "../hooks/useColumnOrder";
+import type { GroupMeta } from "../hooks/useGroupedRows";
 
 /* A sortable, reorderable column header: click cycles asc → desc → default
    (unsorted) for its own key, and starts at asc when switching from a
@@ -254,6 +255,44 @@ function Row({
   );
 }
 
+/* A group header row (see `useGroupedRows`). Deliberately NOT `.drow`:
+   `useMarquee`'s `querySelectorAll(".drow")` hit-test and
+   `useColumnWidths.autoFit`'s `.dtable tbody tr.drow` measurement both sweep
+   that class, and a header row is neither selectable nor measurable. The
+   collapse chevron is the same rotated-`▸` pattern
+   `ArchiveTree.tsx`/`archive-window.css` already use — there's no chevron
+   glyph in `Icon` (`src/ui.tsx`). */
+function GroupRow({
+  group,
+  colSpan,
+  onToggle,
+}: {
+  group: GroupMeta;
+  colSpan: number;
+  onToggle: (key: string) => void;
+}) {
+  return (
+    <tr className="group-row">
+      <td colSpan={colSpan}>
+        <button
+          className="group-toggle"
+          aria-expanded={!group.collapsed}
+          onClick={() => onToggle(group.key)}
+        >
+          <span
+            className={`group-chevron ${group.collapsed ? "" : "expanded"}`}
+            aria-hidden="true"
+          >
+            ▸
+          </span>
+          <span className="group-label">{group.label}</span>
+          <span className="group-count">{group.count}</span>
+        </button>
+      </td>
+    </tr>
+  );
+}
+
 export function DownloadTable({
   tableWrapRef,
   onTableMouseDown,
@@ -280,6 +319,9 @@ export function DownloadTable({
   sentinelRef,
   heldUntil,
   density,
+  headersBefore,
+  trailingGroups,
+  onToggleGroup,
 }: {
   tableWrapRef: RefObject<HTMLElement | null>;
   onTableMouseDown: (e: ReactMouseEvent) => void;
@@ -326,6 +368,14 @@ export function DownloadTable({
   /** Compact vs comfortable row height — set as `data-density` on the
    *  scrolling wrapper so `table.css` can key `--row-h` off it. */
   density: RowDensity;
+  /** Group headers (see `useGroupedRows`) to render immediately before a
+   *  given row id — a list, not a single value, because a run of collapsed
+   *  groups has no row of its own to anchor to. Empty when grouping is off. */
+  headersBefore: Map<string, GroupMeta[]>;
+  /** Group headers with no row after them: collapsed groups at the tail of
+   *  the current view, or every group when all of them are collapsed. */
+  trailingGroups: GroupMeta[];
+  onToggleGroup: (key: string) => void;
 }) {
   return (
     <>
@@ -388,7 +438,9 @@ export function DownloadTable({
             </tr>
           </thead>
           <tbody>
-            {rows.length === 0 && (
+            {/* With every group collapsed there are no rows at all, but the
+                table isn't empty — its headers still render below. */}
+            {rows.length === 0 && trailingGroups.length === 0 && (
               <tr>
                 <td colSpan={order.length} className="empty-cell">
                   <span className="empty-state">
@@ -407,20 +459,27 @@ export function DownloadTable({
               const pct = pctOf(item);
               const selectedRow = selectedIds.has(item.id);
               return (
-                <Row
-                  key={item.id}
-                  item={item}
-                  pct={pct}
-                  selected={selectedRow}
-                  order={order}
-                  heldUntil={heldUntil}
-                  onSelect={(e) => onSelectRow(item.id, e)}
-                  onContext={(e) => onRowContext(e, item)}
-                  onDoubleClick={() => onRowDoubleClick(item)}
-                />
+                <Fragment key={item.id}>
+                  {headersBefore.get(item.id)?.map((g) => (
+                    <GroupRow key={g.key} group={g} colSpan={order.length} onToggle={onToggleGroup} />
+                  ))}
+                  <Row
+                    item={item}
+                    pct={pct}
+                    selected={selectedRow}
+                    order={order}
+                    heldUntil={heldUntil}
+                    onSelect={(e) => onSelectRow(item.id, e)}
+                    onContext={(e) => onRowContext(e, item)}
+                    onDoubleClick={() => onRowDoubleClick(item)}
+                  />
+                </Fragment>
               );
             })}
             {rows.length > 0 && <tr ref={sentinelRef} className="row-sentinel" aria-hidden="true" />}
+            {trailingGroups.map((g) => (
+              <GroupRow key={g.key} group={g} colSpan={order.length} onToggle={onToggleGroup} />
+            ))}
           </tbody>
         </table>
       </main>

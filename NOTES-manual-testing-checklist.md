@@ -636,3 +636,68 @@ Belum pernah diuji manual sama sekali.
       tanpa perlu di-set ulang
 - [ ] Saat field lagi fokus/merekam, tombol Ctrl+N atau shortcut app lain
       **tidak** ikut ter-trigger oleh tombol yang ditekan buat merekam
+
+## 22. Update pending-install senyap, grouping tabel, grafik speed gabungan (Batch 3a, baru)
+
+Belum pernah diuji manual sama sekali. Lolos `tsc --noEmit`, `vitest run` (181
+test), `cargo check --all-targets`, dan `cargo test --lib` (138 test).
+
+**Grouping tabel:**
+
+- [ ] Dropdown baru di toolbar, sebelah kiri filter status: "No grouping" /
+      "Group by category" / "Group by date"
+- [ ] Pilih "Group by category" → muncul header grup per kategori (Videos,
+      Audios, Programs, Documents, Archives, Others), cuma yang punya baris;
+      tiap header nampilin jumlah baris di dalamnya
+- [ ] Pilih "Group by date" → header grup "Today" / "Yesterday" / "Earlier
+      this week" / "Earlier this month" / "Older", sesuai tanggal ditambahkan
+- [ ] Klik header grup → grup collapse (baris hilang, chevron berputar);
+      klik lagi → expand lagi
+- [ ] Restart app → grouping mode dan grup yang di-collapse tadi tetap
+      kepilih/collapse (persisted di localStorage, bukan settings.json)
+- [ ] Collapse **semua** grup → tabel kosong secara visual tapi header-header
+      grup tetap kelihatan; pesan "No downloads yet" **tidak** muncul
+- [ ] Dengan satu grup di-collapse: Ctrl+A, panah atas/bawah, Home/End,
+      shift-click, dan drag marquee semuanya **skip** baris yang
+      disembunyikan dan **tidak pernah** mendarat di baris header grup
+- [ ] Grouping tetap jalan bareng filter kategori sidebar, filter status
+      toolbar, dan search box (kombinasi AND seperti biasa)
+- [ ] Scroll tabel yang panjang dengan grouping aktif → infinite-scroll tetap
+      nge-load per halaman; header grup collapsed di ujung baru muncul
+      setelah scroll sampai ke bawah semua
+
+**Grafik speed gabungan:**
+
+- [ ] Status bar bawah kosong (gak ada grafik) saat idle/tidak ada unduhan
+      aktif
+- [ ] Mulai unduhan → sparkline kecil + angka speed total muncul di status
+      bar, di sebelah kanan tombol "Azhura Download Manager"
+- [ ] Hover grafiknya → tooltip nampilin "Last 60s · avg … · peak …" dengan
+      angka yang masuk akal
+- [ ] Pause semua unduhan → garis grafik landai turun lalu grafik hilang lagi
+      setelah ~60 detik semua sample jadi 0
+
+**Update pending-install senyap** (bagian paling berisiko — uji pakai draft
+release beneran, atau sementara arahkan `updater.endpoints` di
+`tauri.conf.json` ke feed test):
+
+- [ ] Ada update tersedia → app download-nya diam-diam di background dan
+      **tetap kebuka** (gak nutup sendiri). Status bar nampilin "Restart to
+      update". Gak ada window installer nongol, gak ada app nutup sendiri.
+      Cek `%APPDATA%\AzhuraDownloadManager\pending-update.json` dan file
+      `-setup.exe` di sebelahnya beneran ada
+- [ ] Quit dari tray dengan toggle "Install updates when you quit" ON → app
+      nutup dan **tidak nyala lagi sendiri**; buka manual lagi → versi sudah
+      baru, dan `pending-update.json` sudah hilang
+- [ ] Quit dengan toggle OFF → gak ada yang keinstall; "Restart to update"
+      masih ada di launch berikutnya tanpa download ulang
+- [ ] Matikan proses paksa lewat Task Manager selagi ada update pending
+      (toggle ON), lalu buka app lagi → installer jalan **sebelum** window
+      manapun kelihatan, app kebuka langsung di versi baru
+- [ ] Klik "Restart to update" manual → dialog konfirmasi → app nutup dan
+      kebuka lagi di versi baru
+- [ ] Tandai feed test `"critical": true` → dialog countdown 30 detik tetap
+      muncul dan tetap maksa restart (gak kepengaruh toggle
+      "Install updates when you quit")
+- [ ] Offline saat launch → gak ada toast/error; klik "Check for updates"
+      selagi offline → toast error muncul

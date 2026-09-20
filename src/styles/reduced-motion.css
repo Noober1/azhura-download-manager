@@ -24,7 +24,8 @@
   select,
   .ctx-sub,
   .ctx-flyout,
-  .sidebar {
+  .sidebar,
+  .group-chevron {
     transition: none !important;
   }
   .mini-bar.indeterminate,
@@ -47,7 +48,8 @@
 :root[data-reduced-motion="on"] select,
 :root[data-reduced-motion="on"] .ctx-sub,
 :root[data-reduced-motion="on"] .ctx-flyout,
-:root[data-reduced-motion="on"] .sidebar {
+:root[data-reduced-motion="on"] .sidebar,
+:root[data-reduced-motion="on"] .group-chevron {
   transition: none !important;
 }
 :root[data-reduced-motion="on"] .mini-bar.indeterminate,

@@ -7,7 +7,7 @@ beneran masalah).
 ## Fitur baru
 
 - [x] Search/filter bar di tabel unduhan (nama file, status, kategori)
-- [ ] Grouping tabel unduhan by kategori/tanggal (collapsible)
+- [x] Grouping tabel unduhan by kategori/tanggal (collapsible)
 - [ ] Auto-rule: regex site/filetype → kategori+folder otomatis (skip dialog
       konfirmasi kategori)
 - [ ] Dashboard statistik (total data terunduh, grafik kecepatan
@@ -54,7 +54,7 @@ beneran masalah).
 
 ## Fixes
 
-- [ ] **Silent auto-update install — jangan pernah maksa nutup app sendiri.**
+- [x] **Silent auto-update install — jangan pernah maksa nutup app sendiri.**
       Sekarang: kalau `autoInstall` on dan gak ada unduhan aktif/antre, app
       langsung manggil `install()` begitu file update kelar didownload —
       nutup diri sendiri dan buka installer di tengah sesi, cuma toast
@@ -78,7 +78,7 @@ beneran masalah).
 ## UX/UI polish
 
 - [ ] Drag-reorder prioritas antrian langsung dari tabel
-- [ ] Grafik kecepatan gabungan (semua unduhan aktif) di status bar
+- [x] Grafik kecepatan gabungan (semua unduhan aktif) di status bar
 - [x] Compact/comfortable row height toggle
 - [x] Badge jumlah unduhan aktif per kategori di sidebar
 - [x] Indikator visual lebih jelas untuk unduhan yang sedang "held" oleh

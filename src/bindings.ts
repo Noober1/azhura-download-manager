@@ -239,6 +239,29 @@ export const commands = {
 	 *  The caller waits out the same grace period before installing.
 	 */
 	prepareForUpdate: () => __TAURI_INVOKE<void>("prepare_for_update"),
+	/**
+	 *  Checks the feed, downloads and signature-verifies the update package (the
+	 *  plugin's own `download` does the verification), and records it as
+	 *  pending. `Ok(None)` when already up to date.
+	 */
+	downloadUpdate: () => __TAURI_INVOKE<{
+	version: string,
+	critical: boolean,
+} | null>("download_update"),
+	/**
+	 *  What the frontend shows at launch without re-downloading — e.g. the
+	 *  status bar's "Restart to update" button.
+	 */
+	pendingUpdate: () => __TAURI_INVOKE<{
+	version: string,
+	critical: boolean,
+} | null>("pending_update"),
+	/**
+	 *  Explicit "Restart now" path: install and relaunch. Callers must run
+	 *  `prepare_for_update` (pause downloads, flush history) and wait out its
+	 *  grace period first — this only handles the installer itself.
+	 */
+	installPendingUpdate: () => __TAURI_INVOKE<null>("install_pending_update"),
 	grabberStatus: () => __TAURI_INVOKE<GrabberStatus>("grabber_status"),
 };
 
@@ -296,14 +319,14 @@ export type AppSettings = {
 	 */
 	historyRetentionDays?: number,
 	/**
-	 *  Apply a downloaded update at startup instead of waiting for the user to
-	 *  click through the restart prompt. On by default: a downloaded update
-	 *  that nobody ever installs is the failure mode this exists to prevent,
-	 *  and startup is the moment when restarting costs least. Only ever acts
-	 *  when nothing is downloading. An update the feed marks `critical`
-	 *  ignores this — that flag exists precisely for fixes that can't wait on
-	 *  a preference. Applied entirely on the frontend (see
-	 *  `useUpdateCheck.ts`); Rust only persists it.
+	 *  Whether a downloaded update may be installed silently: on quit, and on
+	 *  the next cold start if that was missed (e.g. the process was
+	 *  force-killed before it could quit normally). On by default: a
+	 *  downloaded update that nobody ever installs is the failure mode this
+	 *  exists to prevent. An update the feed marks `critical` ignores this —
+	 *  that flag already forced the restart dialog when it arrived, so it
+	 *  doesn't need this path too. Read by `update.rs`; the frontend only
+	 *  toggles it (see `useUpdateCheck.ts`).
 	 */
 	autoInstallUpdates?: boolean,
 	/**
@@ -614,5 +637,10 @@ export type StartDownloadArgs = {
 export type TrayDownload = {
 	id: string,
 	label: string,
+};
+
+export type UpdateInfo = {
+	version: string,
+	critical: boolean,
 };
 

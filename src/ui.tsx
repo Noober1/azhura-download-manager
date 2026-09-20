@@ -33,6 +33,16 @@ export function Icon({ name, size = 14, active }: { name: string; size?: number;
       </>
     ),
     refresh: <path d="M14.5 9a5.5 5.5 0 1 1-1.7-3.97M14.5 2.5v4h-4" />,
+    // Toolbar filter-menu buttons (FilterMenuButton.tsx) — group-by and
+    // status-filter, replacing the wide `<select>`s that used to spell out
+    // the current choice in text.
+    group: (
+      <>
+        <path d="M9 3l7 4-7 4-7-4z" />
+        <path d="M2 11l7 4 7-4" />
+      </>
+    ),
+    filter: <path d="M3 4h12l-4.5 5.5v4.5l-3 1.5v-6z" />,
     puzzle: (
       <>
         <rect x="3.5" y="3.5" width="11" height="11" />

@@ -51,15 +51,15 @@ pub(crate) struct AppSettings {
     /// frontend, where the download list actually lives (see
     /// `useHistoryPersistence.ts`).
     history_retention_days: u32,
-    /// Apply a downloaded update at startup instead of waiting for the user to
-    /// click through the restart prompt. On by default: a downloaded update
-    /// that nobody ever installs is the failure mode this exists to prevent,
-    /// and startup is the moment when restarting costs least. Only ever acts
-    /// when nothing is downloading. An update the feed marks `critical`
-    /// ignores this — that flag exists precisely for fixes that can't wait on
-    /// a preference. Applied entirely on the frontend (see
-    /// `useUpdateCheck.ts`); Rust only persists it.
-    auto_install_updates: bool,
+    /// Whether a downloaded update may be installed silently: on quit, and on
+    /// the next cold start if that was missed (e.g. the process was
+    /// force-killed before it could quit normally). On by default: a
+    /// downloaded update that nobody ever installs is the failure mode this
+    /// exists to prevent. An update the feed marks `critical` ignores this —
+    /// that flag already forced the restart dialog when it arrived, so it
+    /// doesn't need this path too. Read by `update.rs`; the frontend only
+    /// toggles it (see `useUpdateCheck.ts`).
+    pub(crate) auto_install_updates: bool,
     /// Sidebar shown as a full-width panel vs. a narrow icon rail. Applied
     /// entirely on the frontend (see `src/components/Sidebar.tsx`); Rust
     /// only persists it.

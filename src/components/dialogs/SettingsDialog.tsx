@@ -258,9 +258,10 @@ export function SettingsDialog({
                 checked={autoInstallUpdates}
                 onChange={(e) => onSetAutoInstallUpdates(e.currentTarget.checked)}
               />
-              <label htmlFor="auto-update">Install updates at startup</label>
+              <label htmlFor="auto-update">Install updates when you quit</label>
               <span className="field-unit">
-                Only when nothing is downloading · critical fixes install either way
+                Also installs on the next launch if that was missed · critical fixes restart right
+                away
               </span>
             </div>
             <div className="field-row">
