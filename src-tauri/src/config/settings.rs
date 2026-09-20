@@ -64,6 +64,10 @@ pub(crate) struct AppSettings {
     /// entirely on the frontend (see `src/components/Sidebar.tsx`); Rust
     /// only persists it.
     sidebar_collapsed: bool,
+    /// System-wide shortcut that opens the Add window, in global-hotkey
+    /// syntax ("Ctrl+Alt+D"). "" = off (the default — a preset combo could
+    /// collide with another app). Registered by Rust (see `hotkey.rs`).
+    pub(crate) global_hotkey: String,
 }
 
 impl Default for AppSettings {
@@ -83,7 +87,26 @@ impl Default for AppSettings {
             history_retention_days: 0,
             auto_install_updates: true,
             sidebar_collapsed: false,
+            global_hotkey: String::new(),
         }
+    }
+}
+
+impl AppSettings {
+    /// Clamps an imported (i.e. untrusted, hand-editable) settings object to
+    /// the same ranges the Settings dialog enforces.
+    pub(crate) fn sanitized(mut self) -> Self {
+        self.max_concurrent = self.max_concurrent.clamp(1, 10);
+        if !self.global_limit_mbps.is_finite() || self.global_limit_mbps < 0.0 {
+            self.global_limit_mbps = 0.0;
+        }
+        self.max_retry_attempts = self.max_retry_attempts.min(10);
+        self.history_max_entries = self.history_max_entries.clamp(50, 5000);
+        self.history_retention_days = self.history_retention_days.min(365);
+        if !["system", "dark", "light"].contains(&self.theme.as_str()) {
+            self.theme = "system".to_string();
+        }
+        self
     }
 }
 
@@ -150,4 +173,65 @@ pub(crate) fn set_run_at_startup(app: tauri::AppHandle, enabled: bool) -> Result
 #[specta::specta]
 pub(crate) fn launched_at_startup(state: tauri::State<'_, AutostartLaunch>) -> bool {
     state.0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sanitized_clamps_out_of_range_numeric_fields() {
+        let s = AppSettings {
+            max_concurrent: 99,
+            max_retry_attempts: 99,
+            history_max_entries: 1,
+            history_retention_days: 9999,
+            ..AppSettings::default()
+        }
+        .sanitized();
+        assert_eq!(s.max_concurrent, 10);
+        assert_eq!(s.max_retry_attempts, 10);
+        assert_eq!(s.history_max_entries, 50);
+        assert_eq!(s.history_retention_days, 365);
+    }
+
+    #[test]
+    fn sanitized_rejects_a_zero_max_concurrent() {
+        let s = AppSettings { max_concurrent: 0, ..AppSettings::default() }.sanitized();
+        assert_eq!(s.max_concurrent, 1);
+    }
+
+    #[test]
+    fn sanitized_replaces_a_negative_or_non_finite_speed_limit_with_zero() {
+        let s = AppSettings { global_limit_mbps: -5.0, ..AppSettings::default() }.sanitized();
+        assert_eq!(s.global_limit_mbps, 0.0);
+        let s = AppSettings { global_limit_mbps: f64::NAN, ..AppSettings::default() }.sanitized();
+        assert_eq!(s.global_limit_mbps, 0.0);
+    }
+
+    #[test]
+    fn sanitized_falls_back_to_system_theme_for_an_unknown_value() {
+        let s = AppSettings { theme: "solarized".to_string(), ..AppSettings::default() }.sanitized();
+        assert_eq!(s.theme, "system");
+    }
+
+    #[test]
+    fn sanitized_leaves_valid_values_untouched() {
+        let s = AppSettings {
+            max_concurrent: 5,
+            max_retry_attempts: 3,
+            history_max_entries: 1000,
+            history_retention_days: 30,
+            theme: "dark".to_string(),
+            global_limit_mbps: 2.5,
+            ..AppSettings::default()
+        }
+        .sanitized();
+        assert_eq!(s.max_concurrent, 5);
+        assert_eq!(s.max_retry_attempts, 3);
+        assert_eq!(s.history_max_entries, 1000);
+        assert_eq!(s.history_retention_days, 30);
+        assert_eq!(s.theme, "dark");
+        assert_eq!(s.global_limit_mbps, 2.5);
+    }
 }

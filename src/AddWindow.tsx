@@ -86,6 +86,7 @@ export function AddWindow() {
           runProbe={form.runProbe}
           showCheckSizeButton={form.showCheckSizeButton}
           size={form.size}
+          diskWarning={form.diskWarning}
           canPreviewArchive={form.canPreviewArchive}
           openArchivePreview={form.openArchivePreview}
         />

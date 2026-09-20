@@ -3,12 +3,14 @@ import type { Category, DownloadItem } from "../types";
 import { categoryOf } from "../categories";
 import { etaOf, pctOf, piecesDoneOf, statusRank } from "../format";
 import type { SortKey } from "../constants";
+import { matchesStatus, type StatusFilter } from "../statusFilter";
 
 /** Sidebar category filter + column sort, and the derived row lists both
  *  produce. Defaults to Date Added (newest first); `sort === null` (reachable
  *  by cycling a column's sort back off) falls back to insertion order. */
 export function useSortedRows(downloads: DownloadItem[]) {
   const [category, setCategory] = useState<Category>("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" } | null>({
     key: "added",
@@ -30,15 +32,20 @@ export function useSortedRows(downloads: DownloadItem[]) {
           ? downloads
           : downloads.filter((d) => categoryOf(d.filename) === category);
 
-  // Search narrows `shown` further, by filename or referer — composed after
-  // the category filter and before sort.
+  // Status filter narrows `shown` further, composed after the category
+  // filter and before search.
+  const statusFiltered =
+    statusFilter === "all" ? shown : shown.filter((d) => matchesStatus(d, statusFilter));
+
+  // Search narrows `statusFiltered` further, by filename or referer —
+  // composed after the category/status filters and before sort.
   const q = searchQuery.trim().toLowerCase();
   const searched = q
-    ? shown.filter(
+    ? statusFiltered.filter(
         (d) =>
           d.filename.toLowerCase().includes(q) || (d.referer?.toLowerCase().includes(q) ?? false),
       )
-    : shown;
+    : statusFiltered;
 
   // Counts for the sidebar's "File type" section, tallied once per downloads
   // change rather than filtering the whole list six times.
@@ -123,21 +130,23 @@ export function useSortedRows(downloads: DownloadItem[]) {
   // and nothing else (`rows` itself changes on every progress patch, ~7/sec,
   // which would reset the scroll window constantly). JSON rather than a
   // joined string: `searchQuery` is free text and could contain a delimiter.
-  const viewKey = JSON.stringify([category, searchQuery, sort]);
+  const viewKey = JSON.stringify([category, statusFilter, searchQuery, sort]);
 
   return {
     category,
     setCategory,
+    statusFilter,
+    setStatusFilter,
     searchQuery,
     setSearchQuery,
     sort,
     toggleSort,
     activeItems,
     finishedItems,
-    // Category-filtered but pre-search — what "Clear history" (empty-space
-    // context menu) scopes to, deliberately ignoring the search box: a
-    // transient text filter shouldn't change what a destructive bulk action
-    // considers in scope.
+    // Category-filtered but pre-status/pre-search — what "Clear history"
+    // (empty-space context menu) scopes to, deliberately ignoring the search
+    // box and status filter: a transient view filter shouldn't change what a
+    // destructive bulk action considers in scope.
     categoryRows: shown,
     categoryCounts,
     activeCategoryCounts,

@@ -32,6 +32,11 @@ bukan checklist sekali buang.
 - 🆕 **Belum diuji manual sama sekali:** §20 (header sticky, show/hide kolom,
   kolom ETA/Connections/Pieces — Phase 6). Lolos `tsc` + `vitest` (124 test),
   tapi belum ada satu pun langkah §20 yang dijalankan di app beneran.
+- 🆕 **Belum diuji manual sama sekali:** §21 (filter status, cek disk space,
+  export CSV, backup/restore, global hotkey — Batch 2). Lolos `tsc --noEmit`,
+  `vitest` (157 test), `cargo check --all-targets`, dan `cargo test --lib`
+  (135 test), tapi belum ada satu pun langkah §21 yang dijalankan di app
+  beneran.
 
 Kalau waktunya terbatas, kerjakan **§0 Prasyarat** dan bagian bertanda ⚠️ dulu —
 itu yang paling mungkin menyembunyikan bug yang mahal.
@@ -551,3 +556,83 @@ sebelum mengerjakan bagian ini.
 - [ ] Sort by Connections dan by Pieces jalan dua arah
 - [ ] Semua tiga kolom bisa di-resize, di-reorder, dan di-hide seperti
       kolom lama
+
+---
+
+## 21. Filter status, cek disk space, export CSV, backup/restore, global hotkey (Batch 2, baru)
+
+Belum pernah diuji manual sama sekali.
+
+**Filter status:**
+
+- [ ] Dropdown baru di toolbar, sebelah kiri search box, isinya "All statuses"
+      + 7 status
+- [ ] Pilih "Completed" → tabel cuma nampilin baris selesai; gabung dengan
+      kategori sidebar (mis. "Video") → cuma baris Video yang selesai
+- [ ] Gabung dengan search box → ketiga filter (kategori + status + teks)
+      jalan bareng (AND)
+- [ ] Dropdown ter-highlight (border/teks warna aksen) saat bukan "All
+      statuses", normal lagi saat balik ke "All statuses"
+- [ ] Klik kanan area kosong tabel → "Clear history" tetap menghapus semua
+      riwayat category-scoped, **mengabaikan** filter status yang aktif
+
+**Cek disk space:**
+
+- [ ] Set save path ke drive/folder yang hampir penuh (atau flashdisk kecil),
+      tempel URL file yang lebih besar dari sisa ruang → di Add window,
+      setelah "Check size"/probe kelar, muncul teks merah "Not enough disk
+      space — X free" di sebelah ukuran file
+- [ ] Tetap bisa submit walau ada warning → download dimulai, lalu **gagal**
+      dengan pesan error "Not enough disk space — …"
+- [ ] Baris yang gagal karena disk space **tidak** di-auto-retry (beda dari
+      error jaringan biasa yang di-retry otomatis)
+- [ ] Ganti save path ke folder yang cukup ruang → warning merah hilang
+
+**Export CSV:**
+
+- [ ] Settings → History → "Export CSV…" → dialog save native muncul, nama
+      default `azhura-history-YYYY-MM-DD.csv`
+- [ ] Buka hasilnya di Excel/Sheets → kolom rapi (Name, Status, Size, URL,
+      Referer, Saved to, Added, Finished, Error), karakter non-ASCII di nama
+      file terbaca benar (bukan ganti jadi tanda tanya)
+- [ ] File riwayat dengan nama yang diawali `=`, `+`, `-`, atau `@` **tidak**
+      dieksekusi sebagai rumus saat dibuka di Excel
+- [ ] Tombol "Export CSV…" disabled kalau riwayat kosong
+
+**Backup export/import:**
+
+- [ ] Settings → Backup → "Export backup…" → dialog save native, nama default
+      `azhura-backup-YYYY-MM-DD.json`; buka file JSON-nya, pastikan field
+      `proxy.password` kosong meskipun proxy asli ada passwordnya
+- [ ] Ubah beberapa setting (mis. max concurrent, theme) dan hapus beberapa
+      baris riwayat, lalu "Import backup…" pakai file yang tadi diexport →
+      muncul dialog konfirmasi native menyebutkan jumlah entry riwayat yang
+      mau ditambahkan
+- [ ] Setelah konfirmasi: setting balik ke nilai waktu export, riwayat yang
+      tadi dihapus muncul lagi, **tidak ada duplikat** untuk baris yang masih
+      ada
+- [ ] Buka Add window setelah import → default Connections/Speed
+      cap/proxy host ikut isi backup; kalau proxy asli punya password lokal,
+      password itu **tetap ada** (bukan kosong, karena backup gak bawa
+      password)
+- [ ] Import file JSON yang bukan backup (mis. asal-asalan atau backup app
+      lain) → muncul toast error, tidak ada yang berubah
+- [ ] Batalkan dialog save/open di tengah jalan (klik Cancel) → tidak ada
+      efek apa pun, tidak ada toast error
+
+**Global hotkey:**
+
+- [ ] Settings → System → field "Add download shortcut" → klik → berubah
+      jadi "Press a shortcut…"; tekan Ctrl+Alt+D → field jadi "Ctrl+Alt+D"
+      dan langsung tersimpan
+- [ ] Minimize app ke tray, buka app lain, tekan Ctrl+Alt+D dari situ →
+      window "Add Download" muncul
+- [ ] Coba rekam kombinasi yang sudah dipakai app lain (mis. yang jelas
+      bentrok) → toast error muncul, field balik ke shortcut sebelumnya (yang
+      lama tetap berfungsi)
+- [ ] Fokus field lalu tekan Backspace atau Delete → shortcut jadi "Not set"
+      (off), dan hotkey lama tidak lagi merespons
+- [ ] Restart app sepenuhnya → shortcut yang tersimpan otomatis aktif lagi
+      tanpa perlu di-set ulang
+- [ ] Saat field lagi fokus/merekam, tombol Ctrl+N atau shortcut app lain
+      **tidak** ikut ter-trigger oleh tombol yang ditekan buat merekam

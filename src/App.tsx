@@ -6,8 +6,10 @@ import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { AnimatePresence } from "motion/react";
 import { commands } from "./bindings";
-import type { DownloadItem } from "./types";
+import type { DownloadItem, HistoryEntry } from "./types";
 import { isResumable, isRedownload, looksLikeUrl } from "./format";
+import { historyPayload, mergeImportedHistory } from "./history";
+import { historyToCsv, exportFileName } from "./csvExport";
 import { showToast } from "./toast";
 import { notify } from "./notify";
 import { TERMINAL_STATES } from "./constants";
@@ -293,6 +295,44 @@ function App() {
     );
   }
 
+  function exportHistoryCsv() {
+    commands
+      .exportHistoryCsv(historyToCsv(historyRows), exportFileName("history", "csv"))
+      .then((p) => {
+        if (p) showToast(`Exported ${historyRows.length} entries to ${p}`, "info");
+      })
+      .catch((e) => showToast(`Export failed: ${e}`));
+  }
+
+  function exportBackup() {
+    commands
+      .exportBackup(historyPayload(downloadsRef.current), exportFileName("backup", "json"))
+      .then((p) => {
+        if (p) showToast(`Backup saved to ${p}`, "info");
+      })
+      .catch((e) => showToast(`Backup failed: ${e}`));
+  }
+
+  async function importBackup() {
+    try {
+      const data = await commands.importBackup();
+      if (!data) return;
+      await commands.applyImportedPrefs(data.prefs);
+      settings.applyImportedSettings(data.settings);
+      // Read the latest list from the ref (not `downloads` state, which may
+      // be stale by the time the dialogs above resolve) and commit the merge
+      // synchronously, so nothing else can land between the read and the set.
+      const { next, added } = mergeImportedHistory(
+        downloadsRef.current,
+        data.history as unknown as HistoryEntry[],
+      );
+      setDownloads(next);
+      showToast(`Backup imported · ${added} history entries added`, "info");
+    } catch (e) {
+      showToast(`Import failed: ${e}`);
+    }
+  }
+
   const anyDialogOpen = !!(
     downloadsApi.pendingDelete ||
     showSettings ||
@@ -388,6 +428,8 @@ function App() {
         totalSpeed={totalSpeed}
         activeCount={activeCount}
         queuedCount={queuedCount}
+        statusFilter={sorted.statusFilter}
+        onStatusFilterChange={sorted.setStatusFilter}
         searchQuery={sorted.searchQuery}
         onSearchChange={sorted.setSearchQuery}
         onResume={resumeWithOverride}
@@ -520,6 +562,7 @@ function App() {
             historyMaxEntries={settings.historyMaxEntries}
             historyRetentionDays={settings.historyRetentionDays}
             historyCount={historyRows.length}
+            globalHotkey={settings.globalHotkey}
             onSetMaxActive={settings.setMaxActive}
             onSetGlobalLimit={settings.setGlobalLimit}
             onSetMaxRetryAttempts={settings.setMaxRetryAttemptsSetting}
@@ -533,12 +576,16 @@ function App() {
             onSetScheduledStartTime={settings.setScheduledStartTimeSetting}
             onSetHistoryMaxEntries={settings.setHistoryMaxEntriesSetting}
             onSetHistoryRetentionDays={settings.setHistoryRetentionDaysSetting}
+            onSetGlobalHotkey={settings.setGlobalHotkeySetting}
+            onExportCsv={exportHistoryCsv}
             onClearHistory={() => {
               // Reuses the normal delete flow rather than a parallel one, so
               // the user still gets the "also delete the files" choice.
               setShowSettings(false);
               downloadsApi.requestDelete(historyRows);
             }}
+            onExportBackup={exportBackup}
+            onImportBackup={importBackup}
             updateChecking={updater.state.stage === "checking"}
             autoInstallUpdates={settings.autoInstallUpdates}
             onSetAutoInstallUpdates={settings.setAutoInstallUpdatesSetting}

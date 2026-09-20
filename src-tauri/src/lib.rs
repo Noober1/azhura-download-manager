@@ -11,6 +11,7 @@ mod commands;
 mod config;
 mod deeplink;
 mod engine;
+mod hotkey;
 mod paths;
 mod power;
 mod shell_icon;
@@ -69,6 +70,7 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         commands::probe_url,
         archive::inspect_archive,
         commands::default_download_dir,
+        commands::check_disk_space,
         commands::extension_dir,
         shell_icon::shell_icon,
         windows::add::open_add_window,
@@ -92,9 +94,14 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         config::prefs::load_prefs,
         config::prefs::save_add_defaults,
         config::prefs::set_category_path,
+        config::prefs::apply_imported_prefs,
         config::history::load_history,
         config::history::save_history,
+        config::transfer::export_history_csv,
+        config::transfer::export_backup,
+        config::transfer::import_backup,
         power::run_power_action,
+        hotkey::set_global_hotkey,
         windows::prepare_for_update,
         bridge::grabber_status
     ])
@@ -186,6 +193,7 @@ pub fn run() {
         ))
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(hotkey::plugin())
         .manage(Manager::default())
         .manage(PendingDeepLink::default())
         .manage(windows::archive::PendingArchiveRequest::default())
@@ -342,6 +350,14 @@ pub fn run() {
                 }
             }
 
+            // Last: registering a global hotkey pumps the Win32 message queue
+            // (via the plugin's main-thread marshaling), and doing that
+            // earlier in this closure — before `main`/`add`'s native window
+            // handles exist — made `.owner(&main)?` above intermittently fail
+            // with "the underlying handle is not available". Every window
+            // this closure creates is already built by this point.
+            hotkey::register_saved(app.handle());
+
             Ok(())
         })
         .on_window_event(|window, event| match window.label() {
@@ -400,4 +416,17 @@ pub fn run() {
         .invoke_handler(invoke_handler)
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+/// Regenerates `src/bindings.ts` without launching the app — used by the
+/// `export_bindings` dev-tool binary (`cargo run --bin export_bindings`).
+/// A normal debug run of the app does this too (see `run()` above), but that
+/// needs a full window; this is the CLI-only path.
+pub fn export_bindings() {
+    specta_builder()
+        .export(
+            specta_typescript::Typescript::default(),
+            concat!(env!("CARGO_MANIFEST_DIR"), "/../src/bindings.ts"),
+        )
+        .expect("failed to export typescript bindings");
 }

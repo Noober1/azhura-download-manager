@@ -94,6 +94,14 @@
   text-align: center;
   font-family: var(--font-mono);
 }
+.hotkey-input {
+  width: 150px;
+  cursor: pointer;
+  text-align: center;
+}
+.hotkey-input:focus {
+  border-color: var(--accent);
+}
 .field-unit {
   font-size: var(--fs-xs);
   color: var(--faint);
@@ -158,4 +166,7 @@
   font-family: var(--font-mono);
   font-size: var(--fs-sm);
   color: var(--faint);
+}
+.size-readout.disk-warn {
+  color: var(--danger);
 }

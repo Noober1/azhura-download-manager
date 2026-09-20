@@ -10,6 +10,7 @@ pub(crate) mod history;
 pub(crate) mod prefs;
 pub(crate) mod secret;
 pub(crate) mod settings;
+pub(crate) mod transfer;
 
 pub(crate) fn config_dir() -> Result<PathBuf, String> {
     Ok(dirs::config_dir()

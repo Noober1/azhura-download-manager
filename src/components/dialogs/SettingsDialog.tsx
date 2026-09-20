@@ -2,6 +2,7 @@ import { motion } from "motion/react";
 import type { Theme } from "../../types";
 import { OVERLAY_FADE, DIALOG_POP } from "../../motion";
 import { useDialogA11y } from "../../hooks/useDialogA11y";
+import { HotkeyInput } from "../HotkeyInput";
 
 export function SettingsDialog({
   maxConcurrent,
@@ -20,6 +21,7 @@ export function SettingsDialog({
   historyCount,
   updateChecking,
   autoInstallUpdates,
+  globalHotkey,
   onSetAutoInstallUpdates,
   onCheckForUpdates,
   onSetMaxActive,
@@ -35,7 +37,11 @@ export function SettingsDialog({
   onSetScheduledStartTime,
   onSetHistoryMaxEntries,
   onSetHistoryRetentionDays,
+  onSetGlobalHotkey,
+  onExportCsv,
   onClearHistory,
+  onExportBackup,
+  onImportBackup,
   onClose,
 }: {
   maxConcurrent: number;
@@ -54,6 +60,7 @@ export function SettingsDialog({
   historyCount: number;
   updateChecking: boolean;
   autoInstallUpdates: boolean;
+  globalHotkey: string;
   onSetAutoInstallUpdates: (v: boolean) => void;
   onCheckForUpdates: () => void;
   onSetMaxActive: (n: number) => void;
@@ -69,7 +76,11 @@ export function SettingsDialog({
   onSetScheduledStartTime: (v: string) => void;
   onSetHistoryMaxEntries: (n: number) => void;
   onSetHistoryRetentionDays: (n: number) => void;
+  onSetGlobalHotkey: (v: string) => void;
+  onExportCsv: () => void;
   onClearHistory: () => void;
+  onExportBackup: () => void;
+  onImportBackup: () => void;
   onClose: () => void;
 }) {
   const panelRef = useDialogA11y<HTMLDivElement>(onClose);
@@ -226,6 +237,11 @@ export function SettingsDialog({
               <label htmlFor="run-startup">Run at startup</label>
               <span className="field-unit">Starts hidden in the tray</span>
             </div>
+            <div className="field-row">
+              <label htmlFor="global-hotkey">Add download shortcut</label>
+              <HotkeyInput id="global-hotkey" value={globalHotkey} onChange={onSetGlobalHotkey} />
+              <span className="field-unit">Works from any app · Backspace clears</span>
+            </div>
             <div className="check-row">
               <input
                 type="checkbox"
@@ -289,10 +305,24 @@ export function SettingsDialog({
               <span className="field-unit">0–365 days · 0 = keep forever</span>
             </div>
             <div className="field-row">
+              <button disabled={historyCount === 0} onClick={onExportCsv}>
+                Export CSV…
+              </button>
               <button className="danger" disabled={historyCount === 0} onClick={onClearHistory}>
                 Clear history{historyCount > 0 ? ` (${historyCount})` : ""}
               </button>
             </div>
+          </fieldset>
+
+          <fieldset className="dialog-section">
+            <legend className="dialog-section-title">Backup</legend>
+            <div className="field-row">
+              <button onClick={onExportBackup}>Export backup…</button>
+              <button onClick={onImportBackup}>Import backup…</button>
+            </div>
+            <span className="field-unit">
+              Settings, download defaults and history in one file · proxy password is not included
+            </span>
           </fieldset>
         </div>
         <div className="dialog-actions">

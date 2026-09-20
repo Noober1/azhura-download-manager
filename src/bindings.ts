@@ -55,6 +55,11 @@ export const commands = {
 	/**  The default destination folder, for the Add window's "Save path" field. */
 	defaultDownloadDir: () => __TAURI_INVOKE<string>("default_download_dir"),
 	/**
+	 *  Soft pre-check for the Add window once the probe knows the size — the
+	 *  engine re-checks (and hard-fails) at start regardless.
+	 */
+	checkDiskSpace: (savePath: string, filename: string, total: number | null) => __TAURI_INVOKE<DiskCheck>("check_disk_space", { savePath, filename, total }),
+	/**
 	 *  Folder containing the unpacked browser extension, for the titlebar
 	 *  "install extension" button. In a bundled build this is the `extension`
 	 *  resource shipped next to the app (see `bundle.resources` in
@@ -196,9 +201,37 @@ export const commands = {
 	loadPrefs: () => __TAURI_INVOKE<Prefs>("load_prefs"),
 	saveAddDefaults: (args: SaveAddDefaultsArgs) => __TAURI_INVOKE<null>("save_add_defaults", { args }),
 	setCategoryPath: (category: string, path: string) => __TAURI_INVOKE<null>("set_category_path", { category, path }),
+	/**
+	 *  Replaces prefs with an imported backup's. A backup never carries the proxy
+	 *  password (export strips it), so an empty one keeps the current password.
+	 */
+	applyImportedPrefs: (prefs: Prefs) => __TAURI_INVOKE<null>("apply_imported_prefs", { prefs }),
 	loadHistory: () => __TAURI_INVOKE<HistoryLoad_Serialize>("load_history"),
 	saveHistory: (entries: HistoryEntry_Deserialize[]) => __TAURI_INVOKE<null>("save_history", { entries }),
+	/**
+	 *  Writes `csv` (built by the frontend, see `src/csvExport.ts`) to a path the
+	 *  user picks in a native save dialog. Ok(None) = user canceled.
+	 */
+	exportHistoryCsv: (csv: string, defaultName: string) => __TAURI_INVOKE<string | null>("export_history_csv", { csv, defaultName }),
+	exportBackup: (history: HistoryEntry_Deserialize[], defaultName: string) => __TAURI_INVOKE<string | null>("export_backup", { history, defaultName }),
+	/**
+	 *  Pick → parse → confirm. Applies nothing itself: the frontend applies
+	 *  settings/history (it owns that state) and calls `apply_imported_prefs`.
+	 *  Ok(None) = canceled at either step.
+	 */
+	importBackup: () => __TAURI_INVOKE<{
+	exportedAt: number,
+	settings: AppSettings,
+	prefs: Prefs,
+	history: HistoryEntry_Serialize[],
+} | null>("import_backup"),
 	runPowerAction: (action: string) => __TAURI_INVOKE<null>("run_power_action", { action }),
+	/**
+	 *  Swaps the registered shortcut. On failure the previous one is restored so
+	 *  a typo never leaves the user with none. Persisting is the frontend's job
+	 *  (via `save_settings`), only after this returns Ok.
+	 */
+	setGlobalHotkey: (accel: string) => __TAURI_INVOKE<null>("set_global_hotkey", { accel }),
 	/**
 	 *  Same preparation, minus the exit: the update installer takes the process
 	 *  down itself moments later. Without this the installer would kill downloads
@@ -279,6 +312,12 @@ export type AppSettings = {
 	 *  only persists it.
 	 */
 	sidebarCollapsed?: boolean,
+	/**
+	 *  System-wide shortcut that opens the Add window, in global-hotkey
+	 *  syntax ("Ctrl+Alt+D"). "" = off (the default — a preset combo could
+	 *  collide with another app). Registered by Rust (see `hotkey.rs`).
+	 */
+	globalHotkey?: string,
 };
 
 export type ArchiveEntry = {
@@ -316,10 +355,32 @@ export type ArchiveRequest = {
 	proxy: ProxyConfig | null,
 };
 
+export type BackupImport = BackupImport_Serialize | BackupImport_Deserialize;
+
+export type BackupImport_Deserialize = {
+	exportedAt: number,
+	settings: AppSettings,
+	prefs: Prefs,
+	history: HistoryEntry_Deserialize[],
+};
+
+export type BackupImport_Serialize = {
+	exportedAt: number,
+	settings: AppSettings,
+	prefs: Prefs,
+	history: HistoryEntry_Serialize[],
+};
+
 export type ConnInfo = {
 	downloaded: number,
 	total: number,
 	pieces: number,
+};
+
+export type DiskCheck = {
+	enough: boolean,
+	/**  Free bytes on the folder that's short; None when there's enough room. */
+	free: number | null,
 };
 
 export type DownloadEvent = { event: "started"; data: {

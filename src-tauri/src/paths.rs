@@ -340,30 +340,135 @@ pub(crate) async fn write_mark_of_the_web(dest: &Path, url: &str, referrer: Opti
 #[cfg(not(windows))]
 pub(crate) async fn write_mark_of_the_web(_dest: &Path, _url: &str, _referrer: Option<&str>) {}
 
+/// Where a finished download lands: the explicit save folder, else the
+/// category folder. Shared by `move_to_destination` and the space check.
+pub(crate) fn resolve_dest_dir(
+    filename: &str,
+    save_path: Option<&str>,
+    prefs: &Prefs,
+) -> Result<PathBuf, String> {
+    match save_path.map(str::trim).filter(|s| !s.is_empty()) {
+        Some(s) => {
+            let p = PathBuf::from(s);
+            if !p.is_absolute() {
+                return Err("Save folder must be an absolute path".to_string());
+            }
+            Ok(p)
+        }
+        None => category_dir(filename, prefs),
+    }
+}
+
+/// Free bytes available to this user on the volume holding `path`, walking up
+/// to the nearest existing ancestor (the target folder may not exist yet).
+/// None = unknown (API failure / non-Windows) — callers must treat that as
+/// "don't block".
+#[cfg(windows)]
+pub(crate) fn free_space(path: &Path) -> Option<u64> {
+    use windows::core::HSTRING;
+    use windows::Win32::Storage::FileSystem::GetDiskFreeSpaceExW;
+    let mut p = path;
+    while !p.exists() {
+        p = p.parent()?;
+    }
+    let mut free: u64 = 0;
+    unsafe { GetDiskFreeSpaceExW(&HSTRING::from(p.as_os_str()), Some(&mut free), None, None) }.ok()?;
+    Some(free)
+}
+#[cfg(not(windows))]
+pub(crate) fn free_space(_path: &Path) -> Option<u64> {
+    None
+}
+
+/// Headroom kept free on top of the file itself, so a download never fills
+/// a drive to the last byte.
+const DISK_RESERVE: u64 = 64 * 1024 * 1024;
+/// Must match `DISK_SPACE_PREFIX` in `src/hooks/useDownloads.ts` — the
+/// frontend uses it to skip auto-retry for this error.
+pub(crate) const DISK_SPACE_PREFIX: &str = "Not enough disk space —";
+
+fn has_room(free: Option<u64>, needed: u64) -> bool {
+    free.map_or(true, |f| f >= needed.saturating_add(DISK_RESERVE))
+}
+
+fn human_bytes(b: u64) -> String {
+    const GB: f64 = 1024.0 * 1024.0 * 1024.0;
+    const MB: f64 = 1024.0 * 1024.0;
+    let b = b as f64;
+    if b >= GB {
+        format!("{:.1} GB", b / GB)
+    } else {
+        format!("{:.0} MB", b / MB)
+    }
+}
+
+/// First folder among the download's temp dir and its destination (only
+/// when on another volume — same volume means a rename, no second copy)
+/// that lacks room for `total`, with its free bytes.
+pub(crate) fn space_shortfall(
+    total: u64,
+    filename: &str,
+    save_path: Option<&str>,
+    prefs: &Prefs,
+) -> Result<Option<(PathBuf, u64)>, String> {
+    let temp = temp_download_dir()?;
+    let dest = resolve_dest_dir(filename, save_path, prefs)?;
+    let mut dirs = vec![temp.clone()];
+    if !same_volume(&temp, &dest) {
+        dirs.push(dest);
+    }
+    for d in dirs {
+        let free = free_space(&d);
+        if !has_room(free, total) {
+            return Ok(Some((d, free.unwrap_or(0))));
+        }
+    }
+    Ok(None)
+}
+
+pub(crate) fn ensure_space(
+    total: u64,
+    filename: &str,
+    save_path: Option<&str>,
+    prefs: &Prefs,
+) -> Result<(), String> {
+    match space_shortfall(total, filename, save_path, prefs)? {
+        None => Ok(()),
+        Some((dir, free)) => Err(format!(
+            "{DISK_SPACE_PREFIX} this file needs {}, but only {} is free on {}.",
+            human_bytes(total),
+            human_bytes(free),
+            dir.display()
+        )),
+    }
+}
+
+/// `ensure_space` is a best-effort pre-flight check (the free-space figure it
+/// saw can be stale, or the size can be unknown up front — see its own doc
+/// comment) — this is the backstop for when the actual copy runs out of room
+/// anyway. Tagged with the same prefix so the frontend's auto-retry skips it
+/// exactly like it does the pre-flight version; retrying a full disk can't help.
+fn move_copy_error_message(e: &std::io::Error) -> String {
+    if e.kind() == std::io::ErrorKind::StorageFull {
+        format!("{DISK_SPACE_PREFIX} the destination ran out of room while moving the file: {e}")
+    } else {
+        format!("Could not move file to destination: {e}")
+    }
+}
+
 pub(crate) async fn move_to_destination(
     temp_path: &Path,
     filename: &str,
     save_path: Option<&str>,
     prefs: &Prefs,
 ) -> Result<PathBuf, String> {
-    let base = match save_path.map(str::trim).filter(|s| !s.is_empty()) {
-        Some(s) => {
-            let p = PathBuf::from(s);
-            if !p.is_absolute() {
-                return Err("Save folder must be an absolute path".to_string());
-            }
-            p
-        }
-        None => category_dir(filename, prefs)?,
-    };
+    let base = resolve_dest_dir(filename, save_path, prefs)?;
     tokio::fs::create_dir_all(&base)
         .await
         .map_err(|e| format!("Could not create target folder: {e}"))?;
     let dest = unique_path(&base, filename);
     if tokio::fs::rename(temp_path, &dest).await.is_err() {
-        tokio::fs::copy(temp_path, &dest)
-            .await
-            .map_err(|e| format!("Could not move file to destination: {e}"))?;
+        tokio::fs::copy(temp_path, &dest).await.map_err(|e| move_copy_error_message(&e))?;
         let _ = tokio::fs::remove_file(temp_path).await;
     }
     Ok(dest)
@@ -528,5 +633,59 @@ mod tests {
         let zone_id_lines: Vec<&str> = body.lines().filter(|l| l.starts_with("ZoneId=")).collect();
         assert_eq!(zone_id_lines, vec!["ZoneId=3"]);
         assert!(body.contains("HostUrl=https://evil.example/setup.exeZoneId=0"));
+    }
+
+    #[test]
+    fn has_room_treats_unknown_free_space_as_unblocked() {
+        assert!(has_room(None, u64::MAX));
+    }
+
+    #[test]
+    fn has_room_allows_a_file_that_fits_with_the_reserve() {
+        assert!(has_room(Some(200 * 1024 * 1024), 50 * 1024 * 1024));
+    }
+
+    #[test]
+    fn has_room_blocks_a_file_that_would_eat_into_the_reserve() {
+        assert!(!has_room(Some(100 * 1024 * 1024), 90 * 1024 * 1024));
+    }
+
+    #[test]
+    fn human_bytes_formats_gigabytes_with_one_decimal() {
+        assert_eq!(human_bytes(3 * 1024 * 1024 * 1024), "3.0 GB");
+    }
+
+    #[test]
+    fn human_bytes_formats_megabytes_as_whole_numbers() {
+        assert_eq!(human_bytes(10 * 1024 * 1024), "10 MB");
+    }
+
+    /// Regression test: `free_space` was once accidentally left stubbed to
+    /// always return `None` (a debugging leftover), which made the whole
+    /// disk-space feature silently fail open — no warning, no block, on any
+    /// drive — without a single test catching it, since every other test
+    /// here exercises `has_room`/`human_bytes` on a *given* `Option<u64>`,
+    /// never the real OS call. This one calls the genuine implementation
+    /// against a path that's guaranteed to exist wherever this test runs.
+    #[test]
+    fn free_space_returns_a_real_value_for_an_existing_directory() {
+        let cwd = std::env::current_dir().expect("tests run with a valid cwd");
+        let free = free_space(&cwd);
+        assert!(free.is_some(), "free_space returned None for an existing path: {}", cwd.display());
+        assert!(free.unwrap() > 0, "free_space reported 0 free bytes — almost certainly wrong");
+    }
+
+    #[test]
+    fn move_copy_error_message_tags_storage_full_with_the_disk_space_prefix() {
+        let e = std::io::Error::from(std::io::ErrorKind::StorageFull);
+        assert!(move_copy_error_message(&e).starts_with(DISK_SPACE_PREFIX));
+    }
+
+    #[test]
+    fn move_copy_error_message_leaves_other_errors_untagged() {
+        let e = std::io::Error::from(std::io::ErrorKind::PermissionDenied);
+        let msg = move_copy_error_message(&e);
+        assert!(!msg.starts_with(DISK_SPACE_PREFIX));
+        assert!(msg.starts_with("Could not move file to destination:"));
     }
 }

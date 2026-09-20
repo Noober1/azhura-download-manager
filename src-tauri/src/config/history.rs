@@ -112,20 +112,24 @@ pub(crate) async fn load_history() -> Result<HistoryLoad, String> {
         .entries
         .into_iter()
         .filter_map(|v| serde_json::from_value::<HistoryEntry>(v).ok())
-        .map(|mut e| {
-            // Follows a v0.2.1 category-folder rename (e.g. `Video` -> `Videos`)
-            // so a row saved by an older install doesn't show up as missing.
-            e.path = retarget_legacy_path(&e.path);
-            e.save_path = retarget_legacy_path(&e.save_path);
-            e.missing = !e.path.is_empty() && !Path::new(&e.path).exists();
-            e
-        })
+        .map(hydrate)
         .collect();
 
     Ok(HistoryLoad {
         entries,
         readable: true,
     })
+}
+
+/// Follows a v0.2.1 category-folder rename (e.g. `Video` -> `Videos`) so a
+/// row saved by an older install doesn't show up as missing, and recomputes
+/// `missing` from disk. Shared by `load_history` and backup import
+/// (`config::transfer`), which both start from untrusted-ish on-disk JSON.
+pub(crate) fn hydrate(mut e: HistoryEntry) -> HistoryEntry {
+    e.path = retarget_legacy_path(&e.path);
+    e.save_path = retarget_legacy_path(&e.save_path);
+    e.missing = !e.path.is_empty() && !Path::new(&e.path).exists();
+    e
 }
 
 #[tauri::command]

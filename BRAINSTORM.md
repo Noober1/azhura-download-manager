@@ -6,19 +6,19 @@ beneran masalah).
 
 ## Fitur baru
 
-- [ ] Search/filter bar di tabel unduhan (nama file, status, kategori)
+- [x] Search/filter bar di tabel unduhan (nama file, status, kategori)
 - [ ] Grouping tabel unduhan by kategori/tanggal (collapsible)
 - [ ] Auto-rule: regex site/filetype → kategori+folder otomatis (skip dialog
       konfirmasi kategori)
 - [ ] Dashboard statistik (total data terunduh, grafik kecepatan
       harian/bulanan)
-- [ ] Export/import pengaturan + daftar unduhan (backup/restore, pindah ke PC
+- [x] Export/import pengaturan + daftar unduhan (backup/restore, pindah ke PC
       lain)
-- [ ] Export riwayat unduhan ke CSV
+- [x] Export riwayat unduhan ke CSV
 - [ ] PIN/password lock buat buka aplikasi
-- [ ] Global hotkey (system-wide) buat buka window "Tambah Unduhan" dari luar
+- [x] Global hotkey (system-wide) buat buka window "Tambah Unduhan" dari luar
       app
-- [ ] Cek disk space sebelum mulai unduhan besar, warning kalau gak cukup
+- [x] Cek disk space sebelum mulai unduhan besar, warning kalau gak cukup
 - [ ] Video/stream sniffer (deteksi HLS/m3u8 + mux) — scope besar, prioritas
       belakangan
 - [ ] **Menubar klasik, muncul saat main window focus + tombol Alt ditekan.**

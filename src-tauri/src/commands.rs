@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tauri::ipc::Channel;
 
 use crate::config::prefs::{PrefsState, ProxyConfig};
@@ -234,6 +234,34 @@ pub(crate) async fn probe_url(
 #[specta::specta]
 pub(crate) fn default_download_dir() -> Result<String, String> {
     Ok(crate::paths::downloads_base()?.to_string_lossy().to_string())
+}
+
+#[derive(Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct DiskCheck {
+    enough: bool,
+    /// Free bytes on the folder that's short; None when there's enough room.
+    #[specta(type = Option<specta_typescript::Number>)]
+    free: Option<u64>,
+}
+
+/// Soft pre-check for the Add window once the probe knows the size — the
+/// engine re-checks (and hard-fails) at start regardless.
+#[tauri::command]
+#[specta::specta]
+pub(crate) fn check_disk_space(
+    save_path: String,
+    filename: String,
+    total: f64,
+    prefs_state: tauri::State<'_, PrefsState>,
+) -> Result<DiskCheck, String> {
+    let prefs = prefs_state.0.lock().unwrap().clone();
+    let name = if filename.trim().is_empty() { "download.bin" } else { filename.as_str() };
+    let save = Some(save_path.as_str());
+    Ok(match crate::paths::space_shortfall(total.max(0.0) as u64, name, save, &prefs)? {
+        None => DiskCheck { enough: true, free: None },
+        Some((_, free)) => DiskCheck { enough: false, free: Some(free) },
+    })
 }
 
 /// Folder containing the unpacked browser extension, for the titlebar

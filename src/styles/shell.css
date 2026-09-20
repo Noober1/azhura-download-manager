@@ -74,6 +74,18 @@
   border-radius: var(--radius-field);
 }
 
+.status-filter {
+  height: 24px;
+  margin-right: 0.35rem;
+  font-size: var(--fs-sm);
+  border-radius: var(--radius-field);
+}
+/* A non-default filter hides rows — make that visible at a glance. */
+.status-filter.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .topbar-status {
   margin-left: auto;
   display: flex;

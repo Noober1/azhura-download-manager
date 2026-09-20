@@ -28,6 +28,10 @@ import { retryBackoffMs } from "../retryBackoff";
 // checksum-mismatch kembali di-retry seperti error lain — bukan gagal
 // secara diam-diam yang berbahaya.
 const CHECKSUM_MISMATCH_PREFIX = "Checksum mismatch —";
+// Kehabisan disk space juga gak akan sembuh dengan retry otomatis — kalau
+// drive-nya masih penuh, percobaan berikutnya bakal gagal dengan alasan yang
+// sama persis. mirrors DISK_SPACE_PREFIX di paths.rs.
+const DISK_SPACE_PREFIX = "Not enough disk space —";
 
 /** Owns the download list itself plus every action that mutates it: running,
  *  pausing, canceling, resuming, deleting, and applying live speed/connection
@@ -128,7 +132,8 @@ export function useDownloads({
 
     const item = downloadsRef.current.find((d) => d.id === id);
     const attempts = item?.retryCount ?? 0;
-    const retryWouldHelp = !message.startsWith(CHECKSUM_MISMATCH_PREFIX);
+    const retryWouldHelp =
+      !message.startsWith(CHECKSUM_MISMATCH_PREFIX) && !message.startsWith(DISK_SPACE_PREFIX);
 
     if (attempts < maxRetryAttempts && retryWouldHelp) {
       // A new failure episode starts — drop any "already finalized" marker

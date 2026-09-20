@@ -3,6 +3,7 @@ import { motion } from "motion/react";
 import { commands } from "../bindings";
 import type { DownloadItem } from "../types";
 import { formatSpeed } from "../format";
+import { STATUS_FILTER_OPTIONS, type StatusFilter } from "../statusFilter";
 import { Icon, WindowControls } from "../ui";
 import { TAP } from "../motion";
 
@@ -17,6 +18,8 @@ export function Toolbar({
   totalSpeed,
   activeCount,
   queuedCount,
+  statusFilter,
+  onStatusFilterChange,
   searchQuery,
   onSearchChange,
   onResume,
@@ -40,6 +43,8 @@ export function Toolbar({
   totalSpeed: number;
   activeCount: number;
   queuedCount: number;
+  statusFilter: StatusFilter;
+  onStatusFilterChange: (v: StatusFilter) => void;
   searchQuery: string;
   onSearchChange: (v: string) => void;
   onResume: (items: DownloadItem[]) => void;
@@ -163,6 +168,20 @@ export function Toolbar({
           <Icon name="refresh" />
         </motion.span>
       </motion.button>
+
+      <select
+        className={`status-filter ${statusFilter !== "all" ? "active" : ""}`}
+        aria-label="Filter by status"
+        data-tip="Filter by status"
+        value={statusFilter}
+        onChange={(e) => onStatusFilterChange(e.currentTarget.value as StatusFilter)}
+      >
+        {STATUS_FILTER_OPTIONS.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
 
       <input
         ref={searchRef}
