@@ -21,7 +21,7 @@ beneran masalah).
 - [x] Cek disk space sebelum mulai unduhan besar, warning kalau gak cukup
 - [ ] Video/stream sniffer (deteksi HLS/m3u8 + mux) — scope besar, prioritas
       belakangan
-- [ ] **Menubar klasik, muncul saat main window focus + tombol Alt ditekan.**
+- [x] **Menubar klasik, muncul saat main window focus + tombol Alt ditekan.**
       Perilaku standar aplikasi Windows (Notepad, Explorer, dll): menubar
       tersembunyi secara default, toggle muncul saat tap Alt sendirian (bukan
       kombinasi) selagi window lagi focus. Gak bentrok sama shortcut Alt+Enter

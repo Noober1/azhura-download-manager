@@ -108,6 +108,17 @@ pub(crate) fn prepare_for_update(app: tauri::AppHandle) {
     begin_shutdown(&app);
 }
 
+/// File > Exit, from the menu bar. A thin wrapper rather than a
+/// `#[tauri::command]` on `quit_app` itself: commands take an owned
+/// `AppHandle`, while the tray's "Quit" handler calls `quit_app(&app)` with a
+/// borrow — this just bridges the two. Same path either way, including the
+/// pending-update install on the way out.
+#[tauri::command]
+#[specta::specta]
+pub(crate) fn exit_app(app: tauri::AppHandle) {
+    quit_app(&app);
+}
+
 /// Fixed scale every window renders at — a deliberate ~10% bump over the
 /// design-time 100% baseline. Applied via `set_zoom` (native WebView zoom)
 /// rather than a CSS `zoom`/`transform` on `:root`, so it scales the CSS pixel

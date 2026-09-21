@@ -18,6 +18,51 @@
   border-bottom: 1px solid var(--border);
 }
 
+/* ---- Menu bar -------------------------------------------------------------
+   Classic Alt-tap menu bar (MenuBar.tsx) — hidden by default, its own row
+   below `.topbar`. Deliberately NOT `data-tauri-drag-region`: `.topbar` is
+   the app's one drag handle, and clicking "File" must never risk starting a
+   window drag. */
+
+.menubar {
+  display: flex;
+  align-items: center;
+  gap: 0.1rem;
+  height: 24px;
+  padding: 0 0.25rem;
+  flex-shrink: 0;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.menubar-item {
+  height: 20px;
+  padding: 0 0.5em;
+  color: var(--ink);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-field);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+  transition: background var(--dur-1) var(--ease-standard);
+}
+.menubar-item:hover:not(:disabled) {
+  background: var(--hover);
+}
+.menubar-item.open {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.menubar-item:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+/* Underlines the mnemonic letter (`splitMnemonic` in `src/menubar.ts`) —
+   inherits the trigger's own color, so it stays legible in the `.open`
+   (accent-background) state too. */
+.menubar-mnemonic {
+  text-decoration: underline;
+}
+
 .tbtn {
   display: inline-flex;
   align-items: center;

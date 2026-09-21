@@ -68,3 +68,28 @@
   margin: 0.25rem 0.2rem;
   background: var(--border-strong);
 }
+
+/* ---- Menu bar dropdown rows (MenuBar.tsx) ----------------------------------
+   `.ctx-item` is `display: block` above; a menu-bar row additionally carries
+   `.ctx-row` to lay the check/label/shortcut out horizontally, with the
+   shortcut hint pushed to the far right. */
+.ctx-item.ctx-row {
+  display: flex;
+  align-items: center;
+}
+.ctx-shortcut {
+  margin-left: auto;
+  padding-left: 1.5rem;
+  color: var(--faint);
+  font-size: var(--fs-xs);
+}
+.ctx-item:hover:not(:disabled):not(.disabled) .ctx-shortcut,
+.ctx-item.cursor:not(:disabled) .ctx-shortcut {
+  color: inherit;
+}
+/* The keyboard cursor gets the same highlight `:hover` does, so mouse and
+   keyboard navigation are visually indistinguishable. */
+.ctx-item.cursor:not(:disabled) {
+  background: var(--accent);
+  color: var(--on-accent);
+}

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 
 import { flushSync } from "react-dom";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getVersion } from "@tauri-apps/api/app";
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { AnimatePresence } from "motion/react";
 import { commands } from "./bindings";
@@ -40,7 +40,12 @@ import { useSelection } from "./selection/useSelection";
 import { useMarquee } from "./selection/useMarquee";
 import { useTableKeyboard } from "./selection/useTableKeyboard";
 import { useAppShortcuts } from "./hooks/useAppShortcuts";
+import { useMenubar } from "./hooks/useMenubar";
+import type { Menu, MenuItem } from "./menubar";
+import { GROUP_BY_OPTIONS } from "./grouping";
+import { STATUS_FILTER_OPTIONS } from "./statusFilter";
 import { Toolbar } from "./components/Toolbar";
+import { MenuBar } from "./components/MenuBar";
 import { Sidebar } from "./components/Sidebar";
 import { DownloadTable } from "./components/DownloadTable";
 import { ContextMenu } from "./components/ContextMenu";
@@ -298,6 +303,17 @@ function App() {
     );
   }
 
+  // File > Open Downloads Folder. `openPath` (not `revealItemInDir`, used
+  // everywhere else in this file) opens the folder's *contents* — the right
+  // behavior for a folder itself, where `revealItemInDir` would instead
+  // select `AzhuraDownloadManager` inside its parent Downloads window.
+  function openDownloadsFolder() {
+    commands
+      .defaultDownloadDir()
+      .then((dir) => openPath(dir))
+      .catch(() => showToast("Couldn't open the downloads folder."));
+  }
+
   function exportHistoryCsv() {
     commands
       .exportHistoryCsv(historyToCsv(historyRows), exportFileName("history", "csv"))
@@ -348,6 +364,15 @@ function App() {
     downloadsApi.connRestart
   );
 
+  const menubar = useMenubar(anyDialogOpen);
+
+  // The menu bar owns the keyboard while it's up — otherwise Space would
+  // pause downloads and the arrow keys would move the table's selection
+  // underneath it. Deliberately NOT folded into `anyDialogOpen` itself
+  // (which `useMenubar` reads above to decide whether Alt may act at all):
+  // a second Alt tap has to stay able to close the bar even while it's open.
+  const shortcutsSuppressed = anyDialogOpen || menubar.visible;
+
   const totalSpeed = downloads
     .filter((d) => d.state === "downloading")
     .reduce((s, d) => s + d.speed, 0);
@@ -393,7 +418,7 @@ function App() {
     rows,
     selectedItems,
     singleSelected,
-    anyDialogOpen,
+    anyDialogOpen: shortcutsSuppressed,
     setSelectedIds,
     anchorRef,
     requestDelete: downloadsApi.requestDelete,
@@ -402,7 +427,7 @@ function App() {
   });
 
   useAppShortcuts({
-    anyDialogOpen,
+    anyDialogOpen: shortcutsSuppressed,
     onToggleSidebar: () => settings.setSidebarCollapsedSetting(!settings.sidebarCollapsed),
     onAddDownload: () => commands.openAddWindow(),
     onShowSettings: () => setShowSettings(true),
@@ -417,6 +442,192 @@ function App() {
     singleSelected,
     openDetail,
   });
+
+  // Rebuilt fresh each time `MenuBar` mounts (it's only in the tree while
+  // `menubar.visible`) — a ~30-entry array is cheap, and memoizing it would
+  // need a dependency list covering half this component for no measurable
+  // gain. Every handler here already exists elsewhere in this file/hook
+  // tree except `openDownloadsFolder` and `commands.exitApp`, both new.
+  function buildMenus(): Menu[] {
+    return [
+      {
+        label: "File",
+        mnemonic: "F",
+        items: [
+          { kind: "item", label: "Add Download…", shortcut: "Ctrl+N", onSelect: () => commands.openAddWindow() },
+          { kind: "item", label: "Open Downloads Folder", onSelect: () => openDownloadsFolder() },
+          { kind: "separator" },
+          { kind: "item", label: "Exit", onSelect: () => commands.exitApp() },
+        ],
+      },
+      {
+        label: "Downloads",
+        mnemonic: "D",
+        items: [
+          {
+            kind: "item",
+            label: resumeLabel,
+            shortcut: "Space",
+            disabled: resumableSel.length === 0,
+            onSelect: () => resumeWithOverride(resumableSel),
+          },
+          {
+            kind: "item",
+            label: "Pause",
+            shortcut: "Space",
+            disabled: pausableSel.length === 0,
+            onSelect: () => downloadsApi.pauseMany(pausableSel),
+          },
+          {
+            kind: "item",
+            label: "Cancel",
+            disabled: cancelableSel.length === 0,
+            onSelect: () => downloadsApi.cancelMany(cancelableSel),
+          },
+          {
+            kind: "item",
+            label: "Delete…",
+            shortcut: "Delete",
+            disabled: deletableSel.length === 0,
+            onSelect: () => downloadsApi.requestDelete(deletableSel),
+          },
+          {
+            kind: "item",
+            label: "Copy Link",
+            shortcut: "Ctrl+C",
+            disabled: selectedItems.length === 0,
+            onSelect: () => copyLinks(selectedItems),
+          },
+          { kind: "separator" },
+          {
+            kind: "item",
+            label: "Select All",
+            shortcut: "Ctrl+A",
+            disabled: rows.length === 0,
+            onSelect: () => setSelectedIds(new Set(rows.map((d) => d.id))),
+          },
+          { kind: "item", label: "Refresh", shortcut: "F5", onSelect: () => refreshMissing() },
+          { kind: "separator" },
+          {
+            kind: "item",
+            label: "Clear History…",
+            disabled: clearableRows.length === 0,
+            onSelect: () => downloadsApi.requestDelete(clearableRows),
+          },
+        ],
+      },
+      {
+        label: "View",
+        mnemonic: "V",
+        items: [
+          {
+            kind: "item",
+            label: "Toggle Sidebar",
+            shortcut: "Ctrl+B",
+            onSelect: () => settings.setSidebarCollapsedSetting(!settings.sidebarCollapsed),
+          },
+          {
+            kind: "item",
+            label: "Show/Hide Columns…",
+            // `rect` is the activated item's own box, so the reused
+            // `ColumnMenu` opens flush under it, exactly like a submenu
+            // would — see `MenuBar.tsx`'s `activate`.
+            onSelect: (rect) => setMenu({ x: rect?.left ?? 0, y: rect?.bottom ?? 0, kind: "columns" }),
+          },
+          { kind: "separator" },
+          {
+            kind: "submenu",
+            label: "Group Rows",
+            // Same options the toolbar's "Group rows" `FilterMenuButton`
+            // offers — mapped from the same `GROUP_BY_OPTIONS` list so the
+            // two entry points can't drift.
+            items: GROUP_BY_OPTIONS.map(
+              (o): MenuItem => ({
+                kind: "item",
+                label: o.label,
+                checked: grouped.groupBy === o.value,
+                onSelect: () => grouped.setGroupBy(o.value),
+              }),
+            ),
+          },
+          {
+            kind: "submenu",
+            label: "Filter by Status",
+            // Same options the toolbar's "Filter by status" `FilterMenuButton`
+            // offers — mapped from `STATUS_FILTER_OPTIONS` for the same reason.
+            items: STATUS_FILTER_OPTIONS.map(
+              (o): MenuItem => ({
+                kind: "item",
+                label: o.label,
+                checked: sorted.statusFilter === o.value,
+                onSelect: () => sorted.setStatusFilter(o.value),
+              }),
+            ),
+          },
+          {
+            kind: "submenu",
+            label: "Theme",
+            items: [
+              {
+                kind: "item",
+                label: "System",
+                checked: settings.theme === "system",
+                onSelect: () => settings.setThemeSetting("system"),
+              },
+              {
+                kind: "item",
+                label: "Light",
+                checked: settings.theme === "light",
+                onSelect: () => settings.setThemeSetting("light"),
+              },
+              {
+                kind: "item",
+                label: "Dark",
+                checked: settings.theme === "dark",
+                onSelect: () => settings.setThemeSetting("dark"),
+              },
+            ],
+          },
+        ],
+      },
+      {
+        label: "Tools",
+        mnemonic: "T",
+        items: [
+          { kind: "item", label: "Settings…", shortcut: "Ctrl+,", onSelect: () => setShowSettings(true) },
+          {
+            kind: "item",
+            label: "Extensions…",
+            shortcut: "Ctrl+Shift+X",
+            onSelect: () => setShowExtensions(true),
+          },
+          {
+            kind: "item",
+            label: "Check for Updates",
+            disabled: updater.state.stage === "checking",
+            onSelect: () => updater.checkNow(),
+          },
+        ],
+      },
+      {
+        label: "Help",
+        mnemonic: "H",
+        items: [
+          {
+            kind: "item",
+            label: "Keyboard Shortcuts",
+            shortcut: "Ctrl+/",
+            onSelect: () => setShowShortcuts(true),
+          },
+          {
+            kind: "item",
+            label: "About Azhura Download Manager",
+            onSelect: () => commands.openAboutWindow(),
+          },
+        ],
+      },
+    ];
+  }
 
   return (
     <div className="app">
@@ -448,6 +659,9 @@ function App() {
         sidebarCollapsed={settings.sidebarCollapsed}
         onToggleSidebar={() => settings.setSidebarCollapsedSetting(!settings.sidebarCollapsed)}
       />
+
+      {/* ---- Menu bar: hidden until an Alt tap reveals it ---- */}
+      {menubar.visible && <MenuBar menus={buildMenus()} onDismiss={menubar.hide} />}
 
       {/* ---- Body: sidebar + table ---- */}
       <div className="body">

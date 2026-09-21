@@ -35,6 +35,7 @@ const GROUPS: Group[] = [
       { keys: ["Ctrl", ","], label: "Settings" },
       { keys: ["Ctrl", "Shift", "X"], label: "Browser extensions" },
       { keys: ["Ctrl", "/"], label: "Keyboard shortcuts" },
+      { keys: ["Alt"], label: "Show menu bar" },
     ],
   },
 ];

@@ -21,7 +21,13 @@
     "updater:default",
     "process:allow-restart",
     "opener:allow-reveal-item-in-dir",
-    "opener:allow-open-path",
+    {
+      "identifier": "opener:allow-open-path",
+      "allow": [
+        { "path": "$DOWNLOAD/AzhuraDownloadManager" },
+        { "path": "$DOWNLOAD/AzhuraDownloadManager/**" }
+      ]
+    },
     {
       "identifier": "opener:allow-open-url",
       "allow": [{ "url": "chrome://*", "app": "chrome.exe" }]

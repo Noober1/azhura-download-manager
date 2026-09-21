@@ -240,6 +240,14 @@ export const commands = {
 	 */
 	prepareForUpdate: () => __TAURI_INVOKE<void>("prepare_for_update"),
 	/**
+	 *  File > Exit, from the menu bar. A thin wrapper rather than a
+	 *  `#[tauri::command]` on `quit_app` itself: commands take an owned
+	 *  `AppHandle`, while the tray's "Quit" handler calls `quit_app(&app)` with a
+	 *  borrow — this just bridges the two. Same path either way, including the
+	 *  pending-update install on the way out.
+	 */
+	exitApp: () => __TAURI_INVOKE<void>("exit_app"),
+	/**
 	 *  Checks the feed, downloads and signature-verifies the update package (the
 	 *  plugin's own `download` does the verification), and records it as
 	 *  pending. `Ok(None)` when already up to date.

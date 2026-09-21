@@ -41,7 +41,7 @@ use windows::{harden_webview, quit_app, reveal_main_window, Quitting};
 /// and the cold-start detection below have to agree on.
 const AUTOSTART_FLAG: &str = "--autostart";
 
-/// 34 of the app's 36 IPC-crossing commands, collected once here so both the
+/// 35 of the app's 37 IPC-crossing commands, collected once here so both the
 /// runtime invoke handler and (in debug builds) the generated
 /// `../src/bindings.ts` stay derived from the same list — order matches the
 /// old `tauri::generate_handler!` list it replaced.
@@ -104,6 +104,7 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         power::run_power_action,
         hotkey::set_global_hotkey,
         windows::prepare_for_update,
+        windows::exit_app,
         update::download_update,
         update::pending_update,
         update::install_pending_update,

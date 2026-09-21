@@ -26,6 +26,16 @@
 .ctx-sub:hover:not(.disabled) .ctx-caret {
   color: inherit;
 }
+/* MenuBar.tsx's keyboard cursor gets the same highlight `:hover` does, so
+   mouse and keyboard land on an identical look — same pairing already used
+   for `.ctx-item.cursor` in context-menu.css. */
+.ctx-sub.cursor:not(.disabled) {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.ctx-sub.cursor:not(.disabled) .ctx-caret {
+  color: inherit;
+}
 .ctx-flyout {
   /* `display: none` used to gate visibility, but that can't be transitioned —
      opacity/visibility can. `position: absolute` means staying in `display:

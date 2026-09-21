@@ -701,3 +701,92 @@ release beneran, atau sementara arahkan `updater.endpoints` di
       "Install updates when you quit")
 - [ ] Offline saat launch → gak ada toast/error; klik "Check for updates"
       selagi offline → toast error muncul
+
+## 23. Menubar klasik tap-Alt (Batch 3b-1, baru)
+
+Belum pernah diuji manual sama sekali. Lolos `tsc --noEmit`, `vitest run` (207 test), `cargo check
+--all-targets`, dan `cargo test --lib` (138 test).
+
+**Deteksi tap-Alt:**
+
+- [ ] Tap dan lepas Alt dengan tabel dalam keadaan fokus → menubar muncul di bawah toolbar, "File"
+      langsung fokus
+- [ ] Tap Alt lagi → menubar hilang; fokus balik ke elemen yang tadi dipegang
+- [ ] Tahan Alt lalu tekan Enter pas satu baris ke-select → window Detail kebuka dan menubar **tidak**
+      muncul (regresi klasik yang desain ini jaga)
+- [ ] Tahan Alt, tekan-lepas tombol lain, baru lepas Alt → menubar tidak muncul
+- [ ] Tahan Alt, klik di mana pun, lepas Alt → menubar tidak muncul
+- [ ] Alt+Tab keluar dan balik lagi → menubar tidak muncul pas balik
+- [ ] Tekan Alt selagi fokus di search box → tidak ada yang terjadi
+- [ ] Buka Settings, tap Alt → tidak ada yang terjadi; tutup Settings, tap Alt → menubar muncul
+- [ ] Tap Alt biar menubar muncul, lalu klik baris di tabel unduhan (atau tombol toolbar, atau search
+      box) → menubar **langsung hilang sendiri** (bukan nyangkut kebuka tapi gak bisa dipencet)
+- [ ] Ulangi di atas tapi klik ke tombol trigger menubar lain (mis. dari "File" ke "View") →
+      menubar **tetap kebuka**, cuma pindah menu
+
+**Mnemonic huruf (baru):**
+
+- [ ] Tiap judul menu (File/Downloads/View/Tools/Help) nampilin satu huruf digaris bawahi (F/D/V/T/H)
+- [ ] Selagi menubar kebuka, tekan huruf mnemonic (mis. "V") **tanpa** Alt → langsung buka dropdown
+      menu itu (View), gak perlu navigasi panah dulu
+- [ ] Ganti ke huruf mnemonic lain (mis. "T") selagi menu lain lagi kebuka → langsung pindah ke menu
+      itu (Tools), yang lama tertutup
+- [ ] Tekan huruf yang gak match mnemonic manapun → gak ada yang terjadi, dropdown yang kebuka tetap
+      di situ
+- [ ] Huruf mnemonic tetap kebaca jelas (underline-nya kontras) pas menu-nya lagi ke-highlight aktif
+      (background aksen)
+
+**Submenu View > Group Rows / Filter by Status / Theme (baru):**
+
+- [ ] Di menu View, ketiga item ini nampilin caret "▸" di kanan (bukan lagi list rata dipisah
+      separator)
+- [ ] Hover salah satu (mis. "Group Rows") → flyout-nya langsung muncul di sebelah kanan, isinya
+      pilihan yang sesuai (No grouping/Group by category/Group by date), tanda centang ada di pilihan
+      yang aktif
+- [ ] Hover ke item submenu lain (mis. "Theme") selagi flyout "Group Rows" kebuka → langsung pindah
+      ke flyout "Theme", yang lama nutup
+- [ ] Hover item BIASA (bukan submenu, mis. "Toggle Sidebar") selagi ada flyout kebuka → flyout-nya
+      nutup
+- [ ] Keyboard: navigasi ke salah satu item submenu (panah atas/bawah), tekan panah **kanan** →
+      flyout-nya kebuka, cursor pindah ke item pertama di dalamnya
+- [ ] Di dalam flyout: panah atas/bawah pindah antar pilihan, Home/End ke awal/akhir, Enter milih
+      dan **nutup seluruh menubar** (bukan cuma flyout-nya)
+- [ ] Di dalam flyout: panah **kiri** atau Esc → cuma nutup flyout-nya, balik ke menu View dengan
+      baris "Group Rows"/dst tetap ke-highlight, menubar-nya sendiri tetap kebuka
+- [ ] Klik langsung salah satu pilihan di dalam flyout (mis. "Group by category") → langsung
+      keterapkan (grouping tabel berubah) dan seluruh menubar nutup
+- [ ] Klik di luar menubar selagi flyout kebuka → semuanya nutup, gak nyangkut setengah-setengah
+- [ ] Flyout-nya kelihatan di ATAS panel View (gak ketutupan), posisinya nempel di sebelah kanan
+      baris submenu yang dibuka
+
+**Navigasi:**
+
+- [ ] Panah kiri/kanan pindah antar File…Help; panah bawah buka menu di item pertama; panah atas di
+      item terakhir; Home/End lompat ke awal/akhir; Enter jalanin item; Esc nutup dropdown, Esc kedua
+      nutup menubar-nya
+- [ ] Navigasi panah skip separator dan item yang di-grey-out di kedua arah, dan wrap di ujung-ujungnya
+- [ ] Selagi satu menu kebuka, hover ke judul menu lain langsung pindah; selagi belum ada yang kebuka,
+      hover doang tidak munculin apa-apa
+- [ ] Highlight mouse dan cursor keyboard tidak pernah dobel — selalu satu highlight yang sama
+- [ ] Selagi menubar kebuka: Space **tidak** pause download, panah **tidak** gerakin seleksi tabel,
+      Ctrl+A **tidak** select all
+
+**Item menu:**
+
+- [ ] Semua item File/Downloads/View/Tools/Help ngelakuin hal yang sama kayak tombol toolbar/shortcut
+      yang sepadan, dan menubar-nya nutup sendiri sesudahnya
+- [ ] Status grey-out ngikutin seleksi persis kayak tombol toolbar (gak ada yang di-select → Resume /
+      Pause / Cancel / Delete / Copy Link semua grey)
+- [ ] View > Theme nampilin centang di sebelah tema aktif dan ganti tema langsung keterapkan
+- [ ] View > Show/Hide Columns… buka menu kolom yang sudah ada, posisinya pas di bawah item itu
+- [ ] File > Open Downloads Folder buka `…\Downloads\AzhuraDownloadManager` di Explorer
+- [ ] File > Exit beneran nutup app (ikon tray hilang, proses gak ada lagi) dan unduhan yang lagi
+      jalan balik jadi resumable pas dibuka lagi
+- [ ] Tools > Check for Updates kelakuannya sama kayak tombol di Settings, dan grey selagi lagi ngecek
+
+**Chrome:**
+
+- [ ] Drag window lewat toolbar tetap jalan; drag lewat baris menubar **tidak** ikut mindahin window,
+      dan klik "File" gak pernah ke-anggep drag
+- [ ] Tabel ngecil persis setinggi menubar pas toggle, gak ada layout yang loncat
+- [ ] Kedua tema kelihatan pas; judul menu yang lagi kebuka ke-highlight
