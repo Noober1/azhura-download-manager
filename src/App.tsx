@@ -36,6 +36,7 @@ import { useMissingRefresh } from "./hooks/useMissingRefresh";
 import { useGrabberStatus } from "./hooks/useGrabberStatus";
 import { useBackendWarnings } from "./hooks/useBackendWarnings";
 import { useTotalSpeedHistory } from "./hooks/useTotalSpeedHistory";
+import { useStats } from "./hooks/useStats";
 import { useSelection } from "./selection/useSelection";
 import { useMarquee } from "./selection/useMarquee";
 import { useTableKeyboard } from "./selection/useTableKeyboard";
@@ -63,6 +64,7 @@ import { PowerActionDialog, type PowerAction } from "./components/dialogs/PowerA
 import { UpdateRestartDialog } from "./components/dialogs/UpdateRestartDialog";
 import { ShortcutsDialog } from "./components/dialogs/ShortcutsDialog";
 import { SpeedGraph } from "./components/SpeedGraph";
+import { Dashboard } from "./components/Dashboard";
 import "./App.css";
 
 function App() {
@@ -93,6 +95,12 @@ function App() {
   // paused, not lost.
   const [confirmRestart, setConfirmRestart] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  // Session-only, not persisted — which the main area shows: the download
+  // table or the statistics dashboard (see Sidebar's "Dashboard" row).
+  // Defaults to the dashboard on every launch, since this state is never
+  // persisted and so always starts fresh here.
+  const [view, setView] = useState<"table" | "dashboard">("dashboard");
+  const showDashboard = view === "dashboard";
 
   const tableWrapRef = useRef<HTMLElement>(null);
   const didDragRef = useRef(false);
@@ -391,6 +399,7 @@ function App() {
     .filter((d) => d.state === "downloading")
     .reduce((s, d) => s + d.speed, 0);
   const totalSpeedHistory = useTotalSpeedHistory(totalSpeed);
+  const stats = useStats(downloads, totalSpeed);
   const activeCount = downloads.filter(
     (d) => d.state === "downloading" || d.state === "verifying",
   ).length;
@@ -432,7 +441,10 @@ function App() {
     rows,
     selectedItems,
     singleSelected,
-    anyDialogOpen: shortcutsSuppressed,
+    // Stops arrow keys/Ctrl+A from acting on rows hidden behind the
+    // dashboard. `useAppShortcuts` below stays unchanged, so Ctrl+N/Ctrl+B
+    // and the rest keep working while the dashboard is up.
+    anyDialogOpen: shortcutsSuppressed || showDashboard,
     setSelectedIds,
     anchorRef,
     requestDelete: downloadsApi.requestDelete,
@@ -456,6 +468,14 @@ function App() {
     singleSelected,
     openDetail,
   });
+
+  // Toggles the main area between the table and the dashboard. Clearing the
+  // selection when entering the dashboard means Space/Delete/Ctrl+C
+  // (useAppShortcuts) can't act on rows the user can no longer see.
+  function toggleDashboard() {
+    if (!showDashboard) setSelectedIds(new Set());
+    setView(showDashboard ? "table" : "dashboard");
+  }
 
   // Rebuilt fresh each time `MenuBar` mounts (it's only in the tree while
   // `menubar.visible`) — a ~30-entry array is cheap, and memoizing it would
@@ -539,6 +559,12 @@ function App() {
             label: "Toggle Sidebar",
             shortcut: "Ctrl+B",
             onSelect: () => settings.setSidebarCollapsedSetting(!settings.sidebarCollapsed),
+          },
+          {
+            kind: "item",
+            label: "Dashboard",
+            checked: showDashboard,
+            onSelect: toggleDashboard,
           },
           {
             kind: "item",
@@ -659,11 +685,22 @@ function App() {
         activeCount={activeCount}
         queuedCount={queuedCount}
         groupBy={grouped.groupBy}
-        onGroupByChange={grouped.setGroupBy}
+        // These controls act on the table, so using any of them brings it
+        // back into view if the dashboard is currently showing.
+        onGroupByChange={(v) => {
+          setView("table");
+          grouped.setGroupBy(v);
+        }}
         statusFilter={sorted.statusFilter}
-        onStatusFilterChange={sorted.setStatusFilter}
+        onStatusFilterChange={(v) => {
+          setView("table");
+          sorted.setStatusFilter(v);
+        }}
         searchQuery={sorted.searchQuery}
-        onSearchChange={sorted.setSearchQuery}
+        onSearchChange={(v) => {
+          setView("table");
+          sorted.setSearchQuery(v);
+        }}
         onResume={resumeWithOverride}
         onPause={downloadsApi.pauseMany}
         onCancel={downloadsApi.cancelMany}
@@ -682,13 +719,18 @@ function App() {
       <div className="body">
         <Sidebar
           category={sorted.category}
-          setCategory={sorted.setCategory}
+          setCategory={(c) => {
+            setView("table");
+            sorted.setCategory(c);
+          }}
           totalCount={downloads.length}
           activeCount={sorted.activeItems.length}
           finishedCount={sorted.finishedItems.length}
           categoryCounts={sorted.categoryCounts}
           activeCategoryCounts={sorted.activeCategoryCounts}
           collapsed={settings.sidebarCollapsed}
+          dashboardActive={showDashboard}
+          onToggleDashboard={toggleDashboard}
         />
 
         <DownloadTable
@@ -729,7 +771,11 @@ function App() {
             dropBefore: queueDrag.dropBefore,
             onGripMouseDown: queueDrag.startDrag,
           }}
+          hidden={showDashboard}
         />
+        {showDashboard && (
+          <Dashboard days={stats.days} activeNow={sorted.activeItems.length} onReset={stats.reset} />
+        )}
       </div>
 
       {/* ---- Status bar ---- */}

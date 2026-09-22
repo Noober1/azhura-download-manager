@@ -7,6 +7,13 @@
   padding: 0;
 }
 
+/* Explicit guard: `DownloadTable` stays mounted while the dashboard shows
+   (keeps `tableWrapRef` valid for useMarquee/useQueueDrag/useInfiniteRows and
+   preserves scroll position), so hiding it needs more than unmounting. */
+.table-wrap[hidden] {
+  display: none;
+}
+
 /* ---- Marquee (drag) selection ---------------------------------------------- */
 
 .marquee {

@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// Persisted app configuration: settings.json, prefs.json, history.json.
+// Persisted app configuration: settings.json, prefs.json, history.json, stats.json.
 // ---------------------------------------------------------------------------
 
 use std::path::{Path, PathBuf};
@@ -10,6 +10,7 @@ pub(crate) mod history;
 pub(crate) mod prefs;
 pub(crate) mod secret;
 pub(crate) mod settings;
+pub(crate) mod stats;
 pub(crate) mod transfer;
 
 pub(crate) fn config_dir() -> Result<PathBuf, String> {

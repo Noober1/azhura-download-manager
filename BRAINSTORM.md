@@ -10,7 +10,7 @@ beneran masalah).
 - [x] Grouping tabel unduhan by kategori/tanggal (collapsible)
 - [x] Auto-rule: regex site/filetype → kategori+folder otomatis (skip dialog
       konfirmasi kategori)
-- [ ] Dashboard statistik (total data terunduh, grafik kecepatan
+- [x] Dashboard statistik (total data terunduh, grafik kecepatan
       harian/bulanan)
 - [x] Export/import pengaturan + daftar unduhan (backup/restore, pindah ke PC
       lain)

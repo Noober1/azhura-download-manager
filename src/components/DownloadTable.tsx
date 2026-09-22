@@ -370,6 +370,7 @@ export function DownloadTable({
   trailingGroups,
   onToggleGroup,
   queue,
+  hidden,
 }: {
   tableWrapRef: RefObject<HTMLElement | null>;
   onTableMouseDown: (e: ReactMouseEvent) => void;
@@ -426,12 +427,17 @@ export function DownloadTable({
   onToggleGroup: (key: string) => void;
   /** Drag-reorder state/handlers for the Queue column. */
   queue: QueueColumnProps;
+  /** True while the dashboard is shown instead — the table stays mounted
+   *  (see App.tsx's `view` state) so refs stay valid and scroll position is
+   *  kept, just visually hidden via `table.css`'s `.table-wrap[hidden]`. */
+  hidden?: boolean;
 }) {
   return (
     <>
       <main
         className="table-wrap"
         data-density={density}
+        hidden={hidden}
         ref={tableWrapRef}
         onMouseDown={onTableMouseDown}
         onClick={onTableClick}

@@ -63,6 +63,7 @@ export function Icon({ name, size = 14, active }: { name: string; size?: number;
     // one per `FileCategory` in categories.ts (kept in the same order as
     // `FILE_CATEGORIES`).
     all: <path d="M3 5.5h12M3 9h12M3 12.5h12" />,
+    chart: <path d="M3 15h12M5.5 15V10M9 15V4.5M12.5 15V7.5" />,
     active: (
       <>
         <path d="M9 3v7.5M5.5 7.5L9 11l3.5-3.5" />

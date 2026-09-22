@@ -25,16 +25,20 @@ function CatButton({
   active: boolean;
   icon: string;
   label: string;
-  count: number;
+  /** Omitted for a row with no count of its own (the Dashboard toggle). */
+  count?: number;
   /** How many of `count` are currently downloading/verifying/queued/paused —
    *  rendered as a small badge next to the count. Omitted (or 0) shows no
    *  badge, so All/Active/Finished — which don't pass it — stay as before. */
   activeCount?: number;
   onClick: () => void;
 }) {
-  const tip = activeCount
-    ? `${label} (${count}, ${activeCount} active)`
-    : `${label} (${count})`;
+  const tip =
+    count === undefined
+      ? label
+      : activeCount
+        ? `${label} (${count}, ${activeCount} active)`
+        : `${label} (${count})`;
   return (
     <button
       className={`cat ${active ? "active" : ""}`}
@@ -66,7 +70,7 @@ function CatButton({
             {activeCount}
           </span>
         )}
-        <span className="cat-n">{count}</span>
+        {count !== undefined && <span className="cat-n">{count}</span>}
       </span>
     </button>
   );
@@ -81,6 +85,8 @@ export function Sidebar({
   categoryCounts,
   activeCategoryCounts,
   collapsed,
+  dashboardActive,
+  onToggleDashboard,
 }: {
   category: Category;
   setCategory: (c: Category) => void;
@@ -94,26 +100,32 @@ export function Sidebar({
   /** Drives the icon-rail width only — the toggle button itself lives in
    *  the toolbar now, next to "Add download". */
   collapsed: boolean;
+  /** Whether the main area currently shows the Dashboard instead of the
+   *  table — drives the Dashboard row's own highlight and every other row's
+   *  `active` (which must be false while the dashboard is up). */
+  dashboardActive: boolean;
+  onToggleDashboard: () => void;
 }) {
   return (
     <aside className={`sidebar ${collapsed ? "collapsed" : ""}`}>
+      <CatButton active={dashboardActive} icon="chart" label="Dashboard" onClick={onToggleDashboard} />
       <div className="side-title">Category</div>
       <CatButton
-        active={category === "all"}
+        active={!dashboardActive && category === "all"}
         icon="all"
         label="All Downloads"
         count={totalCount}
         onClick={() => setCategory("all")}
       />
       <CatButton
-        active={category === "active"}
+        active={!dashboardActive && category === "active"}
         icon="active"
         label="Active"
         count={activeCount}
         onClick={() => setCategory("active")}
       />
       <CatButton
-        active={category === "finished"}
+        active={!dashboardActive && category === "finished"}
         icon="finished"
         label="Finished"
         count={finishedCount}
@@ -124,7 +136,7 @@ export function Sidebar({
       {FILE_CATEGORIES.map((c) => (
         <CatButton
           key={c}
-          active={category === c}
+          active={!dashboardActive && category === c}
           icon={CATEGORY_ICON[c]}
           label={CATEGORY_LABEL[c]}
           count={categoryCounts[c] ?? 0}

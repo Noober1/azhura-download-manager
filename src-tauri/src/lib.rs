@@ -102,6 +102,8 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         config::prefs::apply_imported_prefs,
         config::history::load_history,
         config::history::save_history,
+        config::stats::load_stats,
+        config::stats::save_stats,
         config::transfer::export_history_csv,
         config::transfer::export_backup,
         config::transfer::import_backup,

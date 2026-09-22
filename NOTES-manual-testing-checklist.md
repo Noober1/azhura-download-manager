@@ -877,3 +877,41 @@ Belum pernah diuji manual sama sekali. Frontend-only, tidak ada perubahan Rust/b
       menyisipkan di tengah urutan yang sudah diatur manual
 - [ ] Restart app dengan beberapa baris masih queued → urutan boleh balik ke default (prioritas
       session-only, sengaja tidak dipersist — baris queued memang tidak pernah disimpan ke history)
+
+## 26. Dashboard statistik (Batch 4b, baru)
+
+Belum pernah diuji manual sama sekali. Butuh restart `bun run tauri dev` (bukan cuma reload
+frontend) karena ada dua command Rust baru (`load_stats`/`save_stats`).
+
+- [ ] Start app dari kondisi tertutup → **Dashboard tampil duluan secara default** (bukan tabel);
+      sidebar nge-highlight baris "Dashboard", bukan kategori manapun
+- [ ] Dengan history yang sudah ada isinya → tile dan bar chart nampilin total backfill dari
+      hari-hari download selesai; avg speed tile/tooltip tampil "—" untuk hari-hari backfill (gak ada
+      active time tercatat); file `%APPDATA%\AzhuraDownloadManager\stats.json` sekarang ada
+- [ ] Highlight tombol Dashboard geser dari baris kategori yang aktif sebelumnya; klik Dashboard lagi,
+      atau klik kategori manapun di sidebar → balik ke tabel dengan posisi scroll tetap sama
+- [ ] Mulai download baru sambil dashboard terbuka → bar "hari ini" dan tile "Today" naik dalam ~1
+      detik; setelah selesai, "Files completed" naik 1 dan tooltip bar hari itu nampilin avg speed
+- [ ] Tile **"Active now"** selalu sama persis dengan angka "Active" di sidebar (downloading +
+      verifying + queued + paused) — naik/turun langsung real-time pas start/pause/selesai download,
+      tanpa nunggu tick 1 detik seperti tile lain
+- [ ] Bikin satu download gagal (error) dan satu lagi di-cancel → tile **"Errors"** dan **"Canceled"**
+      masing-masing naik 1; retry otomatis yang akhirnya sukses **tidak** menambah "Errors" tiap kali
+      retry (cuma kalau baris beneran menetap di state error)
+- [ ] Hapus baris yang sudah selesai/error/canceled, atau Clear History → semua angka statistik
+      (termasuk Errors/Canceled) tidak berubah
+- [ ] Pause lalu resume sebuah download → byte tidak dihitung dobel (kecuali overlap kecil di piece
+      yang lagi jalan pas pause)
+- [ ] Toggle Daily/Monthly di chart → 30 bar / 12 bar; label sumbu-x kebaca jelas dan tooltip tiap bar
+      benar (bytes, jumlah file, avg speed kalau ada)
+- [ ] Quit dari tray lalu buka lagi → angka statistik (termasuk Errors/Canceled) tetap ada (persisted)
+- [ ] Klik "Reset statistics…" → konfirmasi inline muncul → klik Reset → semua tile (termasuk Active
+      now, Errors, Canceled) balik ke nol/nilai live yang benar, dan tetap nol setelah restart (gak
+      di-backfill ulang dari history)
+- [ ] Selagi dashboard terbuka: arrow key, Ctrl+A, dan Space **tidak** memengaruhi baris tabel yang
+      tersembunyi; Ctrl+N dan Ctrl+B tetap jalan seperti biasa; ketik di search box, atau ganti filter
+      status/grouping di toolbar → otomatis balik ke tampilan tabel
+- [ ] Menu View (tekan Alt) ▸ Dashboard → toggle tampilan dan nampilin tanda centang saat aktif
+- [ ] Export/import backup, dan CSV export riwayat → tidak menyertakan/mempengaruhi stats.json (fitur
+      ini sengaja gak ikut backup/restore)
+- [ ] Cek tampilan di kedua tema (light & dark)

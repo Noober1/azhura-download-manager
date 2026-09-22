@@ -208,6 +208,8 @@ export const commands = {
 	applyImportedPrefs: (prefs: Prefs) => __TAURI_INVOKE<null>("apply_imported_prefs", { prefs }),
 	loadHistory: () => __TAURI_INVOKE<HistoryLoad_Serialize>("load_history"),
 	saveHistory: (entries: HistoryEntry_Deserialize[]) => __TAURI_INVOKE<null>("save_history", { entries }),
+	loadStats: () => __TAURI_INVOKE<StatsLoad>("load_stats"),
+	saveStats: (days: DayRecord[]) => __TAURI_INVOKE<null>("save_stats", { days }),
 	/**
 	 *  Writes `csv` (built by the frontend, see `src/csvExport.ts`) to a path the
 	 *  user picks in a native save dialog. Ok(None) = user canceled.
@@ -438,6 +440,19 @@ export type ConnInfo = {
 	downloaded: number,
 	total: number,
 	pieces: number,
+};
+
+export type DayRecord = {
+	/**  Local calendar day, "YYYY-MM-DD" (computed by the frontend). */
+	day: string,
+	bytes: number,
+	activeMs: number,
+	completed: number,
+	/**  Rows that ended in "error" this day (see `src/stats.ts`'s `observeDownloads`). */
+	errored: number,
+	/**  Rows that ended in "canceled" this day. */
+	canceled: number,
+	peakBps: number,
 };
 
 export type DiskCheck = {
@@ -672,6 +687,15 @@ export type StartDownloadArgs = {
 	filename: string | null,
 	savePath: string | null,
 	proxy: ProxyConfig | null,
+};
+
+export type StatsLoad = {
+	/**
+	 *  False when there was no usable stats.json — the frontend backfills from
+	 *  history then.
+	 */
+	existed: boolean,
+	days: DayRecord[],
 };
 
 export type TrayDownload = {
