@@ -13,6 +13,7 @@ mod config;
 mod deeplink;
 mod engine;
 mod hotkey;
+mod lock;
 mod paths;
 mod power;
 mod shell_icon;
@@ -116,7 +117,12 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         update::install_pending_update,
         bridge::grabber_status,
         auto_rules::validate_auto_rule_pattern,
-        auto_rules::test_auto_rules
+        auto_rules::test_auto_rules,
+        lock::lock_status,
+        lock::unlock_app,
+        lock::lock_app,
+        lock::set_app_pin,
+        lock::clear_app_pin
     ])
 }
 
@@ -216,6 +222,7 @@ pub fn run() {
         .manage(windows::archive::PendingArchiveRequest::default())
         .manage(SettingsState(Mutex::new(config::settings::load_settings_from_disk())))
         .manage(PrefsState(Mutex::new(config::prefs::load_prefs_from_disk())))
+        .manage(lock::LockState::load())
         .manage(Quitting(AtomicBool::new(false)))
         .manage(TrayMenuState::default())
         .manage(PendingMigrationWarnings(failed_migrations))
@@ -433,6 +440,7 @@ pub fn run() {
                     let settings = window.state::<SettingsState>();
                     let minimize_to_tray = settings.0.lock().unwrap().minimize_to_tray;
                     if minimize_to_tray && window.is_minimized().unwrap_or(false) {
+                        crate::lock::engage(window.app_handle());
                         let _ = window.hide();
                     }
                 }

@@ -915,3 +915,39 @@ frontend) karena ada dua command Rust baru (`load_stats`/`save_stats`).
 - [ ] Export/import backup, dan CSV export riwayat → tidak menyertakan/mempengaruhi stats.json (fitur
       ini sengaja gak ikut backup/restore)
 - [ ] Cek tampilan di kedua tema (light & dark)
+
+## 27. PIN lock (Batch 4c, baru)
+
+Belum pernah diuji manual sama sekali. Butuh restart `bun run tauri dev` (bukan cuma reload
+frontend) karena ada lima command Rust baru (`lock_status`/`unlock_app`/`lock_app`/`set_app_pin`/
+`clear_app_pin`).
+
+- [ ] Settings ▸ Security → status "App lock is off", tombol "Set PIN…" → set PIN 5 digit → toast
+      "PIN set", status berubah jadi "App lock is on…" dengan tombol "Change PIN…"/"Remove PIN…"
+- [ ] Restart app → lock screen langsung muncul duluan (tabel/dashboard **tidak** kelihatan sekilas
+      pun), fokus otomatis di kotak PIN
+- [ ] Ketik PIN salah 5× berturut-turut → muncul countdown "Try again in 30s", kotak PIN & tombol
+      Unlock disabled selama countdown; PIN benar setelah countdown habis → berhasil unlock
+- [ ] Titlebar **X** (ke tray) → klik ikon tray lagi → lock screen muncul. Minimize dengan "Minimize
+      to tray" **ON** → juga locked. Minimize dengan opsi itu **OFF** → **tidak** locked
+- [ ] Selagi locked: buka menu tray → tulisan "No active downloads" walau ada download yang lagi
+      jalan; unlock → daftar tray kembali normal dalam ~1 detik. Download tetap jalan/nambah persen
+      selama locked (cuma UI yang ketutup)
+- [ ] Selagi locked: capture dari browser extension → main nampilin lock screen, window Add **tidak**
+      kebuka; setelah unlock → window Add muncul kepenuhan (prefilled). Sama untuk global hotkey
+      (Add window baru kebuka setelah unlock)
+- [ ] Auto rule yang match sambil locked → download langsung masuk antrean tanpa window Add sama
+      sekali (baik locked maupun tidak)
+- [ ] Ctrl+L / File ▸ Lock Now → langsung locked, popup Detail yang lagi kebuka ikut ketutup. Ctrl+L
+      pas belum ada PIN → tidak ngapa-ngapain (menu File ▸ Lock Now juga disabled)
+- [ ] Selagi locked: tombol Space/Delete/Ctrl+F/F5/Alt/Ctrl+N di lock screen **tidak** menembus ke
+      tabel/menubar di belakangnya
+- [ ] Trigger countdown sleep/shutdown pas-queue selagi locked → dialog countdown tetap kelihatan di
+      **atas** lock screen dan tombol Cancel/"Sleep now"/"Shut down now" tetap berfungsi
+- [ ] Change PIN dengan current PIN salah → error "Wrong PIN" inline (dialog tetap terbuka). Remove
+      PIN dengan current PIN benar → restart app → tidak ada lock lagi
+- [ ] Hapus `%APPDATA%\AzhuraDownloadManager\lock.json` manual lalu restart → tidak ada lock (link
+      "Forgot PIN?" di lock screen nunjukin path & pesan ini persis)
+- [ ] Export lalu import backup → PIN yang sudah di-set **tidak** berubah/hilang (lock.json sengaja
+      gak ikut backup/restore)
+- [ ] Cek tampilan lock screen di kedua tema (light & dark)

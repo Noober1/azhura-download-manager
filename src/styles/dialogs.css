@@ -11,6 +11,13 @@
   z-index: 50;
 }
 
+/* The post-queue sleep/shutdown countdown must stay reachable (and
+   cancelable) even while the PIN lock screen (z-index 85) is covering the
+   rest of the app. */
+.overlay-top {
+  z-index: 88;
+}
+
 .dialog {
   width: 100%;
   max-width: 440px;

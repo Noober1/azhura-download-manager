@@ -3,6 +3,7 @@ import type { Theme } from "../../types";
 import { OVERLAY_FADE, DIALOG_POP } from "../../motion";
 import { useDialogA11y } from "../../hooks/useDialogA11y";
 import { HotkeyInput } from "../HotkeyInput";
+import type { PinMode } from "./PinDialog";
 
 export function SettingsDialog({
   maxConcurrent,
@@ -44,6 +45,8 @@ export function SettingsDialog({
   onClearHistory,
   onExportBackup,
   onImportBackup,
+  lockEnabled,
+  onPinAction,
   onClose,
 }: {
   maxConcurrent: number;
@@ -85,6 +88,8 @@ export function SettingsDialog({
   onClearHistory: () => void;
   onExportBackup: () => void;
   onImportBackup: () => void;
+  lockEnabled: boolean;
+  onPinAction: (mode: PinMode) => void;
   onClose: () => void;
 }) {
   const panelRef = useDialogA11y<HTMLDivElement>(onClose);
@@ -280,6 +285,30 @@ export function SettingsDialog({
                 {updateChecking ? "Checking…" : "Check for updates"}
               </button>
               <span className="field-unit">Also checked once at startup</span>
+            </div>
+          </fieldset>
+
+          <fieldset className="dialog-section">
+            <legend className="dialog-section-title">Security</legend>
+            <div className="field-row">
+              <label>App lock</label>
+              <span className="field-unit">
+                {lockEnabled
+                  ? "On — asks for a PIN at startup and when restoring from the tray"
+                  : "Off"}
+              </span>
+            </div>
+            <div className="field-row">
+              {lockEnabled ? (
+                <>
+                  <button onClick={() => onPinAction("change")}>Change PIN…</button>
+                  <button className="danger" onClick={() => onPinAction("remove")}>
+                    Remove PIN…
+                  </button>
+                </>
+              ) : (
+                <button onClick={() => onPinAction("set")}>Set PIN…</button>
+              )}
             </div>
           </fieldset>
 

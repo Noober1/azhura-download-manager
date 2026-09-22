@@ -23,6 +23,7 @@ import { useUpdateCheck } from "./hooks/useUpdateCheck";
 import { useHistoryPersistence } from "./hooks/useHistoryPersistence";
 import { useSettings } from "./hooks/useSettings";
 import { useTrayPush } from "./hooks/useTrayPush";
+import { useAppLock } from "./hooks/useAppLock";
 import { useDetailWindows } from "./hooks/useDetailWindows";
 import { useDeepLinkCapture } from "./hooks/useDeepLinkCapture";
 import { useSortedRows } from "./hooks/useSortedRows";
@@ -63,6 +64,8 @@ import { ConnRestartDialog } from "./components/dialogs/ConnRestartDialog";
 import { PowerActionDialog, type PowerAction } from "./components/dialogs/PowerActionDialog";
 import { UpdateRestartDialog } from "./components/dialogs/UpdateRestartDialog";
 import { ShortcutsDialog } from "./components/dialogs/ShortcutsDialog";
+import { PinDialog, type PinMode } from "./components/dialogs/PinDialog";
+import { LockScreen } from "./components/LockScreen";
 import { SpeedGraph } from "./components/SpeedGraph";
 import { Dashboard } from "./components/Dashboard";
 import "./App.css";
@@ -95,6 +98,7 @@ function App() {
   // paused, not lost.
   const [confirmRestart, setConfirmRestart] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [pinDialog, setPinDialog] = useState<PinMode | null>(null);
   // Session-only, not persisted — which the main area shows: the download
   // table or the statistics dashboard (see Sidebar's "Dashboard" row).
   // Defaults to the dashboard on every launch, since this state is never
@@ -108,6 +112,10 @@ function App() {
   useNativeShell();
 
   const settings = useSettings();
+  const appLock = useAppLock();
+  // Loading (status still null) counts as covered — nothing should flash
+  // unlocked for the one render before the first `lock_status` reply lands.
+  const locked = appLock.status?.locked ?? true;
 
   // downloads/selection have a two-way dependency (adding or removing a
   // download also updates which rows are selected), resolved by having
@@ -191,7 +199,7 @@ function App() {
   useHistoryPersistence(downloads, setDownloads, downloadsRef, settings.historyRetentionDays);
   useClipboardWatch(settings.clipboardWatch, downloadsRef);
   const updater = useUpdateCheck(() => setConfirmRestart(true));
-  useTrayPush(downloadsRef);
+  useTrayPush(downloadsRef, locked);
   useDeepLinkCapture(downloadsRef, downloadsApi.addFromPayload, downloadsApi.patchItem);
   const { refresh: refreshMissing } = useMissingRefresh(downloadsRef, downloadsApi.patchItem);
   const grabber = useGrabberStatus();
@@ -379,11 +387,13 @@ function App() {
     showExtensions ||
     showAutoRules ||
     showShortcuts ||
+    pinDialog ||
     menu ||
     speedCapDialog ||
     pendingPower ||
     confirmRestart ||
-    downloadsApi.connRestart
+    downloadsApi.connRestart ||
+    locked
   );
 
   const menubar = useMenubar(anyDialogOpen);
@@ -467,6 +477,8 @@ function App() {
     onCopyLink: copyLinks,
     singleSelected,
     openDetail,
+    lockEnabled: appLock.status?.enabled ?? false,
+    onLockNow: appLock.lockNow,
   });
 
   // Toggles the main area between the table and the dashboard. Clearing the
@@ -490,6 +502,13 @@ function App() {
         items: [
           { kind: "item", label: "Add Download…", shortcut: "Ctrl+N", onSelect: () => commands.openAddWindow() },
           { kind: "item", label: "Open Downloads Folder", onSelect: () => openDownloadsFolder() },
+          {
+            kind: "item",
+            label: "Lock Now",
+            shortcut: "Ctrl+L",
+            disabled: !appLock.status?.enabled,
+            onSelect: () => appLock.lockNow(),
+          },
           { kind: "separator" },
           { kind: "item", label: "Exit", onSelect: () => commands.exitApp() },
         ],
@@ -889,6 +908,11 @@ function App() {
             }}
             onExportBackup={exportBackup}
             onImportBackup={importBackup}
+            lockEnabled={appLock.status?.enabled ?? false}
+            onPinAction={(mode) => {
+              setShowSettings(false);
+              setPinDialog(mode);
+            }}
             updateChecking={updater.state.stage === "checking"}
             autoInstallUpdates={settings.autoInstallUpdates}
             onSetAutoInstallUpdates={settings.setAutoInstallUpdatesSetting}
@@ -1058,6 +1082,34 @@ function App() {
           />
         )}
       </AnimatePresence>
+
+      {/* ---- Set/Change/Remove PIN dialog ---- */}
+      <AnimatePresence>
+        {pinDialog && (
+          <PinDialog
+            mode={pinDialog}
+            onClose={() => {
+              setPinDialog(null);
+              setShowSettings(true);
+            }}
+            onDone={(msg) => {
+              showToast(msg, "info");
+              appLock.refresh();
+              setPinDialog(null);
+              setShowSettings(true);
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* ---- PIN lock screen — overlays everything above while locked ---- */}
+      {appLock.status === null ? (
+        <LockScreen loading />
+      ) : (
+        appLock.status.locked && (
+          <LockScreen onUnlock={appLock.unlock} initialRetrySecs={appLock.status.retryAfterSecs} />
+        )
+      )}
 
       {/* ---- Post-queue sleep/shutdown countdown ---- */}
       <AnimatePresence>

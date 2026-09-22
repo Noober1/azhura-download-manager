@@ -16,6 +16,9 @@ fn reveal_add_window(app: &tauri::AppHandle) {
 #[tauri::command]
 #[specta::specta]
 pub(crate) fn open_add_window(app: tauri::AppHandle) {
+    if crate::lock::defer_add(&app, crate::lock::AddReveal::Open) {
+        return;
+    }
     reveal_add_window(&app);
     let _ = app.emit_to("add", "window-opened", ());
 }
@@ -26,6 +29,9 @@ pub(crate) fn open_add_window(app: tauri::AppHandle) {
 #[tauri::command]
 #[specta::specta]
 pub(crate) fn reveal_add_window_cmd(app: tauri::AppHandle) {
+    if crate::lock::defer_add(&app, crate::lock::AddReveal::Reveal) {
+        return;
+    }
     reveal_add_window(&app);
 }
 

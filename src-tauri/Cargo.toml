@@ -54,6 +54,8 @@ url = "2"
 percent-encoding = "2"
 tiny_http = "0.12"
 regex = "1"
+# PIN lock hash (lock.rs). `std` pulls in rand_core/getrandom for OsRng.
+argon2 = { version = "0.5", features = ["std"] }
 
 [target.'cfg(windows)'.dependencies]
 webview2-com = "0.38"
@@ -72,4 +74,10 @@ base64 = "0.22"
 [dev-dependencies]
 tempfile = "3"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+
+# Argon2 in debug builds takes seconds without this.
+[profile.dev.package.argon2]
+opt-level = 3
+[profile.dev.package.blake2]
+opt-level = 3
 

@@ -6,6 +6,7 @@ use std::sync::Mutex;
 
 use serde::Deserialize;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
+use tauri::Manager as _;
 
 /// One download row currently rendered in the tray menu, alongside the
 /// `MenuItem` it owns so a same-shape update (the common case, ~1/sec) can
@@ -72,22 +73,16 @@ pub(crate) fn rebuild_tray_menu(
     Ok((menu, entries))
 }
 
-/// Push a fresh snapshot of active downloads into the tray menu, called
-/// roughly once a second from the frontend. Patches labels in place when the
-/// same set of ids is still showing (by far the common case) so the menu
-/// doesn't visibly flicker; otherwise rebuilds it.
-#[tauri::command]
-#[specta::specta]
-pub(crate) fn update_tray_downloads(
-    app: tauri::AppHandle,
-    items: Vec<TrayDownload>,
-    tooltip: String,
-    state: tauri::State<'_, TrayMenuState>,
-) -> Result<(), String> {
+/// Rebuilds (or patches) the tray menu from `items`/`tooltip`, reading
+/// `TrayMenuState` itself — shared by `update_tray_downloads` below and by
+/// `clear_tray_downloads`, which forces an empty list while the app is
+/// locked regardless of what the frontend last pushed.
+fn apply_tray(app: &tauri::AppHandle, items: &[TrayDownload], tooltip: &str) -> Result<(), String> {
     let Some(tray) = app.tray_by_id("main-tray") else {
         return Ok(());
     };
 
+    let state = app.state::<TrayMenuState>();
     let mut cached = state.0.lock().unwrap();
     let same_shape = cached.len() == items.len()
         && cached
@@ -103,11 +98,38 @@ pub(crate) fn update_tray_downloads(
             }
         }
     } else {
-        let (menu, entries) = rebuild_tray_menu(&app, &items)?;
+        let (menu, entries) = rebuild_tray_menu(app, items)?;
         tray.set_menu(Some(menu)).map_err(|e| e.to_string())?;
         *cached = entries;
     }
 
-    let _ = tray.set_tooltip(Some(&tooltip));
+    let _ = tray.set_tooltip(Some(tooltip));
     Ok(())
+}
+
+/// Push a fresh snapshot of active downloads into the tray menu, called
+/// roughly once a second from the frontend. Patches labels in place when the
+/// same set of ids is still showing (by far the common case) so the menu
+/// doesn't visibly flicker; otherwise rebuilds it. While the app is locked,
+/// the frontend's own list is ignored — the tray shows nothing rather than
+/// letting a locked screen still reveal filenames.
+#[tauri::command]
+#[specta::specta]
+pub(crate) fn update_tray_downloads(
+    app: tauri::AppHandle,
+    items: Vec<TrayDownload>,
+    tooltip: String,
+) -> Result<(), String> {
+    if crate::lock::is_locked(&app) {
+        apply_tray(&app, &[], "Azhura Download Manager")
+    } else {
+        apply_tray(&app, &items, &tooltip)
+    }
+}
+
+/// Forces the tray back to its empty placeholder — called when the lock
+/// engages, so downloads that keep progressing in the background never leak
+/// their filenames into the tray menu while the screen is locked.
+pub(crate) fn clear_tray_downloads(app: &tauri::AppHandle) {
+    let _ = apply_tray(app, &[], "Azhura Download Manager");
 }

@@ -46,7 +46,7 @@ export function PowerActionDialog({
 
   return (
     <motion.div
-      className="overlay"
+      className="overlay overlay-top"
       onClick={onCancel}
       variants={OVERLAY_FADE}
       initial="initial"

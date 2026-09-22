@@ -15,7 +15,7 @@ beneran masalah).
 - [x] Export/import pengaturan + daftar unduhan (backup/restore, pindah ke PC
       lain)
 - [x] Export riwayat unduhan ke CSV
-- [ ] PIN/password lock buat buka aplikasi
+- [x] PIN/password lock buat buka aplikasi
 - [x] Global hotkey (system-wide) buat buka window "Tambah Unduhan" dari luar
       app
 - [x] Cek disk space sebelum mulai unduhan besar, warning kalau gak cukup

@@ -48,10 +48,11 @@ pub(crate) fn reveal_main_window(app: &tauri::AppHandle) {
     }
 }
 
-/// Send `main` (and the owned Add/Details windows, if open) to the tray
-/// without destroying any webview — downloads and the React scheduler keep
-/// running, they're just not visible.
-pub(crate) fn hide_to_tray(app: &tauri::AppHandle) {
+/// Hide every window `main` owns (Add, Archive Preview, About, per-download
+/// Details popups) without touching `main` itself — shared by `hide_to_tray`
+/// below and by `lock::engage`, which needs the same sweep without also
+/// hiding `main` (the lock screen renders inside it, so it stays visible).
+pub(crate) fn hide_secondary_windows(app: &tauri::AppHandle) {
     if let Some(w) = app.get_webview_window("add") {
         let _ = w.hide();
     }
@@ -66,6 +67,16 @@ pub(crate) fn hide_to_tray(app: &tauri::AppHandle) {
             let _ = w.hide();
         }
     }
+}
+
+/// Send `main` (and the owned Add/Details windows, if open) to the tray
+/// without destroying any webview — downloads and the React scheduler keep
+/// running, they're just not visible. Also engages the PIN lock (a no-op if
+/// none is set) so the app comes back from the tray showing the lock screen
+/// rather than the last thing on screen.
+pub(crate) fn hide_to_tray(app: &tauri::AppHandle) {
+    crate::lock::engage(app);
+    hide_secondary_windows(app);
     if let Some(m) = app.get_webview_window("main") {
         let _ = m.set_enabled(true);
         let _ = m.hide();

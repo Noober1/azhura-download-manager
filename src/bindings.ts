@@ -190,7 +190,9 @@ export const commands = {
 	 *  Push a fresh snapshot of active downloads into the tray menu, called
 	 *  roughly once a second from the frontend. Patches labels in place when the
 	 *  same set of ids is still showing (by far the common case) so the menu
-	 *  doesn't visibly flicker; otherwise rebuilds it.
+	 *  doesn't visibly flicker; otherwise rebuilds it. While the app is locked,
+	 *  the frontend's own list is ignored — the tray shows nothing rather than
+	 *  letting a locked screen still reveal filenames.
 	 */
 	updateTrayDownloads: (items: TrayDownload[], tooltip: string) => __TAURI_INVOKE<null>("update_tray_downloads", { items, tooltip }),
 	loadSettings: () => __TAURI_INVOKE<AppSettings>("load_settings"),
@@ -284,6 +286,11 @@ export const commands = {
 	 *  for its "Test a URL" box — returns the matching rule's index, if any.
 	 */
 	testAutoRules: (rules: AutoRule[], url: string) => __TAURI_INVOKE<number | null>("test_auto_rules", { rules, url }),
+	lockStatus: () => __TAURI_INVOKE<LockStatus>("lock_status"),
+	unlockApp: (pin: string) => __TAURI_INVOKE<UnlockResult>("unlock_app", { pin }),
+	lockApp: () => __TAURI_INVOKE<void>("lock_app"),
+	setAppPin: (current: string | null, newPin: string) => __TAURI_INVOKE<null>("set_app_pin", { current, newPin }),
+	clearAppPin: (current: string) => __TAURI_INVOKE<null>("clear_app_pin", { current }),
 };
 
 /* Types */
@@ -602,6 +609,12 @@ export type HistoryLoad_Serialize = {
 	readable: boolean,
 };
 
+export type LockStatus = {
+	enabled: boolean,
+	locked: boolean,
+	retryAfterSecs: number,
+};
+
 export type Prefs = {
 	/**  Add-window defaults, remembered across sessions. */
 	connections?: number,
@@ -701,6 +714,11 @@ export type StatsLoad = {
 export type TrayDownload = {
 	id: string,
 	label: string,
+};
+
+export type UnlockResult = {
+	ok: boolean,
+	retryAfterSecs: number,
 };
 
 export type UpdateInfo = {

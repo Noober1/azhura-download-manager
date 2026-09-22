@@ -35,6 +35,9 @@ pub(crate) struct PendingArchiveRequest(Mutex<Option<ArchiveRequest>>);
 #[tauri::command]
 #[specta::specta]
 pub(crate) async fn open_archive_window(app: tauri::AppHandle, req: ArchiveRequest) -> Result<(), String> {
+    if crate::lock::is_locked(&app) {
+        return Err("App is locked".into());
+    }
     app.state::<PendingArchiveRequest>().0.lock().unwrap().replace(req);
 
     if let Some(w) = app.get_webview_window("archive-preview") {
@@ -78,6 +81,9 @@ pub(crate) async fn open_archive_window(app: tauri::AppHandle, req: ArchiveReque
 #[tauri::command]
 #[specta::specta]
 pub(crate) fn show_archive_window(app: tauri::AppHandle) {
+    if crate::lock::is_locked(&app) {
+        return;
+    }
     if let Some(w) = app.get_webview_window("archive-preview") {
         let _ = w.show();
         let _ = w.set_focus();
