@@ -77,7 +77,7 @@ beneran masalah).
 
 ## UX/UI polish
 
-- [ ] Drag-reorder prioritas antrian langsung dari tabel
+- [x] Drag-reorder prioritas antrian langsung dari tabel
 - [x] Grafik kecepatan gabungan (semua unduhan aktif) di status bar
 - [x] Compact/comfortable row height toggle
 - [x] Badge jumlah unduhan aktif per kategori di sidebar

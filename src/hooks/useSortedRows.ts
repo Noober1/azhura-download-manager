@@ -4,6 +4,7 @@ import { categoryOf } from "../categories";
 import { etaOf, pctOf, piecesDoneOf, statusRank } from "../format";
 import type { SortKey } from "../constants";
 import { matchesStatus, type StatusFilter } from "../statusFilter";
+import { queuePositions } from "../queueOrder";
 
 /** Sidebar category filter + column sort, and the derived row lists both
  *  produce. Defaults to Date Added (newest first); `sort === null` (reachable
@@ -70,6 +71,12 @@ export function useSortedRows(downloads: DownloadItem[]) {
     return counts;
   }, [downloads]);
 
+  // Queue position (1-based) per queued id, keyed off the *unfiltered*
+  // `downloads` — the Queue column and drag-reorder always reason about the
+  // real scheduler order, not whatever category/status/search happens to be
+  // narrowing the view.
+  const queuePos = useMemo(() => queuePositions(downloads), [downloads]);
+
   // `searched` ordered by the active column sort, or left as-is (newest
   // first) when `sort` is null. `Array.prototype.sort` is stable, so ties
   // keep insertion order either way.
@@ -79,6 +86,10 @@ export function useSortedRows(downloads: DownloadItem[]) {
     const key = sort.key;
     function value(d: DownloadItem): number | string {
       switch (key) {
+        case "queue":
+          // Non-queued rows always sort to the end on an ascending sort —
+          // they have no position to show.
+          return queuePos.get(d.id) ?? Number.MAX_SAFE_INTEGER;
         case "name":
           return d.filename;
         case "added":
@@ -114,8 +125,7 @@ export function useSortedRows(downloads: DownloadItem[]) {
       }
       return dir * (va - vb);
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searched, sort]);
+  }, [searched, sort, queuePos]);
 
   function toggleSort(key: SortKey) {
     setSort((prev) => {
@@ -151,6 +161,7 @@ export function useSortedRows(downloads: DownloadItem[]) {
     categoryCounts,
     activeCategoryCounts,
     rows,
+    queuePos,
     viewKey,
   };
 }

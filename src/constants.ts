@@ -3,6 +3,7 @@ export const TERMINAL_STATES = ["completed", "error", "canceled"] as const;
 export const CREDENTIAL_HEADERS = ["cookie", "authorization", "proxy-authorization"];
 
 export type SortKey =
+  | "queue"
   | "name"
   | "added"
   | "status"

@@ -99,9 +99,18 @@ describe("normalizeHiddenColumns", () => {
 
   it("hides ETA, Connections and Pieces on a fresh install", () => {
     expect(DEFAULT_HIDDEN_COLUMNS).toEqual(["eta", "conns", "pieces"]);
-    // The seven columns the table has always shown stay on.
+    // The columns the table has always shown (plus Queue) stay on.
     const visible = visibleOrder(DEFAULT_COLUMN_ORDER, new Set(DEFAULT_HIDDEN_COLUMNS));
-    expect(visible).toEqual(["name", "added", "status", "size", "downloaded", "pct", "speed"]);
+    expect(visible).toEqual([
+      "queue",
+      "name",
+      "added",
+      "status",
+      "size",
+      "downloaded",
+      "pct",
+      "speed",
+    ]);
   });
 
   it("keeps recognized keys and drops unknown ones", () => {

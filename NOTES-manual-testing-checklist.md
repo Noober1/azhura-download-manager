@@ -850,3 +850,30 @@ Belum pernah diuji manual sama sekali. Lolos `tsc --noEmit`, `vitest run` (219 t
 - [ ] Kalau "Hold the queue until a set time" (scheduled start) aktif, unduhan yang lolos auto rule
       tetap ketahan sampai jam yang dijadwalkan — bukan langsung jalan (dia cuma `queued`, sama kayak
       unduhan biasa)
+
+## 25. Drag-reorder antrean (Batch 4a, baru)
+
+Belum pernah diuji manual sama sekali. Frontend-only, tidak ada perubahan Rust/bindings.
+
+- [ ] Set Max concurrent download = 1 di Settings, tambah 4 download berurutan A, B, C, D → A langsung
+      jalan, sisanya masuk kolom Queue dengan posisi 1..3 berurutan B, C, D (FIFO — ditambah duluan
+      mulai duluan)
+- [ ] Klik header **Queue** (sort ascending) → grip `⋮⋮` di baris queued jadi aktif (kursor grab); drag
+      D ke atas B → urutan berubah jadi D, B, C; begitu A selesai/di-pause, **D** yang mulai jalan
+      duluan, bukan B
+- [ ] Ganti sort ke **Date Added** (atau kolom lain) → grip `⋮⋮` **hilang sepenuhnya** dari kolom
+      Queue (cuma nomor posisi yang tetap kelihatan); hover angka posisinya → tooltip "Sort by the
+      Queue column to reorder"
+- [ ] Klik-kanan, multi-select dua baris queued (mis. B, C) → menu **Queue ▸** → "Move to top" →
+      B, C pindah ke depan (urutan relatif B sebelum C tetap terjaga); ulangi untuk "Move up" / "Move
+      down" / "Move to bottom" dan cek masing-masing sesuai
+- [ ] Submenu Queue ▸ tetap berfungsi walau sort **bukan** Queue asc (beda dari drag yang butuh sort
+      Queue asc)
+- [ ] Drag dari grip **tidak** ikut mengubah seleksi baris dan **tidak** memunculkan marquee; klik biasa
+      di baris (bukan grip) tetap memilih baris seperti biasa
+- [ ] Nyalakan grouping (kategori atau tanggal) sambil sort tetap Queue asc → grip tetap hilang (drag
+      butuh grouping = none juga, bukan cuma sort Queue asc)
+- [ ] Tambah download baru setelah reorder di atas → masuk ke **ekor** antrean (posisi terakhir), bukan
+      menyisipkan di tengah urutan yang sudah diatur manual
+- [ ] Restart app dengan beberapa baris masih queued → urutan boleh balik ke default (prioritas
+      session-only, sengaja tidak dipersist — baris queued memang tidak pernah disimpan ke history)

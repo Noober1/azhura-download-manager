@@ -9,6 +9,7 @@ import { fallbackName } from "../format";
 import { notify } from "../notify";
 import { pushSpeedSample, SPEED_SAMPLE_INTERVAL_MS } from "../speedHistory";
 import { retryBackoffMs } from "../retryBackoff";
+import { queueOrder, moveIds, type QueueMove } from "../queueOrder";
 
 // Progress events themselves arrive roughly every 150ms (`engine/progress.rs`'s
 // tick) — far more often than the speed history / piece map need, and a
@@ -325,6 +326,18 @@ export function useDownloads({
     onItemAdded?.(id);
   }
 
+  // Queue reorder (drag in the Queue column, or the row menu's Queue ▸
+  // submenu): renumbers every queued row 0..n-1 in `orderedIds` order, so any
+  // row that later enters the queue (rank = addedAt) lands behind all of them.
+  function reorderQueue(orderedIds: string[]) {
+    const rank = new Map(orderedIds.map((id, i) => [id, i]));
+    setDownloads((ds) => ds.map((d) => (rank.has(d.id) ? { ...d, queueRank: rank.get(d.id)! } : d)));
+  }
+  function moveInQueue(ids: Set<string>, where: QueueMove) {
+    const order = queueOrder(downloadsRef.current).map((d) => d.id);
+    reorderQueue(moveIds(order, ids, where));
+  }
+
   function pauseMany(items: DownloadItem[]) {
     items.forEach((i) => commands.pauseDownload(i.id));
   }
@@ -476,6 +489,8 @@ export function useDownloads({
     removeMany,
     applySpeedCap,
     applyConnections,
+    reorderQueue,
+    moveInQueue,
     connRestart,
     setConnRestart,
     confirmConnRestart,

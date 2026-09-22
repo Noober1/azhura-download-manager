@@ -86,6 +86,17 @@ function SortTh({
   );
 }
 
+/** Drag-reorder state/handlers for the Queue column — threaded down from
+ *  `useQueueDrag` in App.tsx. */
+export type QueueColumnProps = {
+  positions: Map<string, number>;
+  /** Sorted by Queue asc AND grouping off. */
+  canDrag: boolean;
+  dragId: string | null;
+  dropBefore: string | "end" | null;
+  onGripMouseDown: (id: string, e: ReactMouseEvent) => void;
+};
+
 /** Renders one `<td>` for `key`, in the shape `Row` used to hardcode inline —
  *  moved here unchanged so both the header and the body can be driven by the
  *  same `order` array. */
@@ -94,8 +105,37 @@ function renderCell(
   item: DownloadItem,
   pct: number | null,
   heldUntil: string | null,
+  queue: QueueColumnProps,
 ) {
   switch (key) {
+    case "queue": {
+      const pos = queue.positions.get(item.id);
+      return (
+        <td key={key} className={COLUMN_CLASS.queue}>
+          {pos !== undefined && (
+            <span
+              className="queue-cell"
+              // Only the cell itself carries the "why can't I drag" hint when
+              // dragging is off — the grip below isn't even in the DOM then,
+              // so there's nothing dimmed/disabled-looking to explain.
+              data-tip={queue.canDrag ? undefined : "Sort by the Queue column to reorder"}
+            >
+              {queue.canDrag && (
+                <span
+                  className="queue-grip"
+                  aria-hidden="true"
+                  data-tip="Drag to reorder"
+                  onMouseDown={(e) => queue.onGripMouseDown(item.id, e)}
+                >
+                  ⋮⋮
+                </span>
+              )}
+              <span className="queue-num">{pos}</span>
+            </span>
+          )}
+        </td>
+      );
+    }
     case "name":
       return (
         <td key={key} className={COLUMN_CLASS.name} data-tip={item.path || item.url}>
@@ -223,6 +263,7 @@ function Row({
   selected,
   order,
   heldUntil,
+  queue,
   onSelect,
   onContext,
   onDoubleClick,
@@ -234,13 +275,19 @@ function Row({
   /** Scheduled start time ("HH:MM") when the scheduler is holding the queue,
    *  or null otherwise — see `statusLabel`/`statusClass` in format.ts. */
   heldUntil: string | null;
+  queue: QueueColumnProps;
   onSelect: (e: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }) => void;
   onContext: (e: ReactMouseEvent) => void;
   onDoubleClick: () => void;
 }) {
+  const dragging = queue.dragId === item.id;
+  const dropBeforeThis = queue.dropBefore === item.id;
+  const dropAfterThis = queue.dropBefore === "end" && queue.positions.get(item.id) === queue.positions.size;
   return (
     <tr
-      className={`drow ${selected ? "selected" : ""}`}
+      className={`drow ${selected ? "selected" : ""} ${dragging ? "queue-dragging" : ""} ${
+        dropBeforeThis ? "queue-drop-before" : ""
+      } ${dropAfterThis ? "queue-drop-after" : ""}`}
       data-id={item.id}
       onClick={onSelect}
       onDoubleClick={onDoubleClick}
@@ -250,7 +297,7 @@ function Row({
         onContext(e);
       }}
     >
-      {order.map((key) => renderCell(key, item, pct, heldUntil))}
+      {order.map((key) => renderCell(key, item, pct, heldUntil, queue))}
     </tr>
   );
 }
@@ -322,6 +369,7 @@ export function DownloadTable({
   headersBefore,
   trailingGroups,
   onToggleGroup,
+  queue,
 }: {
   tableWrapRef: RefObject<HTMLElement | null>;
   onTableMouseDown: (e: ReactMouseEvent) => void;
@@ -376,6 +424,8 @@ export function DownloadTable({
    *  the current view, or every group when all of them are collapsed. */
   trailingGroups: GroupMeta[];
   onToggleGroup: (key: string) => void;
+  /** Drag-reorder state/handlers for the Queue column. */
+  queue: QueueColumnProps;
 }) {
   return (
     <>
@@ -469,6 +519,7 @@ export function DownloadTable({
                     selected={selectedRow}
                     order={order}
                     heldUntil={heldUntil}
+                    queue={queue}
                     onSelect={(e) => onSelectRow(item.id, e)}
                     onContext={(e) => onRowContext(e, item)}
                     onDoubleClick={() => onRowDoubleClick(item)}

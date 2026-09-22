@@ -115,6 +115,13 @@ export type DownloadItem = {
    *  what's *displayed* (mirrors `awaitingCapture`'s exact pattern in
    *  format.ts). */
   retryPending?: boolean;
+  /** Session-only queue priority — lower starts sooner. Unset means "use
+   *  `addedAt`" (see `queueOrder.ts`'s `rankOf`), which is what makes the
+   *  default order FIFO. Never persisted: same non-persistence reasoning as
+   *  `speedHistory` above (not in `toHistoryEntry`'s field allowlist in
+   *  `history.ts`), and queued rows aren't persisted at all regardless (see
+   *  `useHistoryPersistence.ts`). */
+  queueRank?: number;
 };
 
 /** Emitted by the detail popup when the user clicks an action button there. */

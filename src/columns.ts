@@ -4,6 +4,7 @@ import type { SortKey } from "./constants";
  *  no settings.json round trip for these (see `src/theme.ts` for the same
  *  localStorage-as-source-of-truth pattern). */
 export const DEFAULT_COLUMN_ORDER: SortKey[] = [
+  "queue",
   "name",
   "added",
   "status",
@@ -17,6 +18,7 @@ export const DEFAULT_COLUMN_ORDER: SortKey[] = [
 ];
 
 export const COLUMN_LABEL: Record<SortKey, string> = {
+  queue: "Queue",
   name: "Name",
   added: "Date Added",
   status: "Status",
@@ -30,6 +32,7 @@ export const COLUMN_LABEL: Record<SortKey, string> = {
 };
 
 export const COLUMN_CLASS: Record<SortKey, string> = {
+  queue: "col-queue",
   name: "col-name",
   added: "col-added",
   status: "col-status",
@@ -55,6 +58,7 @@ export const MAX_COLUMN_WIDTH = 900;
  *  same as it always did. `pct` is the one exception: it grew from 80 to fit
  *  the progress bar added alongside the percentage text. */
 export const DEFAULT_COLUMN_WIDTHS: ColumnWidths = {
+  queue: 64,
   name: 260,
   added: 140,
   status: 110,

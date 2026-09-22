@@ -524,3 +524,38 @@
   margin-left: 0.75rem;
   color: var(--faint);
 }
+
+/* ---- Queue column --------------------------------------------------------- */
+
+.col-queue {
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.queue-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.queue-grip {
+  cursor: grab;
+  color: var(--ink-soft);
+  letter-spacing: -2px;
+  user-select: none;
+}
+body.queue-reordering {
+  cursor: grabbing;
+  user-select: none;
+}
+body.queue-reordering .queue-grip {
+  cursor: grabbing;
+}
+.drow.queue-dragging td {
+  opacity: 0.5;
+}
+.drow.queue-drop-before td {
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+.drow.queue-drop-after td {
+  box-shadow: inset 0 -2px 0 var(--accent);
+}

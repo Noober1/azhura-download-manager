@@ -39,6 +39,8 @@ import { useTotalSpeedHistory } from "./hooks/useTotalSpeedHistory";
 import { useSelection } from "./selection/useSelection";
 import { useMarquee } from "./selection/useMarquee";
 import { useTableKeyboard } from "./selection/useTableKeyboard";
+import { useQueueDrag } from "./hooks/useQueueDrag";
+import { dropBefore, queueOrder } from "./queueOrder";
 import { useAppShortcuts } from "./hooks/useAppShortcuts";
 import { useMenubar } from "./hooks/useMenubar";
 import type { Menu, MenuItem } from "./menubar";
@@ -125,6 +127,15 @@ function App() {
   const { selectedIds, setSelectedIds, anchorRef, selectRow, scrollRowIntoView } = selection;
 
   const marquee = useMarquee(didDragRef, tableWrapRef, selectedIds, setSelectedIds);
+  const queueDrag = useQueueDrag(tableWrapRef, sorted.queuePos, (id, before) =>
+    downloadsApi.reorderQueue(
+      dropBefore(queueOrder(downloadsRef.current).map((d) => d.id), id, before),
+    ),
+  );
+  // Drag only makes sense when the visible order IS the scheduler's queue
+  // order — sorted by Queue ascending, with no grouping splitting the rows
+  // into buckets that no longer reflect start order.
+  const canDragQueue = sorted.sort?.key === "queue" && sorted.sort.dir === "asc" && grouped.groupBy === "none";
   const columnVisibility = useColumnVisibility();
   const columnOrder = useColumnOrder(columnVisibility.hidden);
   const rowDensity = useRowDensity();
@@ -711,6 +722,13 @@ function App() {
             infiniteRows.visibleRows.length >= rows.length ? grouped.trailingGroups : []
           }
           onToggleGroup={grouped.toggleGroup}
+          queue={{
+            positions: sorted.queuePos,
+            canDrag: canDragQueue,
+            dragId: queueDrag.dragId,
+            dropBefore: queueDrag.dropBefore,
+            onGripMouseDown: queueDrag.startDrag,
+          }}
         />
       </div>
 
@@ -889,6 +907,13 @@ function App() {
             canModify={selectedItems.length > 0}
             currentSpeedLimit={singleSelected?.speedLimit ?? null}
             currentConnections={singleSelected?.connections ?? null}
+            canMoveInQueue={selectedItems.some((d) => d.state === "queued")}
+            onMoveInQueue={(where) =>
+              downloadsApi.moveInQueue(
+                new Set(selectedItems.filter((d) => d.state === "queued").map((d) => d.id)),
+                where,
+              )
+            }
             onResume={() => resumeWithOverride(resumableSel)}
             onPause={() => downloadsApi.pauseMany(pausableSel)}
             onCancel={() => downloadsApi.cancelMany(cancelableSel)}
