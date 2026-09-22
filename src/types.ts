@@ -32,6 +32,9 @@ export type AddPayload = {
   filename: string; // "" = derive from server / URL
   savePath: string; // "" = default downloads folder
   proxy: ProxyConfig;
+  /** Set by Rust (see `auto_rules.rs`) when an auto rule matched this
+   *  capture — the rule's pattern, shown in the "auto rule matched" toast. */
+  autoRule?: string;
 };
 
 export type DlState =

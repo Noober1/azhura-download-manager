@@ -5,6 +5,7 @@ import { broadcastTheme, normalizeTheme, useTheme } from "../theme";
 import { broadcastReducedMotion } from "../reducedMotion";
 import { initNotifications, setNotificationsEnabled } from "../notify";
 import { showToast } from "../toast";
+import { normalizeAutoRule, type AutoRule } from "../autoRules";
 
 const SIDEBAR_COLLAPSED_KEY = "adm-sidebar-collapsed";
 
@@ -44,6 +45,7 @@ export function useSettings() {
   const [autoInstallUpdates, setAutoInstallUpdates] = useState(true);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsedMirror);
   const [globalHotkey, setGlobalHotkey] = useState("");
+  const [autoRules, setAutoRules] = useState<AutoRule[]>([]);
 
   useTheme();
 
@@ -76,6 +78,7 @@ export function useSettings() {
     setAutoInstallUpdates(s.autoInstallUpdates ?? true);
     setSidebarCollapsed(sidebarCollapsed);
     setGlobalHotkey(s.globalHotkey ?? "");
+    setAutoRules((s.autoRules ?? []).map(normalizeAutoRule));
     try {
       localStorage.setItem(SIDEBAR_COLLAPSED_KEY, sidebarCollapsed ? "1" : "0");
     } catch {
@@ -134,6 +137,7 @@ export function useSettings() {
       autoInstallUpdates,
       sidebarCollapsed,
       globalHotkey,
+      autoRules,
       ...overrides,
     } as AppSettings);
   }
@@ -242,6 +246,11 @@ export function useSettings() {
     commands.setRunAtStartup(v).catch(() => setRunAtStartup(!v));
   }
 
+  function setAutoRulesSetting(v: AutoRule[]) {
+    setAutoRules(v);
+    persistSettings({ autoRules: v });
+  }
+
   /** Registers first; only a shortcut the OS accepted gets saved. */
   function setGlobalHotkeySetting(v: string) {
     commands
@@ -299,6 +308,7 @@ export function useSettings() {
     autoInstallUpdates,
     sidebarCollapsed,
     globalHotkey,
+    autoRules,
     setMaxActive,
     setGlobalLimit,
     setMaxRetryAttemptsSetting,
@@ -315,6 +325,7 @@ export function useSettings() {
     setAutoInstallUpdatesSetting,
     setSidebarCollapsedSetting,
     setGlobalHotkeySetting,
+    setAutoRulesSetting,
     applyImportedSettings,
   };
 }

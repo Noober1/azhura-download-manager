@@ -5,6 +5,7 @@
 // while a slow one finishes. Per-piece completion is persisted for resume.
 
 mod archive;
+mod auto_rules;
 mod bridge;
 mod categories;
 mod commands;
@@ -30,7 +31,9 @@ use tauri_plugin_autostart::MacosLauncher;
 use categories::{migrate_legacy_category_folders, PendingMigrationWarnings, CATEGORY_FOLDERS};
 use config::prefs::PrefsState;
 use config::settings::{AutostartLaunch, SettingsState};
-use deeplink::{deep_link_from_args, handle_deep_link, handle_deep_link_cold_start, PendingDeepLink};
+use deeplink::{
+    deep_link_from_args, handle_deep_link, handle_deep_link_cold_start, PendingAutoAdd, PendingDeepLink,
+};
 use engine::control::Manager;
 use paths::downloads_base;
 use tray::{rebuild_tray_menu, TrayMenuState};
@@ -41,16 +44,17 @@ use windows::{harden_webview, quit_app, reveal_main_window, Quitting};
 /// and the cold-start detection below have to agree on.
 const AUTOSTART_FLAG: &str = "--autostart";
 
-/// 35 of the app's 37 IPC-crossing commands, collected once here so both the
+/// 37 of the app's 40 IPC-crossing commands, collected once here so both the
 /// runtime invoke handler and (in debug builds) the generated
 /// `../src/bindings.ts` stay derived from the same list — order matches the
 /// old `tauri::generate_handler!` list it replaced.
 ///
-/// `submit_add` and `take_pending_deep_link` are the missing two: this
-/// crate's `specta` (pinned to `2.0.0-rc.25`) overflows the stack while
-/// exporting a `serde_json::Value`-shaped command — confirmed by isolating
-/// each of them in turn. Both stay on a plain `tauri::generate_handler!`,
-/// merged into the specta-generated one in `run()` below.
+/// `submit_add`, `take_pending_deep_link` and `take_pending_auto_add` are the
+/// missing three: this crate's `specta` (pinned to `2.0.0-rc.25`) overflows
+/// the stack while exporting a `serde_json::Value`-shaped command —
+/// confirmed by isolating each of them in turn. All three stay on a plain
+/// `tauri::generate_handler!`, merged into the specta-generated one in
+/// `run()` below.
 fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
     tauri_specta::Builder::<tauri::Wry>::new()
         // Default mode wraps every `Result`-returning command's binding in a
@@ -108,7 +112,9 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         update::download_update,
         update::pending_update,
         update::install_pending_update,
-        bridge::grabber_status
+        bridge::grabber_status,
+        auto_rules::validate_auto_rule_pattern,
+        auto_rules::test_auto_rules
     ])
 }
 
@@ -153,10 +159,13 @@ pub fn run() {
     // handlers can't just be tried in sequence — check the command name
     // first (a borrow) and route the one owned `invoke` to whichever handler
     // actually owns that command.
-    let plain_invoke_handler: BoxedInvokeHandler =
-        Box::new(tauri::generate_handler![windows::add::submit_add, deeplink::take_pending_deep_link]);
+    let plain_invoke_handler: BoxedInvokeHandler = Box::new(tauri::generate_handler![
+        windows::add::submit_add,
+        deeplink::take_pending_deep_link,
+        deeplink::take_pending_auto_add
+    ]);
     let invoke_handler = move |invoke: tauri::ipc::Invoke<tauri::Wry>| match invoke.message.command() {
-        "submit_add" | "take_pending_deep_link" => plain_invoke_handler(invoke),
+        "submit_add" | "take_pending_deep_link" | "take_pending_auto_add" => plain_invoke_handler(invoke),
         _ => specta_invoke_handler(invoke),
     };
 
@@ -201,6 +210,7 @@ pub fn run() {
         .plugin(hotkey::plugin())
         .manage(Manager::default())
         .manage(PendingDeepLink::default())
+        .manage(PendingAutoAdd::default())
         .manage(windows::archive::PendingArchiveRequest::default())
         .manage(SettingsState(Mutex::new(config::settings::load_settings_from_disk())))
         .manage(PrefsState(Mutex::new(config::prefs::load_prefs_from_disk())))

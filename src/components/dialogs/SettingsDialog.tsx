@@ -22,6 +22,8 @@ export function SettingsDialog({
   updateChecking,
   autoInstallUpdates,
   globalHotkey,
+  autoRulesActive,
+  onOpenAutoRules,
   onSetAutoInstallUpdates,
   onCheckForUpdates,
   onSetMaxActive,
@@ -61,6 +63,8 @@ export function SettingsDialog({
   updateChecking: boolean;
   autoInstallUpdates: boolean;
   globalHotkey: string;
+  autoRulesActive: number;
+  onOpenAutoRules: () => void;
   onSetAutoInstallUpdates: (v: boolean) => void;
   onCheckForUpdates: () => void;
   onSetMaxActive: (n: number) => void;
@@ -164,6 +168,13 @@ export function SettingsDialog({
               />
               <label htmlFor="clip-watch">Watch clipboard for links</label>
               <span className="field-unit">Offers copied http(s) links as downloads</span>
+            </div>
+            <div className="field-row">
+              <label>Auto rules</label>
+              <button onClick={onOpenAutoRules}>Manage…</button>
+              <span className="field-unit">
+                {autoRulesActive} active · auto-starts matching extension captures
+              </span>
             </div>
           </fieldset>
 

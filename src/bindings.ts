@@ -271,6 +271,17 @@ export const commands = {
 	 */
 	installPendingUpdate: () => __TAURI_INVOKE<null>("install_pending_update"),
 	grabberStatus: () => __TAURI_INVOKE<GrabberStatus>("grabber_status"),
+	/**
+	 *  Validates a single pattern exactly the way `first_match` will evaluate
+	 *  it, so the rules dialog's inline error can never disagree with what a
+	 *  real capture does. Used for live validation while a rule is being edited.
+	 */
+	validateAutoRulePattern: (kind: string, pattern: string) => __TAURI_INVOKE<null>("validate_auto_rule_pattern", { kind, pattern }),
+	/**
+	 *  Runs `first_match` against a draft rule list the dialog hasn't saved yet,
+	 *  for its "Test a URL" box — returns the matching rule's index, if any.
+	 */
+	testAutoRules: (rules: AutoRule[], url: string) => __TAURI_INVOKE<number | null>("test_auto_rules", { rules, url }),
 };
 
 /* Types */
@@ -349,6 +360,13 @@ export type AppSettings = {
 	 *  collide with another app). Registered by Rust (see `hotkey.rs`).
 	 */
 	globalHotkey?: string,
+	/**
+	 *  Ordered URL-pattern rules that auto-start a browser-extension capture
+	 *  straight into a chosen folder, skipping the Add window. Evaluated by
+	 *  Rust at capture time (see `auto_rules.rs`); the frontend only edits
+	 *  this list.
+	 */
+	autoRules?: AutoRule[],
 };
 
 export type ArchiveEntry = {
@@ -384,6 +402,20 @@ export type ArchiveRequest = {
 	allowInsecure: boolean,
 	headers: ([string, string])[],
 	proxy: ProxyConfig | null,
+};
+
+export type AutoRule = {
+	id?: string,
+	enabled?: boolean,
+	/**  "wildcard" | "regex" */
+	kind?: string,
+	pattern?: string,
+	/**  "folder" | "category" */
+	target?: string,
+	/**  Absolute path, used when `target == "folder"`. */
+	folder?: string,
+	/**  Category id, used when `target == "category"`. */
+	category?: string,
 };
 
 export type BackupImport = BackupImport_Serialize | BackupImport_Deserialize;

@@ -8,7 +8,7 @@ beneran masalah).
 
 - [x] Search/filter bar di tabel unduhan (nama file, status, kategori)
 - [x] Grouping tabel unduhan by kategori/tanggal (collapsible)
-- [ ] Auto-rule: regex site/filetype → kategori+folder otomatis (skip dialog
+- [x] Auto-rule: regex site/filetype → kategori+folder otomatis (skip dialog
       konfirmasi kategori)
 - [ ] Dashboard statistik (total data terunduh, grafik kecepatan
       harian/bulanan)

@@ -14,6 +14,14 @@ use crate::urls::validate_download_url;
 #[derive(Default)]
 pub(crate) struct PendingDeepLink(Mutex<Option<serde_json::Value>>);
 
+/// Same idea as `PendingDeepLink`, but for a cold-start capture that an auto
+/// rule already claimed (see `auto_rules::apply`) — `main`, not the Add
+/// window, drains this one, since the whole point is to skip the Add window
+/// entirely. Kept separate from `PendingDeepLink` rather than a shared enum
+/// so each window only ever polls for the kind of payload it can act on.
+#[derive(Default)]
+pub(crate) struct PendingAutoAdd(pub(crate) Mutex<Option<serde_json::Value>>);
+
 /// Parse an `adm://add?url=...&filename=...&handoff=...` deep link into an
 /// `AddPayload`-shaped JSON value (see `src/types.ts`), or `None` if it isn't
 /// a well-formed link for this app.
@@ -133,25 +141,38 @@ pub(crate) fn build_deep_link_payload(link: &str, handoffs: &HandoffStore) -> Op
 /// waiting to re-capture credentials for this URL. It either claims the
 /// capture and resumes that row itself, or calls `reveal_add_window_cmd` +
 /// forwards the prefill for the normal review flow. Routing the decision
-/// through one place avoids both a race and a visible Add-window flash.
+/// through one place avoids both a race and a visible Add-window flash. An
+/// auto rule match (see `auto_rules::apply`) is stamped onto the payload
+/// either way — `main` still gets the final say, so a row waiting to
+/// re-acquire credentials for this exact URL keeps winning over any rule.
 pub(crate) fn handle_deep_link(app: &tauri::AppHandle, link: &str) {
     let handoffs = app.state::<Arc<HandoffStore>>();
-    let Some(payload) = build_deep_link_payload(link, &handoffs) else {
+    let Some(mut payload) = build_deep_link_payload(link, &handoffs) else {
         return;
     };
+    crate::auto_rules::apply(app, &mut payload);
     crate::windows::reveal_main_window(app);
     let _ = app.emit_to("main", "deep-link-captured", payload);
 }
 
 /// Handle a deep link seen at cold start (`std::env::args()` in `setup()`):
-/// the Add window's frontend hasn't mounted yet at this point, so emitting
-/// immediately would silently drop the event. Stash it instead — the Add
+/// neither window's frontend has mounted yet at this point, so emitting
+/// immediately would silently drop the event.
+///
+/// A payload an auto rule claims is stashed into `PendingAutoAdd` and `main`
+/// is revealed directly, so the download queues without the Add window ever
+/// appearing. Everything else goes to `PendingDeepLink` as before — the Add
 /// window calls `take_pending_deep_link` right after it starts up.
 pub(crate) fn handle_deep_link_cold_start(app: &tauri::AppHandle, link: &str) {
     let handoffs = app.state::<Arc<HandoffStore>>();
-    let Some(payload) = build_deep_link_payload(link, &handoffs) else {
+    let Some(mut payload) = build_deep_link_payload(link, &handoffs) else {
         return;
     };
+    if crate::auto_rules::apply(app, &mut payload) {
+        app.state::<PendingAutoAdd>().0.lock().unwrap().replace(payload);
+        crate::windows::reveal_main_window(app);
+        return;
+    }
     app.state::<PendingDeepLink>().0.lock().unwrap().replace(payload);
 }
 
@@ -160,6 +181,12 @@ pub(crate) fn handle_deep_link_cold_start(app: &tauri::AppHandle, link: &str) {
 // stack trying to export a `serde_json::Value`-shaped command.
 #[tauri::command]
 pub(crate) fn take_pending_deep_link(state: tauri::State<'_, PendingDeepLink>) -> Option<serde_json::Value> {
+    state.0.lock().unwrap().take()
+}
+
+// Same reasoning as `take_pending_deep_link` above.
+#[tauri::command]
+pub(crate) fn take_pending_auto_add(state: tauri::State<'_, PendingAutoAdd>) -> Option<serde_json::Value> {
     state.0.lock().unwrap().take()
 }
 

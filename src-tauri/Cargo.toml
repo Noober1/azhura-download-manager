@@ -53,6 +53,7 @@ hex = "0.4"
 url = "2"
 percent-encoding = "2"
 tiny_http = "0.12"
+regex = "1"
 
 [target.'cfg(windows)'.dependencies]
 webview2-com = "0.38"

@@ -53,6 +53,7 @@ import { TableContextMenu } from "./components/TableContextMenu";
 import { ColumnMenu } from "./components/ColumnMenu";
 import { SettingsDialog } from "./components/dialogs/SettingsDialog";
 import { ExtensionsDialog } from "./components/dialogs/ExtensionsDialog";
+import { AutoRulesDialog } from "./components/dialogs/AutoRulesDialog";
 import { DeleteDialog } from "./components/dialogs/DeleteDialog";
 import { SpeedCapDialog } from "./components/dialogs/SpeedCapDialog";
 import { ConnRestartDialog } from "./components/dialogs/ConnRestartDialog";
@@ -66,6 +67,7 @@ function App() {
   const [version, setVersion] = useState("");
   const [showSettings, setShowSettings] = useState(false);
   const [showExtensions, setShowExtensions] = useState(false);
+  const [showAutoRules, setShowAutoRules] = useState(false);
   const [menu, setMenu] = useState<{
     x: number;
     y: number;
@@ -356,6 +358,7 @@ function App() {
     downloadsApi.pendingDelete ||
     showSettings ||
     showExtensions ||
+    showAutoRules ||
     showShortcuts ||
     menu ||
     speedCapDialog ||
@@ -601,6 +604,7 @@ function App() {
             shortcut: "Ctrl+Shift+X",
             onSelect: () => setShowExtensions(true),
           },
+          { kind: "item", label: "Auto Rules…", onSelect: () => setShowAutoRules(true) },
           {
             kind: "item",
             label: "Check for Updates",
@@ -793,6 +797,11 @@ function App() {
             historyRetentionDays={settings.historyRetentionDays}
             historyCount={historyRows.length}
             globalHotkey={settings.globalHotkey}
+            autoRulesActive={settings.autoRules.filter((r) => r.enabled).length}
+            onOpenAutoRules={() => {
+              setShowSettings(false);
+              setShowAutoRules(true);
+            }}
             onSetMaxActive={settings.setMaxActive}
             onSetGlobalLimit={settings.setGlobalLimit}
             onSetMaxRetryAttempts={settings.setMaxRetryAttemptsSetting}
@@ -845,6 +854,17 @@ function App() {
       {/* ---- Browser extension dialog ---- */}
       <AnimatePresence>
         {showExtensions && <ExtensionsDialog onClose={() => setShowExtensions(false)} />}
+      </AnimatePresence>
+
+      {/* ---- Auto rules dialog ---- */}
+      <AnimatePresence>
+        {showAutoRules && (
+          <AutoRulesDialog
+            rules={settings.autoRules}
+            onSave={settings.setAutoRulesSetting}
+            onClose={() => setShowAutoRules(false)}
+          />
+        )}
       </AnimatePresence>
 
       {/* ---- Keyboard shortcuts cheat sheet ---- */}

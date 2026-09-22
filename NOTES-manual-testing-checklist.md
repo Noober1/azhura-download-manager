@@ -790,3 +790,63 @@ Belum pernah diuji manual sama sekali. Lolos `tsc --noEmit`, `vitest run` (207 t
       dan klik "File" gak pernah ke-anggep drag
 - [ ] Tabel ngecil persis setinggi menubar pas toggle, gak ada layout yang loncat
 - [ ] Kedua tema kelihatan pas; judul menu yang lagi kebuka ke-highlight
+
+## 24. Auto rules — URL pattern → folder otomatis (Batch 3b-2, baru)
+
+Belum pernah diuji manual sama sekali. Lolos `tsc --noEmit`, `vitest run` (219 test), `cargo check
+--all-targets`, dan `cargo test --lib` (158 test).
+
+**Editor (Tools > Auto Rules… atau Settings > Downloads > Auto rules "Manage…"):**
+
+- [ ] Kedua entry point buka dialog yang sama; baris "Auto rules" di Settings nampilin "N active"
+      sesuai jumlah rule yang enabled
+- [ ] Tambah rule baru ("Add rule") → muncul baris kosong, default Wildcard + target Folder
+- [ ] Ketik regex yang salah (mis. cuma `(`) di rule yang **enabled** → muncul pesan error di bawah
+      pattern-nya dan tombol Save ke-disable; benerin pattern-nya → error hilang, Save aktif lagi
+- [ ] Rule dengan target Folder yang kosong atau path relatif → Save tetap disabled; isi lewat
+      "Browse…" → Save aktif (asal semua rule enabled lainnya juga valid)
+- [ ] Rule yang **disabled** (checkbox off) boleh punya pattern/folder kosong atau salah tanpa
+      nge-block Save
+- [ ] Tombol ▲/▼ mindahin urutan rule; ✕ ngehapus rule (dengan konfirmasi dari card-nya sendiri,
+      gak ada dialog tambahan)
+- [ ] "Cancel" nutup dialog tanpa nyimpen perubahan apapun; buka lagi → balik ke rule yang tersimpan
+      terakhir
+- [ ] "Save" nyimpen dan nutup dialog; restart app sepenuhnya → rule-nya tetap ada
+- [ ] "Test a URL": ketik URL yang cocok salah satu rule → muncul "Matches rule N → saves to …"
+      dengan nomor dan folder yang bener; ketik URL yang gak cocok → "No match — the Add window will
+      open."
+- [ ] Ganti "Save to" dari Folder ke salah satu kategori (mis. "Videos folder") → input path+Browse
+      hilang, select kategori aja yang kelihatan
+
+**Capture warm start (app lagi jalan):**
+
+- [ ] Bikin rule wildcard `*.iso` → Folder `D:\ISO` (atau folder test lain). Klik link `.iso` di
+      browser → window Add **tidak** muncul, baris langsung queued/downloading, dan toast
+      `Auto rule "*.iso" → D:\ISO` muncul. File akhirnya ada di folder itu
+- [ ] Bikin rule wildcard host/path (mis. `*github.com/*`) → target kategori Programs → file akhirnya
+      masuk folder Programs (atau folder override kategori itu kalau ada)
+- [ ] Rule yang di-disable diabaikan sepenuhnya — link yang cocok pattern-nya tetap buka window Add
+- [ ] Dua rule yang sama-sama cocok satu URL → yang urutannya lebih atas yang menang
+- [ ] Link yang gak cocok rule manapun → window Add kebuka seperti biasa, gak ada bedanya
+- [ ] Klik link buat baris yang lagi nunggu re-capture kredensial (`awaitingCapture`) — baris itu
+      tetap ke-claim dan **tidak** kebuat duplikat, walaupun ada rule yang cocok sama URL-nya
+
+**Capture cold start (app dalam keadaan tertutup):**
+
+- [ ] Tutup app sepenuhnya (proses tray-nya juga gak ada), klik link yang cocok rule → app kebuka
+      sendiri, main window kelihatan, unduhannya langsung queued, toast muncul, dan window Add
+      **tidak pernah** kelihatan sama sekali
+- [ ] Tutup app, klik link yang gak cocok rule manapun → window Add kebuka dengan form terisi
+      seperti biasa (perilaku lama, gak berubah)
+
+**Lain-lain:**
+
+- [ ] Clipboard watch dan "Paste & download" (klik kanan tabel) tetap **selalu** buka window Add,
+      walaupun URL-nya cocok sama sebuah rule
+- [ ] Export backup lalu import lagi → rule-rule auto ikut ke-roundtrip persis
+- [ ] Edit manual `settings.json` biar salah satu rule regex-nya rusak (mis. `"pattern": "("`), lalu
+      import backup apapun → rule yang rusak itu ilang sendiri dari list (bukan bikin crash atau
+      nge-block rule lainnya)
+- [ ] Kalau "Hold the queue until a set time" (scheduled start) aktif, unduhan yang lolos auto rule
+      tetap ketahan sampai jam yang dijadwalkan — bukan langsung jalan (dia cuma `queued`, sama kayak
+      unduhan biasa)

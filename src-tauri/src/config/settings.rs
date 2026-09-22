@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use tauri_plugin_autostart::ManagerExt;
 
 use super::{config_dir, write_json_atomic};
+use crate::auto_rules::AutoRule;
 
 #[derive(Serialize, Deserialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase", default)]
@@ -68,6 +69,11 @@ pub(crate) struct AppSettings {
     /// syntax ("Ctrl+Alt+D"). "" = off (the default — a preset combo could
     /// collide with another app). Registered by Rust (see `hotkey.rs`).
     pub(crate) global_hotkey: String,
+    /// Ordered URL-pattern rules that auto-start a browser-extension capture
+    /// straight into a chosen folder, skipping the Add window. Evaluated by
+    /// Rust at capture time (see `auto_rules.rs`); the frontend only edits
+    /// this list.
+    pub(crate) auto_rules: Vec<AutoRule>,
 }
 
 impl Default for AppSettings {
@@ -88,6 +94,7 @@ impl Default for AppSettings {
             auto_install_updates: true,
             sidebar_collapsed: false,
             global_hotkey: String::new(),
+            auto_rules: Vec::new(),
         }
     }
 }
@@ -106,6 +113,7 @@ impl AppSettings {
         if !["system", "dark", "light"].contains(&self.theme.as_str()) {
             self.theme = "system".to_string();
         }
+        self.auto_rules = crate::auto_rules::sanitize(self.auto_rules);
         self
     }
 }
@@ -233,5 +241,28 @@ mod tests {
         assert_eq!(s.history_retention_days, 30);
         assert_eq!(s.theme, "dark");
         assert_eq!(s.global_limit_mbps, 2.5);
+    }
+
+    #[test]
+    fn sanitized_drops_an_invalid_auto_rule_and_keeps_a_valid_one() {
+        let valid = AutoRule {
+            id: "valid".to_string(),
+            enabled: true,
+            kind: "wildcard".to_string(),
+            pattern: "*.zip".to_string(),
+            target: "folder".to_string(),
+            folder: "D:\\Downloads".to_string(),
+            category: String::new(),
+        };
+        let invalid = AutoRule {
+            id: "invalid".to_string(),
+            enabled: true,
+            kind: "regex".to_string(),
+            pattern: "(".to_string(),
+            ..AutoRule::default()
+        };
+        let s = AppSettings { auto_rules: vec![invalid, valid.clone()], ..AppSettings::default() }
+            .sanitized();
+        assert_eq!(s.auto_rules, vec![valid]);
     }
 }
