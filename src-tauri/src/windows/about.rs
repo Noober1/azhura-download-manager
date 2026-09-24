@@ -18,6 +18,12 @@ use tauri::Manager as _;
 #[tauri::command]
 #[specta::specta]
 pub(crate) async fn open_about_window(app: tauri::AppHandle) -> Result<(), String> {
+    // Locked: do nothing rather than `Err(...)` — neither call site in
+    // `App.tsx` attaches a `.catch()`, so an error here would surface as an
+    // uncaught promise rejection instead of anything the user'd notice.
+    if crate::lock::is_locked(&app) {
+        return Ok(());
+    }
     if let Some(w) = app.get_webview_window("about") {
         let _ = w.show();
         let _ = w.set_focus();

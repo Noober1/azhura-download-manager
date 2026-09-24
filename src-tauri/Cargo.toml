@@ -1,9 +1,12 @@
 [package]
 name = "azhura-download-manager"
-version = "0.2.4"
+version = "0.2.5"
 description = "Download files from the internet faster, tidier, and more in control than a browser's own downloader"
 authors = ["Azhura"]
 edition = "2021"
+# Without this, a bare `cargo run` (used by `tauri dev`'s DevCommand) can't
+# pick between this and the `export_bindings` dev-tool binary in `src/bin/`.
+default-run = "azhura-download-manager"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -22,6 +25,7 @@ tauri = { version = "2", features = ["tray-icon", "specta"] }
 tauri-plugin-opener = "2"
 tauri-plugin-clipboard-manager = "2"
 tauri-plugin-dialog = "2"
+tauri-plugin-global-shortcut = "2"
 tauri-plugin-notification = "2"
 tauri-plugin-deep-link = "2"
 tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
@@ -49,6 +53,9 @@ hex = "0.4"
 url = "2"
 percent-encoding = "2"
 tiny_http = "0.12"
+regex = "1"
+# PIN lock hash (lock.rs). `std` pulls in rand_core/getrandom for OsRng.
+argon2 = { version = "0.5", features = ["std"] }
 
 [target.'cfg(windows)'.dependencies]
 webview2-com = "0.38"
@@ -67,4 +74,10 @@ base64 = "0.22"
 [dev-dependencies]
 tempfile = "3"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+
+# Argon2 in debug builds takes seconds without this.
+[profile.dev.package.argon2]
+opt-level = 3
+[profile.dev.package.blake2]
+opt-level = 3
 

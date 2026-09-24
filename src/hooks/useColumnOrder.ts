@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import type { SortKey } from "../constants";
-import { loadColumnOrder, moveColumn, saveColumnOrder } from "../columns";
+import { applyVisibleOrder, loadColumnOrder, moveColumn, saveColumnOrder, visibleOrder } from "../columns";
 import { suppressNextClick } from "../suppressNextClick";
 
 const DRAG_THRESHOLD_PX = 4;
@@ -30,8 +30,15 @@ export type DragRect = { left: number; top: number; width: number; height: numbe
  *  resize, before it hit this exact bug and adopted this same fix) would
  *  never get consumed or cleared. Instead, a real reorder arms
  *  `suppressNextClick()` on `mouseup`, which stops the trailing click
- *  wherever it lands before it ever reaches anything. */
-export function useColumnOrder() {
+ *  wherever it lands before it ever reaches anything.
+ *
+ *  `hidden` (from `useColumnVisibility`) splits this into two orders that
+ *  must not be confused: `order` is the full, persisted list of positions
+ *  including columns that are currently switched off, while `visible` is what
+ *  is actually on screen. All the drag math below is in `visible` terms —
+ *  it reads real `<th>` rects, and a hidden column has no `<th>` — and the
+ *  result is folded back into `order` by `applyVisibleOrder` at drop. */
+export function useColumnOrder(hidden: Set<SortKey>) {
   const [order, setOrder] = useState<SortKey[]>(loadColumnOrder);
   const [drag, setDrag] = useState<{ key: SortKey; startX: number; rect: DragRect } | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
@@ -64,10 +71,12 @@ export function useColumnOrder() {
     const { key, startX } = drag;
     document.body.classList.add("col-reordering");
 
-    // Headers are read in DOM order, which matches `order` (DownloadTable
-    // renders `<SortTh>` by iterating `order`) — so a header's position in
-    // this array IS its index in `order` for the whole drag, since `order`
-    // itself doesn't change until drop.
+    const visible = visibleOrder(order, hidden);
+
+    // Headers are read in DOM order, which matches `visible` (DownloadTable
+    // renders `<SortTh>` by iterating the visible order) — so a header's
+    // position in this array IS its index in `visible` for the whole drag,
+    // since neither `order` nor `hidden` changes until drop.
     function headerRects(): DOMRect[] {
       return Array.from(document.querySelectorAll<HTMLElement>(".dtable thead th")).map((th) =>
         th.getBoundingClientRect(),
@@ -87,7 +96,7 @@ export function useColumnOrder() {
         const mid = rect.left + rect.width / 2;
         if (e.clientX >= mid) index = i + 1;
       });
-      const clamped = Math.max(0, Math.min(order.length, index));
+      const clamped = Math.max(0, Math.min(visible.length, index));
       dropIndexRef.current = clamped;
       setDropIndex(clamped);
     }
@@ -95,12 +104,12 @@ export function useColumnOrder() {
     function onMouseUp() {
       const finalDropIndex = dropIndexRef.current;
       if (didDragRef.current && finalDropIndex !== null) {
-        const from = order.indexOf(key);
-        // finalDropIndex is a gap position (0..order.length); moveColumn
+        const from = visible.indexOf(key);
+        // finalDropIndex is a gap position (0..visible.length); moveColumn
         // expects a target slot, which is the same gap minus one once the
         // source is pulled out of the array when the gap is past it.
         const to = finalDropIndex > from ? finalDropIndex - 1 : finalDropIndex;
-        const next = moveColumn(order, from, to);
+        const next = applyVisibleOrder(order, hidden, moveColumn(visible, from, to));
         setOrder(next);
         saveColumnOrder(next);
 
@@ -126,7 +135,10 @@ export function useColumnOrder() {
   }, [drag]);
 
   return {
+    /** Every column, hidden ones included — the persisted source of truth for
+     *  positions. Callers that render or measure want `visible` instead. */
     order,
+    visible: visibleOrder(order, hidden),
     dragKey: drag?.key ?? null,
     // Only meaningful once `didDragRef` has actually crossed the threshold
     // (same as `dropIndex`, which follows the same gate) — otherwise a

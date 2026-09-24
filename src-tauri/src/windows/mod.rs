@@ -2,6 +2,7 @@ pub(crate) mod about;
 pub(crate) mod add;
 pub(crate) mod archive;
 pub(crate) mod detail;
+pub(crate) mod whats_new;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
@@ -48,10 +49,11 @@ pub(crate) fn reveal_main_window(app: &tauri::AppHandle) {
     }
 }
 
-/// Send `main` (and the owned Add/Details windows, if open) to the tray
-/// without destroying any webview — downloads and the React scheduler keep
-/// running, they're just not visible.
-pub(crate) fn hide_to_tray(app: &tauri::AppHandle) {
+/// Hide every window `main` owns (Add, Archive Preview, About, per-download
+/// Details popups) without touching `main` itself — shared by `hide_to_tray`
+/// below and by `lock::engage`, which needs the same sweep without also
+/// hiding `main` (the lock screen renders inside it, so it stays visible).
+pub(crate) fn hide_secondary_windows(app: &tauri::AppHandle) {
     if let Some(w) = app.get_webview_window("add") {
         let _ = w.hide();
     }
@@ -61,11 +63,24 @@ pub(crate) fn hide_to_tray(app: &tauri::AppHandle) {
     if let Some(w) = app.get_webview_window("about") {
         let _ = w.hide();
     }
+    if let Some(w) = app.get_webview_window("whats-new") {
+        let _ = w.hide();
+    }
     for (label, w) in app.webview_windows() {
         if label.starts_with("detail-") {
             let _ = w.hide();
         }
     }
+}
+
+/// Send `main` (and the owned Add/Details windows, if open) to the tray
+/// without destroying any webview — downloads and the React scheduler keep
+/// running, they're just not visible. Also engages the PIN lock (a no-op if
+/// none is set) so the app comes back from the tray showing the lock screen
+/// rather than the last thing on screen.
+pub(crate) fn hide_to_tray(app: &tauri::AppHandle) {
+    crate::lock::engage(app);
+    hide_secondary_windows(app);
     if let Some(m) = app.get_webview_window("main") {
         let _ = m.set_enabled(true);
         let _ = m.hide();
@@ -85,12 +100,15 @@ fn begin_shutdown(app: &tauri::AppHandle) {
 }
 
 /// Tray "Quit": prepare as above, give the periodic meta writer a moment to
-/// catch up, then actually exit.
+/// catch up, install a pending update if one is waiting and the user has
+/// opted in (see `update::try_install_on_quit` — it never brings the app back
+/// afterward), then actually exit.
 pub(crate) fn quit_app(app: &tauri::AppHandle) {
     begin_shutdown(app);
     let handle = app.clone();
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(Duration::from_millis(1000)).await;
+        crate::update::try_install_on_quit(&handle);
         handle.exit(0);
     });
 }
@@ -103,6 +121,17 @@ pub(crate) fn quit_app(app: &tauri::AppHandle) {
 #[specta::specta]
 pub(crate) fn prepare_for_update(app: tauri::AppHandle) {
     begin_shutdown(&app);
+}
+
+/// File > Exit, from the menu bar. A thin wrapper rather than a
+/// `#[tauri::command]` on `quit_app` itself: commands take an owned
+/// `AppHandle`, while the tray's "Quit" handler calls `quit_app(&app)` with a
+/// borrow — this just bridges the two. Same path either way, including the
+/// pending-update install on the way out.
+#[tauri::command]
+#[specta::specta]
+pub(crate) fn exit_app(app: tauri::AppHandle) {
+    quit_app(&app);
 }
 
 /// Fixed scale every window renders at — a deliberate ~10% bump over the

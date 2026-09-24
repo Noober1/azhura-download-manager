@@ -69,3 +69,16 @@ export function historyPayload(items: DownloadItem[]): HistoryEntry[] {
     .filter((d) => (TERMINAL_STATES as readonly string[]).includes(d.state))
     .map(toHistoryEntry);
 }
+
+/** Imported history rows not already in the list (by id, or by non-empty path). */
+export function mergeImportedHistory(
+  prev: DownloadItem[],
+  entries: HistoryEntry[],
+): { next: DownloadItem[]; added: number } {
+  const ids = new Set(prev.map((d) => d.id));
+  const paths = new Set(prev.map((d) => d.path).filter(Boolean));
+  const fresh = entries
+    .filter((e) => !ids.has(e.id) && (!e.path || !paths.has(e.path)))
+    .map(fromHistoryEntry);
+  return { next: fresh.length ? [...prev, ...fresh] : prev, added: fresh.length };
+}

@@ -5,11 +5,20 @@ import { formatSpeed, pctOf, truncate } from "../format";
 
 /** Pushes a live download list into the tray's dropdown roughly once a
  *  second — far coarser than the ~7/sec progress patches, and skipped
- *  entirely when nothing actually changed since the last push. */
-export function useTrayPush(downloadsRef: RefObject<DownloadItem[]>) {
+ *  entirely when nothing actually changed since the last push. `locked`
+ *  (the PIN lock) doesn't stop this loop — Rust itself drops the push while
+ *  locked (see `tray.rs`'s `update_tray_downloads`) so it never leaks a
+ *  filename into the tray — but the dedupe ref needs resetting on unlock,
+ *  otherwise the first post-unlock push would be skipped as "unchanged"
+ *  even though Rust never actually applied the last one it saw. */
+export function useTrayPush(downloadsRef: RefObject<DownloadItem[]>, locked: boolean) {
   const lastTraySentRef = useRef<string | null>(null);
   // Guards against piling up pushes if one command outlives the 1s interval.
   const traySendingRef = useRef(false);
+
+  useEffect(() => {
+    lastTraySentRef.current = null;
+  }, [locked]);
 
   useEffect(() => {
     const t = setInterval(() => {

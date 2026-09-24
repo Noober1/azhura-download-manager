@@ -1,11 +1,28 @@
-import type { MouseEvent as ReactMouseEvent, RefObject } from "react";
+import { Fragment, type MouseEvent as ReactMouseEvent, type RefObject } from "react";
 import type { DownloadItem } from "../types";
-import { formatBytes, formatSpeed, pctOf, statusClass, statusLabel, formatDateAdded } from "../format";
+import {
+  formatBytes,
+  formatSpeed,
+  formatEta,
+  etaOf,
+  piecesDoneOf,
+  pctOf,
+  statusClass,
+  statusLabel,
+  formatDateAdded,
+} from "../format";
 import { FileIcon } from "../fileIcons";
 import { Icon } from "../ui";
 import type { SortKey } from "../constants";
-import { COLUMN_CLASS, COLUMN_LABEL, totalWidth, type ColumnWidths } from "../columns";
+import {
+  COLUMN_CLASS,
+  COLUMN_LABEL,
+  totalWidth,
+  type ColumnWidths,
+  type RowDensity,
+} from "../columns";
 import type { DragRect } from "../hooks/useColumnOrder";
+import type { GroupMeta } from "../hooks/useGroupedRows";
 
 /* A sortable, reorderable column header: click cycles asc → desc → default
    (unsorted) for its own key, and starts at asc when switching from a
@@ -69,11 +86,56 @@ function SortTh({
   );
 }
 
+/** Drag-reorder state/handlers for the Queue column — threaded down from
+ *  `useQueueDrag` in App.tsx. */
+export type QueueColumnProps = {
+  positions: Map<string, number>;
+  /** Sorted by Queue asc AND grouping off. */
+  canDrag: boolean;
+  dragId: string | null;
+  dropBefore: string | "end" | null;
+  onGripMouseDown: (id: string, e: ReactMouseEvent) => void;
+};
+
 /** Renders one `<td>` for `key`, in the shape `Row` used to hardcode inline —
  *  moved here unchanged so both the header and the body can be driven by the
  *  same `order` array. */
-function renderCell(key: SortKey, item: DownloadItem, pct: number | null) {
+function renderCell(
+  key: SortKey,
+  item: DownloadItem,
+  pct: number | null,
+  heldUntil: string | null,
+  queue: QueueColumnProps,
+) {
   switch (key) {
+    case "queue": {
+      const pos = queue.positions.get(item.id);
+      return (
+        <td key={key} className={COLUMN_CLASS.queue}>
+          {pos !== undefined && (
+            <span
+              className="queue-cell"
+              // Only the cell itself carries the "why can't I drag" hint when
+              // dragging is off — the grip below isn't even in the DOM then,
+              // so there's nothing dimmed/disabled-looking to explain.
+              data-tip={queue.canDrag ? undefined : "Sort by the Queue column to reorder"}
+            >
+              {queue.canDrag && (
+                <span
+                  className="queue-grip"
+                  aria-hidden="true"
+                  data-tip="Drag to reorder"
+                  onMouseDown={(e) => queue.onGripMouseDown(item.id, e)}
+                >
+                  ⋮⋮
+                </span>
+              )}
+              <span className="queue-num">{pos}</span>
+            </span>
+          )}
+        </td>
+      );
+    }
     case "name":
       return (
         <td key={key} className={COLUMN_CLASS.name} data-tip={item.path || item.url}>
@@ -94,7 +156,16 @@ function renderCell(key: SortKey, item: DownloadItem, pct: number | null) {
         <td key={key} className={COLUMN_CLASS.status}>
           {/* One state class only — `.mode-tag.missing` and `.mode-tag.completed`
               have equal specificity, so both applying would be order-dependent. */}
-          <span className={`mode-tag ${statusClass(item)}`}>{statusLabel(item)}</span>
+          <span
+            className={`mode-tag ${statusClass(item, heldUntil)}`}
+            data-tip={
+              heldUntil && item.state === "queued"
+                ? "Waiting for the scheduled start"
+                : undefined
+            }
+          >
+            {statusLabel(item, heldUntil)}
+          </span>
         </td>
       );
     case "size":
@@ -133,6 +204,51 @@ function renderCell(key: SortKey, item: DownloadItem, pct: number | null) {
           {item.state === "downloading" ? formatSpeed(item.speed) : "—"}
         </td>
       );
+    case "eta": {
+      // Gated on "downloading" for the same reason Speed is: a paused row's
+      // last known rate is stale the moment it stops, and projecting a
+      // finish time from it would be a number that never ticks down.
+      const eta = item.state === "downloading" ? etaOf(item) : null;
+      return (
+        <td key={key} className={COLUMN_CLASS.eta}>
+          {eta !== null ? formatEta(eta) : "—"}
+        </td>
+      );
+    }
+    case "conns":
+      // The configured maximum, which is the number the Connections submenu
+      // sets and the only one that means anything for a row that isn't
+      // running. How many of them are actually live is a downloading-only
+      // fact, so it goes in the tooltip rather than the cell.
+      return (
+        <td
+          key={key}
+          className={COLUMN_CLASS.conns}
+          data-tip={
+            item.state === "downloading"
+              ? `${item.usedConnections} of ${item.connections} connections in use`
+              : undefined
+          }
+        >
+          {item.connections}
+        </td>
+      );
+    case "pieces": {
+      const done = piecesDoneOf(item);
+      return (
+        <td
+          key={key}
+          className={COLUMN_CLASS.pieces}
+          data-tip={
+            done !== null
+              ? `${done} of ${item.numPieces} pieces downloaded (${formatBytes(item.pieceSize)} each)`
+              : undefined
+          }
+        >
+          {done !== null ? `${done} / ${item.numPieces}` : "—"}
+        </td>
+      );
+    }
   }
 }
 
@@ -146,6 +262,8 @@ function Row({
   pct,
   selected,
   order,
+  heldUntil,
+  queue,
   onSelect,
   onContext,
   onDoubleClick,
@@ -154,13 +272,22 @@ function Row({
   pct: number | null;
   selected: boolean;
   order: SortKey[];
+  /** Scheduled start time ("HH:MM") when the scheduler is holding the queue,
+   *  or null otherwise — see `statusLabel`/`statusClass` in format.ts. */
+  heldUntil: string | null;
+  queue: QueueColumnProps;
   onSelect: (e: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }) => void;
   onContext: (e: ReactMouseEvent) => void;
   onDoubleClick: () => void;
 }) {
+  const dragging = queue.dragId === item.id;
+  const dropBeforeThis = queue.dropBefore === item.id;
+  const dropAfterThis = queue.dropBefore === "end" && queue.positions.get(item.id) === queue.positions.size;
   return (
     <tr
-      className={`drow ${selected ? "selected" : ""}`}
+      className={`drow ${selected ? "selected" : ""} ${dragging ? "queue-dragging" : ""} ${
+        dropBeforeThis ? "queue-drop-before" : ""
+      } ${dropAfterThis ? "queue-drop-after" : ""}`}
       data-id={item.id}
       onClick={onSelect}
       onDoubleClick={onDoubleClick}
@@ -170,7 +297,45 @@ function Row({
         onContext(e);
       }}
     >
-      {order.map((key) => renderCell(key, item, pct))}
+      {order.map((key) => renderCell(key, item, pct, heldUntil, queue))}
+    </tr>
+  );
+}
+
+/* A group header row (see `useGroupedRows`). Deliberately NOT `.drow`:
+   `useMarquee`'s `querySelectorAll(".drow")` hit-test and
+   `useColumnWidths.autoFit`'s `.dtable tbody tr.drow` measurement both sweep
+   that class, and a header row is neither selectable nor measurable. The
+   collapse chevron is the same rotated-`▸` pattern
+   `ArchiveTree.tsx`/`archive-window.css` already use — there's no chevron
+   glyph in `Icon` (`src/ui.tsx`). */
+function GroupRow({
+  group,
+  colSpan,
+  onToggle,
+}: {
+  group: GroupMeta;
+  colSpan: number;
+  onToggle: (key: string) => void;
+}) {
+  return (
+    <tr className="group-row">
+      <td colSpan={colSpan}>
+        <button
+          className="group-toggle"
+          aria-expanded={!group.collapsed}
+          onClick={() => onToggle(group.key)}
+        >
+          <span
+            className={`group-chevron ${group.collapsed ? "" : "expanded"}`}
+            aria-hidden="true"
+          >
+            ▸
+          </span>
+          <span className="group-label">{group.label}</span>
+          <span className="group-count">{group.count}</span>
+        </button>
+      </td>
     </tr>
   );
 }
@@ -180,6 +345,7 @@ export function DownloadTable({
   onTableMouseDown,
   onTableClick,
   onTableContextMenu,
+  onHeaderContextMenu,
   sort,
   onSort,
   rows,
@@ -198,6 +364,13 @@ export function DownloadTable({
   offsetX,
   onReorderStart,
   sentinelRef,
+  heldUntil,
+  density,
+  headersBefore,
+  trailingGroups,
+  onToggleGroup,
+  queue,
+  hidden,
 }: {
   tableWrapRef: RefObject<HTMLElement | null>;
   onTableMouseDown: (e: ReactMouseEvent) => void;
@@ -206,6 +379,9 @@ export function DownloadTable({
    *  `onContextMenu` already calls `stopPropagation()`, so a row right-click
    *  never reaches this handler. */
   onTableContextMenu: (e: ReactMouseEvent) => void;
+  /** Right-click anywhere in the header row — opens the show/hide-columns
+   *  menu. Stops propagation so `onTableContextMenu` above never also fires. */
+  onHeaderContextMenu: (e: ReactMouseEvent) => void;
   sort: { key: SortKey; dir: "asc" | "desc" } | null;
   onSort: (key: SortKey) => void;
   rows: DownloadItem[];
@@ -214,6 +390,8 @@ export function DownloadTable({
   onRowContext: (e: ReactMouseEvent, item: DownloadItem) => void;
   onRowDoubleClick: (item: DownloadItem) => void;
   marquee: { left: number; top: number; width: number; height: number } | null;
+  /** The columns actually on screen, left to right — `useColumnOrder`'s
+   *  `visible`, never its full `order`. */
   order: SortKey[];
   widths: ColumnWidths;
   onResizeStart: (key: SortKey, e: ReactMouseEvent) => void;
@@ -231,24 +409,51 @@ export function DownloadTable({
   dragRect: DragRect | null;
   offsetX: number;
   onReorderStart: (key: SortKey, e: ReactMouseEvent) => void;
+  /** Scheduled start time ("HH:MM") when `useQueueSchedule`'s `held` is true,
+   *  or null when the queue isn't being held — threaded down to every row's
+   *  Status cell so a queued item reads "Scheduled HH:MM" instead of plain
+   *  "Queued". */
+  heldUntil: string | null;
+  /** Compact vs comfortable row height — set as `data-density` on the
+   *  scrolling wrapper so `table.css` can key `--row-h` off it. */
+  density: RowDensity;
+  /** Group headers (see `useGroupedRows`) to render immediately before a
+   *  given row id — a list, not a single value, because a run of collapsed
+   *  groups has no row of its own to anchor to. Empty when grouping is off. */
+  headersBefore: Map<string, GroupMeta[]>;
+  /** Group headers with no row after them: collapsed groups at the tail of
+   *  the current view, or every group when all of them are collapsed. */
+  trailingGroups: GroupMeta[];
+  onToggleGroup: (key: string) => void;
+  /** Drag-reorder state/handlers for the Queue column. */
+  queue: QueueColumnProps;
+  /** True while the dashboard is shown instead — the table stays mounted
+   *  (see App.tsx's `view` state) so refs stay valid and scroll position is
+   *  kept, just visually hidden via `table.css`'s `.table-wrap[hidden]`. */
+  hidden?: boolean;
 }) {
   return (
     <>
       <main
         className="table-wrap"
+        data-density={density}
+        hidden={hidden}
         ref={tableWrapRef}
         onMouseDown={onTableMouseDown}
         onClick={onTableClick}
         onContextMenu={onTableContextMenu}
       >
-        <table className="dtable" style={{ minWidth: totalWidth(widths) }}>
+        <table className="dtable" style={{ minWidth: totalWidth(widths, order) }}>
           {/* Every column but `name` is a fixed `<col>` width; `name` gets none, so
               under `table-layout: fixed` it's the sole flex column — it absorbs
-              whatever space `.table-wrap` has beyond the other six columns' widths.
-              A drag or double-click auto-fit on `name`'s resizer only narrows it
-              back below that floor; while there's slack, widening/auto-fitting it
-              has no visible effect, because the rendered width is `max(wrap width,
-              minWidth)`, not `sum(widths)`. */}
+              whatever space `.table-wrap` has beyond the other visible columns'
+              widths. A drag or double-click auto-fit on `name`'s resizer only
+              narrows it back below that floor; while there's slack,
+              widening/auto-fitting it has no visible effect, because the rendered
+              width is `max(wrap width, minWidth)`, not `sum(widths)`. With `name`
+              itself hidden there is no flex column at all, and the browser shares
+              any slack out across the fixed columns instead — which is fine, since
+              nothing then depends on one column absorbing it. */}
           <colgroup>
             {order.map((key) =>
               key === "name" ? (
@@ -258,7 +463,17 @@ export function DownloadTable({
               ),
             )}
           </colgroup>
-          <thead>
+          {/* The header's own right-click opens the columns menu, and must
+              `stopPropagation` so `.table-wrap`'s `onContextMenu` (the
+              empty-space menu) doesn't also fire — the same guard `.drow`
+              already uses for the row menu. */}
+          <thead
+            onContextMenu={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onHeaderContextMenu(e);
+            }}
+          >
             <tr>
               {order.map((key, i) => (
                 <SortTh
@@ -279,7 +494,9 @@ export function DownloadTable({
             </tr>
           </thead>
           <tbody>
-            {rows.length === 0 && (
+            {/* With every group collapsed there are no rows at all, but the
+                table isn't empty — its headers still render below. */}
+            {rows.length === 0 && trailingGroups.length === 0 && (
               <tr>
                 <td colSpan={order.length} className="empty-cell">
                   <span className="empty-state">
@@ -298,19 +515,28 @@ export function DownloadTable({
               const pct = pctOf(item);
               const selectedRow = selectedIds.has(item.id);
               return (
-                <Row
-                  key={item.id}
-                  item={item}
-                  pct={pct}
-                  selected={selectedRow}
-                  order={order}
-                  onSelect={(e) => onSelectRow(item.id, e)}
-                  onContext={(e) => onRowContext(e, item)}
-                  onDoubleClick={() => onRowDoubleClick(item)}
-                />
+                <Fragment key={item.id}>
+                  {headersBefore.get(item.id)?.map((g) => (
+                    <GroupRow key={g.key} group={g} colSpan={order.length} onToggle={onToggleGroup} />
+                  ))}
+                  <Row
+                    item={item}
+                    pct={pct}
+                    selected={selectedRow}
+                    order={order}
+                    heldUntil={heldUntil}
+                    queue={queue}
+                    onSelect={(e) => onSelectRow(item.id, e)}
+                    onContext={(e) => onRowContext(e, item)}
+                    onDoubleClick={() => onRowDoubleClick(item)}
+                  />
+                </Fragment>
               );
             })}
             {rows.length > 0 && <tr ref={sentinelRef} className="row-sentinel" aria-hidden="true" />}
+            {trailingGroups.map((g) => (
+              <GroupRow key={g.key} group={g} colSpan={order.length} onToggle={onToggleGroup} />
+            ))}
           </tbody>
         </table>
       </main>

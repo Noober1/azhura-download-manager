@@ -21,6 +21,9 @@ use tauri::{Emitter, Manager as _};
 #[tauri::command]
 #[specta::specta]
 pub(crate) async fn open_detail_window(app: tauri::AppHandle, id: String) -> Result<(), String> {
+    if crate::lock::is_locked(&app) {
+        return Err("App is locked".into());
+    }
     let label = format!("detail-{id}");
     if let Some(w) = app.get_webview_window(&label) {
         let _ = w.show();
@@ -71,6 +74,9 @@ pub(crate) async fn open_detail_window(app: tauri::AppHandle, id: String) -> Res
 #[tauri::command]
 #[specta::specta]
 pub(crate) fn show_detail_window(app: tauri::AppHandle, id: String) {
+    if crate::lock::is_locked(&app) {
+        return;
+    }
     if let Some(w) = app.get_webview_window(&format!("detail-{id}")) {
         let _ = w.show();
         let _ = w.set_focus();

@@ -1,8 +1,10 @@
 import { useEffect } from "react";
 import type { DownloadItem } from "../types";
+import { queueOrder } from "../queueOrder";
 
 /** Keeps at most `maxConcurrent` downloads active, promoting queued rows into
- *  running ones as slots free up. `held` (from `useQueueSchedule`) suspends
+ *  running ones as slots free up — in queue order (see `queueOrder.ts`), FIFO
+ *  unless the user reordered them. `held` (from `useQueueSchedule`) suspends
  *  that promotion entirely while a scheduled start time is still pending. */
 export function useScheduler(
   downloads: DownloadItem[],
@@ -17,8 +19,8 @@ export function useScheduler(
     ).length;
     const slots = maxConcurrent - active;
     if (slots <= 0) return;
-    downloads
-      .filter((d) => d.state === "queued" && !d.retryPending)
+    queueOrder(downloads)
+      .filter((d) => !d.retryPending)
       .slice(0, slots)
       .forEach((item) => startRun(item));
     // eslint-disable-next-line react-hooks/exhaustive-deps

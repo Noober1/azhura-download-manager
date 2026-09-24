@@ -1,0 +1,162 @@
+/* ---- Dashboard (Statistics view) ------------------------------------------
+   Sibling of `.table-wrap` inside `.body`, toggled in place of the table —
+   see `App.tsx`'s `view` state and `Dashboard.tsx`. */
+
+.dashboard {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: var(--canvas);
+}
+
+.dashboard h2 {
+  margin: 0;
+  font-family: var(--font-head);
+  font-size: 1.1rem;
+}
+
+.dash-subtitle {
+  margin: 2px 0 0;
+  color: var(--ink-soft);
+  font-size: var(--fs-sm);
+}
+
+/* ---- Summary tiles ---- */
+
+.dash-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.dash-tile {
+  background: var(--surface);
+  border: var(--bw) solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 12px 14px;
+}
+
+.dash-tile-value {
+  font-family: var(--font-mono);
+  font-size: 1.35rem;
+  color: var(--ink);
+}
+
+.dash-tile-label {
+  margin-top: 2px;
+  font-size: var(--fs-label);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--ink-soft);
+}
+
+/* ---- Chart card ---- */
+
+.dash-card {
+  background: var(--surface);
+  border: var(--bw) solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 12px 14px;
+}
+
+.dash-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.dash-card-title {
+  font-size: var(--fs-sm);
+  color: var(--ink);
+}
+
+.dash-seg {
+  display: inline-flex;
+  gap: 2px;
+  background: var(--surface-2);
+  border: var(--bw) solid var(--border);
+  border-radius: var(--radius-field);
+  padding: 2px;
+}
+
+.dash-seg button {
+  border: none;
+  background: transparent;
+  padding: 0.25em 0.7em;
+  font-size: var(--fs-xs);
+  color: var(--ink-soft);
+}
+
+.dash-seg button.active {
+  background: var(--accent-wash);
+  color: var(--accent);
+}
+
+.dash-chart {
+  display: flex;
+  gap: 8px;
+  border-bottom: var(--bw) solid var(--border);
+}
+
+.dash-yaxis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--ink-soft);
+  padding-bottom: 2px;
+}
+
+.dash-bars {
+  flex: 1;
+  min-width: 0;
+  display: block;
+}
+
+.dash-bar {
+  fill: var(--accent);
+}
+
+.dash-bar.current {
+  fill: var(--accent-strong);
+}
+
+.dash-bars g:hover .dash-bar {
+  fill: var(--accent-strong);
+}
+
+.dash-xlabels {
+  display: flex;
+}
+
+.dash-xlabels span {
+  flex: 1;
+  text-align: center;
+  font-size: var(--fs-xs);
+  color: var(--ink-soft);
+}
+
+/* ---- Footer / reset ---- */
+
+.dash-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.dash-footer button {
+  min-width: 5rem;
+}
+
+.dash-reset-warning {
+  color: var(--ink-soft);
+  font-size: var(--fs-sm);
+}

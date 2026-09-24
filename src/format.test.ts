@@ -194,6 +194,30 @@ describe("statusClass / statusLabel", () => {
     expect(statusClass(item)).toBe("downloading");
     expect(statusLabel(item)).toBe("Downloading");
   });
+
+  it("a queued row held by the scheduler reports the scheduled time", () => {
+    const item = makeItem({ state: "queued" });
+    expect(statusClass(item, "02:00")).toBe("held");
+    expect(statusLabel(item, "02:00")).toBe("Scheduled 02:00");
+  });
+
+  it("heldUntil is ignored for a state other than queued", () => {
+    const item = makeItem({ state: "downloading" });
+    expect(statusClass(item, "02:00")).toBe("downloading");
+    expect(statusLabel(item, "02:00")).toBe("Downloading");
+  });
+
+  it("retryPending still wins over heldUntil on a queued row", () => {
+    const item = makeItem({ state: "queued", retryPending: true });
+    expect(statusClass(item, "02:00")).toBe("queued");
+    expect(statusLabel(item, "02:00")).toBe("Retrying…");
+  });
+
+  it("a plain queued row with no heldUntil reports Queued", () => {
+    const item = makeItem({ state: "queued" });
+    expect(statusClass(item, null)).toBe("queued");
+    expect(statusLabel(item, null)).toBe("Queued");
+  });
 });
 
 describe("isRedownload", () => {

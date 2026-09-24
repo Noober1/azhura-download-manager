@@ -162,6 +162,29 @@ export function pctOf(item: DownloadItem): number | null {
   return Math.min(100, (item.downloaded / item.total) * 100);
 }
 
+/** Seconds until this download finishes at its current rate, or null when
+ *  that can't be known (unknown total, or nothing moving). The backend already
+ *  smooths `speed` with an EMA (see `report_progress` in
+ *  `src-tauri/src/engine/progress.rs`), so no extra damping is needed here —
+ *  without it this number visibly flickered. Shared by the ETA column and the
+ *  Detail window, which must never disagree. */
+export function etaOf(item: DownloadItem): number | null {
+  if (!item.total || item.speed <= 0) return null;
+  return Math.max(0, (item.total - item.downloaded) / item.speed);
+}
+
+/** How many whole pieces' worth of the file is on disk, out of
+ *  `item.numPieces`. Derived from bytes rather than summed from
+ *  `item.conns[].pieces`: that counter only tallies pieces completed *this
+ *  run*, so a resumed download would restart the count at zero even though
+ *  most of the file is already there. Bytes are the one measure that survives
+ *  a resume. Null for a single-stream download, which has no piece plan at
+ *  all (`numPieces`/`pieceSize` stay 0). */
+export function piecesDoneOf(item: DownloadItem): number | null {
+  if (item.numPieces <= 0 || item.pieceSize <= 0) return null;
+  return Math.min(item.numPieces, Math.floor(item.downloaded / item.pieceSize));
+}
+
 /** Shortens to at most `max` chars, ellipsis in the middle so the extension stays visible. */
 export function truncate(s: string, max: number): string {
   if (s.length <= max) return s;
@@ -191,16 +214,24 @@ export function isRedownload(item: DownloadItem): boolean {
   return !!item.missing || !!item.fromHistory;
 }
 
-export function statusClass(item: DownloadItem): string {
+/** `heldUntil` is the scheduled start time ("HH:MM") when the scheduler is
+ *  holding the queue (`queue.held` in App.tsx) — only meaningful for a plain
+ *  `queued` row, since `awaitingCapture`/`retryPending`/`missing` all mean
+ *  something more specific already happened to this item. */
+export function statusClass(item: DownloadItem, heldUntil?: string | null): string {
   if (item.awaitingCapture) return "queued";
   if (item.retryPending) return "queued";
-  return item.missing ? "missing" : item.state;
+  if (item.missing) return "missing";
+  if (heldUntil && item.state === "queued") return "held";
+  return item.state;
 }
 
-export function statusLabel(item: DownloadItem): string {
+export function statusLabel(item: DownloadItem, heldUntil?: string | null): string {
   if (item.awaitingCapture) return "Waiting for browser";
   if (item.retryPending) return "Retrying…";
-  return item.missing ? "Moved / deleted" : STATE_LABEL[item.state];
+  if (item.missing) return "Moved / deleted";
+  if (heldUntil && item.state === "queued") return `Scheduled ${heldUntil}`;
+  return STATE_LABEL[item.state];
 }
 
 /** Sort rank for the Status column — mirrors the same `awaitingCapture` →

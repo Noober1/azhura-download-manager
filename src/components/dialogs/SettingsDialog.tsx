@@ -2,6 +2,8 @@ import { motion } from "motion/react";
 import type { Theme } from "../../types";
 import { OVERLAY_FADE, DIALOG_POP } from "../../motion";
 import { useDialogA11y } from "../../hooks/useDialogA11y";
+import { HotkeyInput } from "../HotkeyInput";
+import type { PinMode } from "./PinDialog";
 
 export function SettingsDialog({
   maxConcurrent,
@@ -20,6 +22,9 @@ export function SettingsDialog({
   historyCount,
   updateChecking,
   autoInstallUpdates,
+  globalHotkey,
+  autoRulesActive,
+  onOpenAutoRules,
   onSetAutoInstallUpdates,
   onCheckForUpdates,
   onSetMaxActive,
@@ -35,7 +40,13 @@ export function SettingsDialog({
   onSetScheduledStartTime,
   onSetHistoryMaxEntries,
   onSetHistoryRetentionDays,
+  onSetGlobalHotkey,
+  onExportCsv,
   onClearHistory,
+  onExportBackup,
+  onImportBackup,
+  lockEnabled,
+  onPinAction,
   onClose,
 }: {
   maxConcurrent: number;
@@ -54,6 +65,9 @@ export function SettingsDialog({
   historyCount: number;
   updateChecking: boolean;
   autoInstallUpdates: boolean;
+  globalHotkey: string;
+  autoRulesActive: number;
+  onOpenAutoRules: () => void;
   onSetAutoInstallUpdates: (v: boolean) => void;
   onCheckForUpdates: () => void;
   onSetMaxActive: (n: number) => void;
@@ -69,7 +83,13 @@ export function SettingsDialog({
   onSetScheduledStartTime: (v: string) => void;
   onSetHistoryMaxEntries: (n: number) => void;
   onSetHistoryRetentionDays: (n: number) => void;
+  onSetGlobalHotkey: (v: string) => void;
+  onExportCsv: () => void;
   onClearHistory: () => void;
+  onExportBackup: () => void;
+  onImportBackup: () => void;
+  lockEnabled: boolean;
+  onPinAction: (mode: PinMode) => void;
   onClose: () => void;
 }) {
   const panelRef = useDialogA11y<HTMLDivElement>(onClose);
@@ -154,6 +174,13 @@ export function SettingsDialog({
               <label htmlFor="clip-watch">Watch clipboard for links</label>
               <span className="field-unit">Offers copied http(s) links as downloads</span>
             </div>
+            <div className="field-row">
+              <label>Auto rules</label>
+              <button onClick={onOpenAutoRules}>Manage…</button>
+              <span className="field-unit">
+                {autoRulesActive} active · auto-starts matching extension captures
+              </span>
+            </div>
           </fieldset>
 
           <fieldset className="dialog-section">
@@ -226,6 +253,11 @@ export function SettingsDialog({
               <label htmlFor="run-startup">Run at startup</label>
               <span className="field-unit">Starts hidden in the tray</span>
             </div>
+            <div className="field-row">
+              <label htmlFor="global-hotkey">Add download shortcut</label>
+              <HotkeyInput id="global-hotkey" value={globalHotkey} onChange={onSetGlobalHotkey} />
+              <span className="field-unit">Works from any app · Backspace clears</span>
+            </div>
             <div className="check-row">
               <input
                 type="checkbox"
@@ -242,9 +274,10 @@ export function SettingsDialog({
                 checked={autoInstallUpdates}
                 onChange={(e) => onSetAutoInstallUpdates(e.currentTarget.checked)}
               />
-              <label htmlFor="auto-update">Install updates at startup</label>
+              <label htmlFor="auto-update">Install updates when you quit</label>
               <span className="field-unit">
-                Only when nothing is downloading · critical fixes install either way
+                Also installs on the next launch if that was missed · critical fixes restart right
+                away
               </span>
             </div>
             <div className="field-row">
@@ -252,6 +285,30 @@ export function SettingsDialog({
                 {updateChecking ? "Checking…" : "Check for updates"}
               </button>
               <span className="field-unit">Also checked once at startup</span>
+            </div>
+          </fieldset>
+
+          <fieldset className="dialog-section">
+            <legend className="dialog-section-title">Security</legend>
+            <div className="field-row">
+              <label>App lock</label>
+              <span className="field-unit">
+                {lockEnabled
+                  ? "On — asks for a PIN at startup and when restoring from the tray"
+                  : "Off"}
+              </span>
+            </div>
+            <div className="field-row">
+              {lockEnabled ? (
+                <>
+                  <button onClick={() => onPinAction("change")}>Change PIN…</button>
+                  <button className="danger" onClick={() => onPinAction("remove")}>
+                    Remove PIN…
+                  </button>
+                </>
+              ) : (
+                <button onClick={() => onPinAction("set")}>Set PIN…</button>
+              )}
             </div>
           </fieldset>
 
@@ -289,10 +346,24 @@ export function SettingsDialog({
               <span className="field-unit">0–365 days · 0 = keep forever</span>
             </div>
             <div className="field-row">
+              <button disabled={historyCount === 0} onClick={onExportCsv}>
+                Export CSV…
+              </button>
               <button className="danger" disabled={historyCount === 0} onClick={onClearHistory}>
                 Clear history{historyCount > 0 ? ` (${historyCount})` : ""}
               </button>
             </div>
+          </fieldset>
+
+          <fieldset className="dialog-section">
+            <legend className="dialog-section-title">Backup</legend>
+            <div className="field-row">
+              <button onClick={onExportBackup}>Export backup…</button>
+              <button onClick={onImportBackup}>Import backup…</button>
+            </div>
+            <span className="field-unit">
+              Settings, download defaults and history in one file · proxy password is not included
+            </span>
           </fieldset>
         </div>
         <div className="dialog-actions">

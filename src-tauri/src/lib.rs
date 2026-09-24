@@ -5,16 +5,20 @@
 // while a slow one finishes. Per-piece completion is persisted for resume.
 
 mod archive;
+mod auto_rules;
 mod bridge;
 mod categories;
 mod commands;
 mod config;
 mod deeplink;
 mod engine;
+mod hotkey;
+mod lock;
 mod paths;
 mod power;
 mod shell_icon;
 mod tray;
+mod update;
 mod urls;
 mod windows;
 
@@ -28,7 +32,9 @@ use tauri_plugin_autostart::MacosLauncher;
 use categories::{migrate_legacy_category_folders, PendingMigrationWarnings, CATEGORY_FOLDERS};
 use config::prefs::PrefsState;
 use config::settings::{AutostartLaunch, SettingsState};
-use deeplink::{deep_link_from_args, handle_deep_link, handle_deep_link_cold_start, PendingDeepLink};
+use deeplink::{
+    deep_link_from_args, handle_deep_link, handle_deep_link_cold_start, PendingAutoAdd, PendingDeepLink,
+};
 use engine::control::Manager;
 use paths::downloads_base;
 use tray::{rebuild_tray_menu, TrayMenuState};
@@ -39,16 +45,17 @@ use windows::{harden_webview, quit_app, reveal_main_window, Quitting};
 /// and the cold-start detection below have to agree on.
 const AUTOSTART_FLAG: &str = "--autostart";
 
-/// 31 of the app's 33 IPC-crossing commands, collected once here so both the
+/// 37 of the app's 40 IPC-crossing commands, collected once here so both the
 /// runtime invoke handler and (in debug builds) the generated
 /// `../src/bindings.ts` stay derived from the same list — order matches the
 /// old `tauri::generate_handler!` list it replaced.
 ///
-/// `submit_add` and `take_pending_deep_link` are the missing two: this
-/// crate's `specta` (pinned to `2.0.0-rc.25`) overflows the stack while
-/// exporting a `serde_json::Value`-shaped command — confirmed by isolating
-/// each of them in turn. Both stay on a plain `tauri::generate_handler!`,
-/// merged into the specta-generated one in `run()` below.
+/// `submit_add`, `take_pending_deep_link` and `take_pending_auto_add` are the
+/// missing three: this crate's `specta` (pinned to `2.0.0-rc.25`) overflows
+/// the stack while exporting a `serde_json::Value`-shaped command —
+/// confirmed by isolating each of them in turn. All three stay on a plain
+/// `tauri::generate_handler!`, merged into the specta-generated one in
+/// `run()` below.
 fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
     tauri_specta::Builder::<tauri::Wry>::new()
         // Default mode wraps every `Result`-returning command's binding in a
@@ -69,6 +76,7 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         commands::probe_url,
         archive::inspect_archive,
         commands::default_download_dir,
+        commands::check_disk_space,
         commands::extension_dir,
         shell_icon::shell_icon,
         windows::add::open_add_window,
@@ -83,6 +91,8 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         windows::archive::close_archive_window,
         windows::about::open_about_window,
         windows::about::close_about_window,
+        windows::whats_new::open_whats_new_window,
+        windows::whats_new::close_whats_new_window,
         tray::update_tray_downloads,
         config::settings::load_settings,
         config::settings::save_settings,
@@ -92,11 +102,29 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         config::prefs::load_prefs,
         config::prefs::save_add_defaults,
         config::prefs::set_category_path,
+        config::prefs::apply_imported_prefs,
         config::history::load_history,
         config::history::save_history,
+        config::stats::load_stats,
+        config::stats::save_stats,
+        config::transfer::export_history_csv,
+        config::transfer::export_backup,
+        config::transfer::import_backup,
         power::run_power_action,
+        hotkey::set_global_hotkey,
         windows::prepare_for_update,
-        bridge::grabber_status
+        windows::exit_app,
+        update::download_update,
+        update::pending_update,
+        update::install_pending_update,
+        bridge::grabber_status,
+        auto_rules::validate_auto_rule_pattern,
+        auto_rules::test_auto_rules,
+        lock::lock_status,
+        lock::unlock_app,
+        lock::lock_app,
+        lock::set_app_pin,
+        lock::clear_app_pin
     ])
 }
 
@@ -141,10 +169,13 @@ pub fn run() {
     // handlers can't just be tried in sequence — check the command name
     // first (a borrow) and route the one owned `invoke` to whichever handler
     // actually owns that command.
-    let plain_invoke_handler: BoxedInvokeHandler =
-        Box::new(tauri::generate_handler![windows::add::submit_add, deeplink::take_pending_deep_link]);
+    let plain_invoke_handler: BoxedInvokeHandler = Box::new(tauri::generate_handler![
+        windows::add::submit_add,
+        deeplink::take_pending_deep_link,
+        deeplink::take_pending_auto_add
+    ]);
     let invoke_handler = move |invoke: tauri::ipc::Invoke<tauri::Wry>| match invoke.message.command() {
-        "submit_add" | "take_pending_deep_link" => plain_invoke_handler(invoke),
+        "submit_add" | "take_pending_deep_link" | "take_pending_auto_add" => plain_invoke_handler(invoke),
         _ => specta_invoke_handler(invoke),
     };
 
@@ -186,11 +217,14 @@ pub fn run() {
         ))
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(hotkey::plugin())
         .manage(Manager::default())
         .manage(PendingDeepLink::default())
+        .manage(PendingAutoAdd::default())
         .manage(windows::archive::PendingArchiveRequest::default())
         .manage(SettingsState(Mutex::new(config::settings::load_settings_from_disk())))
         .manage(PrefsState(Mutex::new(config::prefs::load_prefs_from_disk())))
+        .manage(lock::LockState::load())
         .manage(Quitting(AtomicBool::new(false)))
         .manage(TrayMenuState::default())
         .manage(PendingMigrationWarnings(failed_migrations))
@@ -201,6 +235,16 @@ pub fn run() {
         // checks can't collide).
         .manage(AutostartLaunch(std::env::args().any(|a| a == AUTOSTART_FLAG)))
         .setup(move |app| {
+            // Before anything else: a pending update left over from a
+            // force-kill or a reboot installs now, while no window, no
+            // socket and no tray icon exist yet — the installer is already
+            // on disk, so this only costs the spawn. Unlike hotkey
+            // registration at the end of this closure, nothing here touches
+            // a native window handle, so the early position is safe.
+            if update::try_install_on_cold_start(app.handle()) {
+                std::process::exit(0);
+            }
+
             specta_builder.mount_events(app);
 
             // Started here rather than via an eager `.manage(bridge::start())`
@@ -342,6 +386,14 @@ pub fn run() {
                 }
             }
 
+            // Last: registering a global hotkey pumps the Win32 message queue
+            // (via the plugin's main-thread marshaling), and doing that
+            // earlier in this closure — before `main`/`add`'s native window
+            // handles exist — made `.owner(&main)?` above intermittently fail
+            // with "the underlying handle is not available". Every window
+            // this closure creates is already built by this point.
+            hotkey::register_saved(app.handle());
+
             Ok(())
         })
         .on_window_event(|window, event| match window.label() {
@@ -390,6 +442,7 @@ pub fn run() {
                     let settings = window.state::<SettingsState>();
                     let minimize_to_tray = settings.0.lock().unwrap().minimize_to_tray;
                     if minimize_to_tray && window.is_minimized().unwrap_or(false) {
+                        crate::lock::engage(window.app_handle());
                         let _ = window.hide();
                     }
                 }
@@ -400,4 +453,17 @@ pub fn run() {
         .invoke_handler(invoke_handler)
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+/// Regenerates `src/bindings.ts` without launching the app — used by the
+/// `export_bindings` dev-tool binary (`cargo run --bin export_bindings`).
+/// A normal debug run of the app does this too (see `run()` above), but that
+/// needs a full window; this is the CLI-only path.
+pub fn export_bindings() {
+    specta_builder()
+        .export(
+            specta_typescript::Typescript::default(),
+            concat!(env!("CARGO_MANIFEST_DIR"), "/../src/bindings.ts"),
+        )
+        .expect("failed to export typescript bindings");
 }

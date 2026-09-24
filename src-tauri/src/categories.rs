@@ -133,7 +133,13 @@ fn retarget_legacy_path_in(path: &str, base: &Path) -> String {
 /// explicit save path: the remembered override for its category if one is
 /// set (and absolute), otherwise `<base>/<CategoryFolder>`.
 pub(crate) fn category_dir(filename: &str, prefs: &Prefs) -> Result<PathBuf, String> {
-    let id = category_id(filename);
+    category_dir_for_id(category_id(filename), prefs)
+}
+
+/// Same as `category_dir`, but for a category id directly rather than a
+/// filename to classify — used by auto rules, which let the user target a
+/// category by id without knowing any particular file's name.
+pub(crate) fn category_dir_for_id(id: &str, prefs: &Prefs) -> Result<PathBuf, String> {
     if let Some(custom) = prefs.category_paths.get(id) {
         let p = PathBuf::from(custom);
         if p.is_absolute() {
@@ -141,6 +147,13 @@ pub(crate) fn category_dir(filename: &str, prefs: &Prefs) -> Result<PathBuf, Str
         }
     }
     Ok(downloads_base()?.join(category_folder(id)))
+}
+
+/// Whether `id` is one of the six real category ids (as opposed to the
+/// `category_folder`/`category_dir_for_id` fallback that treats anything
+/// unrecognized as "Others").
+pub(crate) fn is_known_category(id: &str) -> bool {
+    matches!(id, "video" | "audio" | "program" | "docs" | "archive" | "other")
 }
 
 #[cfg(test)]

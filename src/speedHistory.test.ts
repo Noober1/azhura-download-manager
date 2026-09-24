@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { pushSpeedSample, sparklinePoints, SPEED_SAMPLE_CAP } from "./speedHistory";
+import {
+  pushSpeedSample,
+  sparklinePoints,
+  peakOf,
+  averageOf,
+  SPEED_SAMPLE_CAP,
+} from "./speedHistory";
 
 describe("pushSpeedSample", () => {
   it("appends to an empty history", () => {
@@ -67,5 +73,41 @@ describe("sparklinePoints", () => {
     const pairs = points.split(" ").map((p) => p.split(",").map(Number));
     expect(pairs[0][0]).toBe(0);
     expect(pairs[pairs.length - 1][0]).toBe(90);
+  });
+});
+
+describe("peakOf", () => {
+  it("returns 0 for an empty buffer", () => {
+    expect(peakOf([])).toBe(0);
+  });
+
+  it("returns the only value for a single sample", () => {
+    expect(peakOf([42])).toBe(42);
+  });
+
+  it("returns the largest value among mixed samples", () => {
+    expect(peakOf([10, 50, 30, 0])).toBe(50);
+  });
+
+  it("returns 0 when every sample is 0", () => {
+    expect(peakOf([0, 0, 0])).toBe(0);
+  });
+});
+
+describe("averageOf", () => {
+  it("returns 0 for an empty buffer", () => {
+    expect(averageOf([])).toBe(0);
+  });
+
+  it("returns the only value for a single sample", () => {
+    expect(averageOf([42])).toBe(42);
+  });
+
+  it("returns the mean of mixed samples", () => {
+    expect(averageOf([10, 20, 30])).toBe(20);
+  });
+
+  it("returns 0 when every sample is 0", () => {
+    expect(averageOf([0, 0, 0])).toBe(0);
   });
 });

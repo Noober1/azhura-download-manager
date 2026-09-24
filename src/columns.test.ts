@@ -4,6 +4,11 @@ import {
   clampWidth,
   normalizeColumnWidths,
   normalizeColumnOrder,
+  normalizeHiddenColumns,
+  normalizeRowDensity,
+  DEFAULT_HIDDEN_COLUMNS,
+  visibleOrder,
+  applyVisibleOrder,
   moveColumn,
   totalWidth,
   DEFAULT_COLUMN_ORDER,
@@ -74,7 +79,95 @@ describe("normalizeColumnWidths", () => {
 describe("totalWidth", () => {
   it("sums all columns in order", () => {
     const expected = DEFAULT_COLUMN_ORDER.reduce((sum, key) => sum + DEFAULT_COLUMN_WIDTHS[key], 0);
-    expect(totalWidth(DEFAULT_COLUMN_WIDTHS)).toBe(expected);
+    expect(totalWidth(DEFAULT_COLUMN_WIDTHS, DEFAULT_COLUMN_ORDER)).toBe(expected);
+  });
+
+  it("only counts the columns it is given, so a hidden one reserves nothing", () => {
+    const order: SortKey[] = ["name", "speed"];
+    expect(totalWidth(DEFAULT_COLUMN_WIDTHS, order)).toBe(
+      DEFAULT_COLUMN_WIDTHS.name + DEFAULT_COLUMN_WIDTHS.speed,
+    );
+  });
+});
+
+describe("normalizeHiddenColumns", () => {
+  it("returns the defaults for unrecognized values", () => {
+    for (const value of [undefined, null, "garbage", 42, { not: "an array" }]) {
+      expect([...normalizeHiddenColumns(value)]).toEqual(DEFAULT_HIDDEN_COLUMNS);
+    }
+  });
+
+  it("hides ETA, Connections and Pieces on a fresh install", () => {
+    expect(DEFAULT_HIDDEN_COLUMNS).toEqual(["eta", "conns", "pieces"]);
+    // The columns the table has always shown (plus Queue) stay on.
+    const visible = visibleOrder(DEFAULT_COLUMN_ORDER, new Set(DEFAULT_HIDDEN_COLUMNS));
+    expect(visible).toEqual([
+      "queue",
+      "name",
+      "added",
+      "status",
+      "size",
+      "downloaded",
+      "pct",
+      "speed",
+    ]);
+  });
+
+  it("keeps recognized keys and drops unknown ones", () => {
+    const result = normalizeHiddenColumns(["speed", "bogus"]);
+    expect(result.has("speed")).toBe(true);
+    expect(result.size).toBe(1);
+  });
+
+  it("treats an explicit empty list as 'nothing hidden', not as missing", () => {
+    expect(normalizeHiddenColumns([]).size).toBe(0);
+  });
+
+  it("refuses to hide every column, falling back to the defaults", () => {
+    expect([...normalizeHiddenColumns([...DEFAULT_COLUMN_ORDER])]).toEqual(DEFAULT_HIDDEN_COLUMNS);
+  });
+});
+
+describe("visibleOrder", () => {
+  it("drops hidden columns and keeps the rest in order", () => {
+    const order: SortKey[] = ["name", "added", "status", "size"];
+    expect(visibleOrder(order, new Set<SortKey>(["added"]))).toEqual(["name", "status", "size"]);
+  });
+
+  it("returns everything when nothing is hidden", () => {
+    expect(visibleOrder(DEFAULT_COLUMN_ORDER, new Set())).toEqual(DEFAULT_COLUMN_ORDER);
+  });
+});
+
+describe("applyVisibleOrder", () => {
+  it("folds a reordering of the visible columns back into the full order", () => {
+    const order: SortKey[] = ["name", "added", "status", "size"];
+    const hidden = new Set<SortKey>(["added"]);
+    // Visible is [name, status, size] — move the last one to the front.
+    const result = applyVisibleOrder(order, hidden, ["size", "name", "status"]);
+    expect(visibleOrder(result, hidden)).toEqual(["size", "name", "status"]);
+    expect([...result].sort()).toEqual([...order].sort());
+  });
+
+  it("keeps a hidden column anchored behind the visible column it followed", () => {
+    const order: SortKey[] = ["name", "added", "status", "size"];
+    const hidden = new Set<SortKey>(["added"]);
+    // "added" sits behind "name", so moving "name" last takes "added" along.
+    const result = applyVisibleOrder(order, hidden, ["status", "size", "name"]);
+    expect(result).toEqual(["status", "size", "name", "added"]);
+  });
+
+  it("keeps hidden columns that precede every visible one at the front", () => {
+    const order: SortKey[] = ["added", "name", "status"];
+    const hidden = new Set<SortKey>(["added"]);
+    const result = applyVisibleOrder(order, hidden, ["status", "name"]);
+    expect(result).toEqual(["added", "status", "name"]);
+  });
+
+  it("is a no-op when the visible order is unchanged", () => {
+    const order: SortKey[] = ["name", "added", "status", "size"];
+    const hidden = new Set<SortKey>(["status"]);
+    expect(applyVisibleOrder(order, hidden, visibleOrder(order, hidden))).toEqual(order);
   });
 });
 
@@ -139,5 +232,19 @@ describe("moveColumn", () => {
     const order: SortKey[] = ["name", "added", "status", "size"];
     expect(moveColumn(order, -1, 2)).toBe(order);
     expect(moveColumn(order, 0, 99)).toBe(order);
+  });
+});
+
+describe("normalizeRowDensity", () => {
+  it("accepts comfortable", () => {
+    expect(normalizeRowDensity("comfortable")).toBe("comfortable");
+  });
+
+  it("falls back to compact for anything else", () => {
+    expect(normalizeRowDensity("compact")).toBe("compact");
+    expect(normalizeRowDensity("x")).toBe("compact");
+    expect(normalizeRowDensity(null)).toBe("compact");
+    expect(normalizeRowDensity(42)).toBe("compact");
+    expect(normalizeRowDensity(undefined)).toBe("compact");
   });
 });

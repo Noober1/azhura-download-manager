@@ -2,12 +2,14 @@ import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 
 import { flushSync } from "react-dom";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getVersion } from "@tauri-apps/api/app";
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { AnimatePresence } from "motion/react";
 import { commands } from "./bindings";
-import type { DownloadItem } from "./types";
+import type { DownloadItem, HistoryEntry } from "./types";
 import { isResumable, isRedownload, looksLikeUrl } from "./format";
+import { historyPayload, mergeImportedHistory } from "./history";
+import { historyToCsv, exportFileName } from "./csvExport";
 import { showToast } from "./toast";
 import { notify } from "./notify";
 import { TERMINAL_STATES } from "./constants";
@@ -21,39 +23,64 @@ import { useUpdateCheck } from "./hooks/useUpdateCheck";
 import { useHistoryPersistence } from "./hooks/useHistoryPersistence";
 import { useSettings } from "./hooks/useSettings";
 import { useTrayPush } from "./hooks/useTrayPush";
+import { useAppLock } from "./hooks/useAppLock";
 import { useDetailWindows } from "./hooks/useDetailWindows";
 import { useDeepLinkCapture } from "./hooks/useDeepLinkCapture";
 import { useSortedRows } from "./hooks/useSortedRows";
+import { useWhatsNewAutoOpen } from "./hooks/useWhatsNewAutoOpen";
+import { useGroupedRows } from "./hooks/useGroupedRows";
 import { useColumnWidths } from "./hooks/useColumnWidths";
 import { useColumnOrder } from "./hooks/useColumnOrder";
+import { useColumnVisibility } from "./hooks/useColumnVisibility";
+import { useRowDensity } from "./hooks/useRowDensity";
 import { useInfiniteRows } from "./hooks/useInfiniteRows";
 import { useMissingRefresh } from "./hooks/useMissingRefresh";
 import { useGrabberStatus } from "./hooks/useGrabberStatus";
 import { useBackendWarnings } from "./hooks/useBackendWarnings";
+import { useTotalSpeedHistory } from "./hooks/useTotalSpeedHistory";
+import { useStats } from "./hooks/useStats";
 import { useSelection } from "./selection/useSelection";
 import { useMarquee } from "./selection/useMarquee";
 import { useTableKeyboard } from "./selection/useTableKeyboard";
+import { useQueueDrag } from "./hooks/useQueueDrag";
+import { dropBefore, queueOrder } from "./queueOrder";
 import { useAppShortcuts } from "./hooks/useAppShortcuts";
+import { useMenubar } from "./hooks/useMenubar";
+import type { Menu, MenuItem } from "./menubar";
+import { GROUP_BY_OPTIONS } from "./grouping";
+import { STATUS_FILTER_OPTIONS } from "./statusFilter";
 import { Toolbar } from "./components/Toolbar";
+import { MenuBar } from "./components/MenuBar";
 import { Sidebar } from "./components/Sidebar";
 import { DownloadTable } from "./components/DownloadTable";
 import { ContextMenu } from "./components/ContextMenu";
 import { TableContextMenu } from "./components/TableContextMenu";
+import { ColumnMenu } from "./components/ColumnMenu";
 import { SettingsDialog } from "./components/dialogs/SettingsDialog";
 import { ExtensionsDialog } from "./components/dialogs/ExtensionsDialog";
+import { AutoRulesDialog } from "./components/dialogs/AutoRulesDialog";
 import { DeleteDialog } from "./components/dialogs/DeleteDialog";
 import { SpeedCapDialog } from "./components/dialogs/SpeedCapDialog";
 import { ConnRestartDialog } from "./components/dialogs/ConnRestartDialog";
 import { PowerActionDialog, type PowerAction } from "./components/dialogs/PowerActionDialog";
 import { UpdateRestartDialog } from "./components/dialogs/UpdateRestartDialog";
 import { ShortcutsDialog } from "./components/dialogs/ShortcutsDialog";
+import { PinDialog, type PinMode } from "./components/dialogs/PinDialog";
+import { LockScreen } from "./components/LockScreen";
+import { SpeedGraph } from "./components/SpeedGraph";
+import { Dashboard } from "./components/Dashboard";
 import "./App.css";
 
 function App() {
   const [version, setVersion] = useState("");
   const [showSettings, setShowSettings] = useState(false);
   const [showExtensions, setShowExtensions] = useState(false);
-  const [menu, setMenu] = useState<{ x: number; y: number; kind: "row" | "empty" } | null>(null);
+  const [showAutoRules, setShowAutoRules] = useState(false);
+  const [menu, setMenu] = useState<{
+    x: number;
+    y: number;
+    kind: "row" | "empty" | "columns";
+  } | null>(null);
   // Read fresh each time the empty-space menu opens, rather than kept live
   // via a poller (unlike `useClipboardWatch`) — this only needs to be
   // correct at the moment the menu appears, not continuously.
@@ -72,6 +99,13 @@ function App() {
   // paused, not lost.
   const [confirmRestart, setConfirmRestart] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [pinDialog, setPinDialog] = useState<PinMode | null>(null);
+  // Session-only, not persisted — which the main area shows: the download
+  // table or the statistics dashboard (see Sidebar's "Dashboard" row).
+  // Defaults to the dashboard on every launch, since this state is never
+  // persisted and so always starts fresh here.
+  const [view, setView] = useState<"table" | "dashboard">("dashboard");
+  const showDashboard = view === "dashboard";
 
   const tableWrapRef = useRef<HTMLElement>(null);
   const didDragRef = useRef(false);
@@ -79,6 +113,10 @@ function App() {
   useNativeShell();
 
   const settings = useSettings();
+  const appLock = useAppLock();
+  // Loading (status still null) counts as covered — nothing should flash
+  // unlocked for the one render before the first `lock_status` reply lands.
+  const locked = appLock.status?.locked ?? true;
 
   // downloads/selection have a two-way dependency (adding or removing a
   // download also updates which rows are selected), resolved by having
@@ -99,15 +137,33 @@ function App() {
   const { downloads, setDownloads, downloadsRef } = downloadsApi;
 
   const sorted = useSortedRows(downloads);
-  const { rows } = sorted;
+  const grouped = useGroupedRows(sorted.rows);
+  const { rows } = grouped;
 
   const selection = useSelection(rows, didDragRef);
   const { selectedIds, setSelectedIds, anchorRef, selectRow, scrollRowIntoView } = selection;
 
   const marquee = useMarquee(didDragRef, tableWrapRef, selectedIds, setSelectedIds);
-  const columnOrder = useColumnOrder();
-  const columnWidths = useColumnWidths(columnOrder.order);
-  const infiniteRows = useInfiniteRows(rows, tableWrapRef, sorted.viewKey);
+  const queueDrag = useQueueDrag(tableWrapRef, sorted.queuePos, (id, before) =>
+    downloadsApi.reorderQueue(
+      dropBefore(queueOrder(downloadsRef.current).map((d) => d.id), id, before),
+    ),
+  );
+  // Drag only makes sense when the visible order IS the scheduler's queue
+  // order — sorted by Queue ascending, with no grouping splitting the rows
+  // into buckets that no longer reflect start order.
+  const canDragQueue = sorted.sort?.key === "queue" && sorted.sort.dir === "asc" && grouped.groupBy === "none";
+  const columnVisibility = useColumnVisibility();
+  const columnOrder = useColumnOrder(columnVisibility.hidden);
+  const rowDensity = useRowDensity();
+  // The visible order, not the full one — everything downstream measures or
+  // renders real `<th>`/`<td>` elements, and a hidden column has neither.
+  const columnWidths = useColumnWidths(columnOrder.visible);
+  // `grouped.groupBy` (not `collapsed`) rides along in the view key: changing
+  // *what* the rows are grouped into reshuffles the list and must reset the
+  // render window, but collapsing a group only shortens it — resetting the
+  // scroll position on every collapse would be hostile.
+  const infiniteRows = useInfiniteRows(rows, tableWrapRef, sorted.viewKey + grouped.groupBy);
 
   // Deterministic version of `scrollRowIntoView` for keyboard navigation
   // (Home/End/Ctrl+A/arrows in `useTableKeyboard`): if the target row is
@@ -143,13 +199,8 @@ function App() {
   useScheduler(downloads, settings.maxConcurrent, downloadsApi.startRun, queue.held);
   useHistoryPersistence(downloads, setDownloads, downloadsRef, settings.historyRetentionDays);
   useClipboardWatch(settings.clipboardWatch, downloadsRef);
-  const updater = useUpdateCheck(() => setConfirmRestart(true), {
-    autoInstall: settings.autoInstallUpdates,
-    inFlight: downloads.filter((d) =>
-      ["downloading", "verifying", "queued"].includes(d.state),
-    ).length,
-  });
-  useTrayPush(downloadsRef);
+  const updater = useUpdateCheck(() => setConfirmRestart(true));
+  useTrayPush(downloadsRef, locked);
   useDeepLinkCapture(downloadsRef, downloadsApi.addFromPayload, downloadsApi.patchItem);
   const { refresh: refreshMissing } = useMissingRefresh(downloadsRef, downloadsApi.patchItem);
   const grabber = useGrabberStatus();
@@ -182,6 +233,8 @@ function App() {
       .then(setVersion)
       .catch(() => {});
   }, []);
+
+  useWhatsNewAutoOpen(version, locked);
 
   // Fires the armed post-queue action once the queue drains.
   //
@@ -245,6 +298,13 @@ function App() {
       .catch(() => setClipboardUrl(null));
   }
 
+  // Right-click on the column headers — the only entry point to show/hide
+  // columns, so the header row must never be able to become empty (see
+  // `useColumnVisibility`).
+  function handleHeaderContext(e: ReactMouseEvent) {
+    setMenu({ x: e.clientX, y: e.clientY, kind: "columns" });
+  }
+
   // Completed + still on disk → reveal its folder; otherwise there's nothing
   // to reveal yet (or the row needs attention), so fall back to the detail
   // popup — the row's only other way in besides Enter/"Show detail".
@@ -275,21 +335,84 @@ function App() {
     );
   }
 
+  // File > Open Downloads Folder. `openPath` (not `revealItemInDir`, used
+  // everywhere else in this file) opens the folder's *contents* — the right
+  // behavior for a folder itself, where `revealItemInDir` would instead
+  // select `AzhuraDownloadManager` inside its parent Downloads window.
+  function openDownloadsFolder() {
+    commands
+      .defaultDownloadDir()
+      .then((dir) => openPath(dir))
+      .catch(() => showToast("Couldn't open the downloads folder."));
+  }
+
+  function exportHistoryCsv() {
+    commands
+      .exportHistoryCsv(historyToCsv(historyRows), exportFileName("history", "csv"))
+      .then((p) => {
+        if (p) showToast(`Exported ${historyRows.length} entries to ${p}`, "info");
+      })
+      .catch((e) => showToast(`Export failed: ${e}`));
+  }
+
+  function exportBackup() {
+    commands
+      .exportBackup(historyPayload(downloadsRef.current), exportFileName("backup", "json"))
+      .then((p) => {
+        if (p) showToast(`Backup saved to ${p}`, "info");
+      })
+      .catch((e) => showToast(`Backup failed: ${e}`));
+  }
+
+  async function importBackup() {
+    try {
+      const data = await commands.importBackup();
+      if (!data) return;
+      await commands.applyImportedPrefs(data.prefs);
+      settings.applyImportedSettings(data.settings);
+      // Read the latest list from the ref (not `downloads` state, which may
+      // be stale by the time the dialogs above resolve) and commit the merge
+      // synchronously, so nothing else can land between the read and the set.
+      const { next, added } = mergeImportedHistory(
+        downloadsRef.current,
+        data.history as unknown as HistoryEntry[],
+      );
+      setDownloads(next);
+      showToast(`Backup imported · ${added} history entries added`, "info");
+    } catch (e) {
+      showToast(`Import failed: ${e}`);
+    }
+  }
+
   const anyDialogOpen = !!(
     downloadsApi.pendingDelete ||
     showSettings ||
     showExtensions ||
+    showAutoRules ||
     showShortcuts ||
+    pinDialog ||
     menu ||
     speedCapDialog ||
     pendingPower ||
     confirmRestart ||
-    downloadsApi.connRestart
+    downloadsApi.connRestart ||
+    locked
   );
+
+  const menubar = useMenubar(anyDialogOpen);
+
+  // The menu bar owns the keyboard while it's up — otherwise Space would
+  // pause downloads and the arrow keys would move the table's selection
+  // underneath it. Deliberately NOT folded into `anyDialogOpen` itself
+  // (which `useMenubar` reads above to decide whether Alt may act at all):
+  // a second Alt tap has to stay able to close the bar even while it's open.
+  const shortcutsSuppressed = anyDialogOpen || menubar.visible;
 
   const totalSpeed = downloads
     .filter((d) => d.state === "downloading")
     .reduce((s, d) => s + d.speed, 0);
+  const totalSpeedHistory = useTotalSpeedHistory(totalSpeed);
+  const stats = useStats(downloads, totalSpeed);
   const activeCount = downloads.filter(
     (d) => d.state === "downloading" || d.state === "verifying",
   ).length;
@@ -331,7 +454,10 @@ function App() {
     rows,
     selectedItems,
     singleSelected,
-    anyDialogOpen,
+    // Stops arrow keys/Ctrl+A from acting on rows hidden behind the
+    // dashboard. `useAppShortcuts` below stays unchanged, so Ctrl+N/Ctrl+B
+    // and the rest keep working while the dashboard is up.
+    anyDialogOpen: shortcutsSuppressed || showDashboard,
     setSelectedIds,
     anchorRef,
     requestDelete: downloadsApi.requestDelete,
@@ -340,7 +466,7 @@ function App() {
   });
 
   useAppShortcuts({
-    anyDialogOpen,
+    anyDialogOpen: shortcutsSuppressed,
     onToggleSidebar: () => settings.setSidebarCollapsedSetting(!settings.sidebarCollapsed),
     onAddDownload: () => commands.openAddWindow(),
     onShowSettings: () => setShowSettings(true),
@@ -354,7 +480,222 @@ function App() {
     onCopyLink: copyLinks,
     singleSelected,
     openDetail,
+    lockEnabled: appLock.status?.enabled ?? false,
+    onLockNow: appLock.lockNow,
   });
+
+  // Toggles the main area between the table and the dashboard. Clearing the
+  // selection when entering the dashboard means Space/Delete/Ctrl+C
+  // (useAppShortcuts) can't act on rows the user can no longer see.
+  function toggleDashboard() {
+    if (!showDashboard) setSelectedIds(new Set());
+    setView(showDashboard ? "table" : "dashboard");
+  }
+
+  // Rebuilt fresh each time `MenuBar` mounts (it's only in the tree while
+  // `menubar.visible`) — a ~30-entry array is cheap, and memoizing it would
+  // need a dependency list covering half this component for no measurable
+  // gain. Every handler here already exists elsewhere in this file/hook
+  // tree except `openDownloadsFolder` and `commands.exitApp`, both new.
+  function buildMenus(): Menu[] {
+    return [
+      {
+        label: "File",
+        mnemonic: "F",
+        items: [
+          { kind: "item", label: "Add Download…", shortcut: "Ctrl+N", onSelect: () => commands.openAddWindow() },
+          { kind: "item", label: "Open Downloads Folder", onSelect: () => openDownloadsFolder() },
+          {
+            kind: "item",
+            label: "Lock Now",
+            shortcut: "Ctrl+L",
+            disabled: !appLock.status?.enabled,
+            onSelect: () => appLock.lockNow(),
+          },
+          { kind: "separator" },
+          { kind: "item", label: "Exit", onSelect: () => commands.exitApp() },
+        ],
+      },
+      {
+        label: "Downloads",
+        mnemonic: "D",
+        items: [
+          {
+            kind: "item",
+            label: resumeLabel,
+            shortcut: "Space",
+            disabled: resumableSel.length === 0,
+            onSelect: () => resumeWithOverride(resumableSel),
+          },
+          {
+            kind: "item",
+            label: "Pause",
+            shortcut: "Space",
+            disabled: pausableSel.length === 0,
+            onSelect: () => downloadsApi.pauseMany(pausableSel),
+          },
+          {
+            kind: "item",
+            label: "Cancel",
+            disabled: cancelableSel.length === 0,
+            onSelect: () => downloadsApi.cancelMany(cancelableSel),
+          },
+          {
+            kind: "item",
+            label: "Delete…",
+            shortcut: "Delete",
+            disabled: deletableSel.length === 0,
+            onSelect: () => downloadsApi.requestDelete(deletableSel),
+          },
+          {
+            kind: "item",
+            label: "Copy Link",
+            shortcut: "Ctrl+C",
+            disabled: selectedItems.length === 0,
+            onSelect: () => copyLinks(selectedItems),
+          },
+          { kind: "separator" },
+          {
+            kind: "item",
+            label: "Select All",
+            shortcut: "Ctrl+A",
+            disabled: rows.length === 0,
+            onSelect: () => setSelectedIds(new Set(rows.map((d) => d.id))),
+          },
+          { kind: "item", label: "Refresh", shortcut: "F5", onSelect: () => refreshMissing() },
+          { kind: "separator" },
+          {
+            kind: "item",
+            label: "Clear History…",
+            disabled: clearableRows.length === 0,
+            onSelect: () => downloadsApi.requestDelete(clearableRows),
+          },
+        ],
+      },
+      {
+        label: "View",
+        mnemonic: "V",
+        items: [
+          {
+            kind: "item",
+            label: "Toggle Sidebar",
+            shortcut: "Ctrl+B",
+            onSelect: () => settings.setSidebarCollapsedSetting(!settings.sidebarCollapsed),
+          },
+          {
+            kind: "item",
+            label: "Dashboard",
+            checked: showDashboard,
+            onSelect: toggleDashboard,
+          },
+          {
+            kind: "item",
+            label: "Show/Hide Columns…",
+            // `rect` is the activated item's own box, so the reused
+            // `ColumnMenu` opens flush under it, exactly like a submenu
+            // would — see `MenuBar.tsx`'s `activate`.
+            onSelect: (rect) => setMenu({ x: rect?.left ?? 0, y: rect?.bottom ?? 0, kind: "columns" }),
+          },
+          { kind: "separator" },
+          {
+            kind: "submenu",
+            label: "Group Rows",
+            // Same options the toolbar's "Group rows" `FilterMenuButton`
+            // offers — mapped from the same `GROUP_BY_OPTIONS` list so the
+            // two entry points can't drift.
+            items: GROUP_BY_OPTIONS.map(
+              (o): MenuItem => ({
+                kind: "item",
+                label: o.label,
+                checked: grouped.groupBy === o.value,
+                onSelect: () => grouped.setGroupBy(o.value),
+              }),
+            ),
+          },
+          {
+            kind: "submenu",
+            label: "Filter by Status",
+            // Same options the toolbar's "Filter by status" `FilterMenuButton`
+            // offers — mapped from `STATUS_FILTER_OPTIONS` for the same reason.
+            items: STATUS_FILTER_OPTIONS.map(
+              (o): MenuItem => ({
+                kind: "item",
+                label: o.label,
+                checked: sorted.statusFilter === o.value,
+                onSelect: () => sorted.setStatusFilter(o.value),
+              }),
+            ),
+          },
+          {
+            kind: "submenu",
+            label: "Theme",
+            items: [
+              {
+                kind: "item",
+                label: "System",
+                checked: settings.theme === "system",
+                onSelect: () => settings.setThemeSetting("system"),
+              },
+              {
+                kind: "item",
+                label: "Light",
+                checked: settings.theme === "light",
+                onSelect: () => settings.setThemeSetting("light"),
+              },
+              {
+                kind: "item",
+                label: "Dark",
+                checked: settings.theme === "dark",
+                onSelect: () => settings.setThemeSetting("dark"),
+              },
+            ],
+          },
+        ],
+      },
+      {
+        label: "Tools",
+        mnemonic: "T",
+        items: [
+          { kind: "item", label: "Settings…", shortcut: "Ctrl+,", onSelect: () => setShowSettings(true) },
+          {
+            kind: "item",
+            label: "Extensions…",
+            shortcut: "Ctrl+Shift+X",
+            onSelect: () => setShowExtensions(true),
+          },
+          { kind: "item", label: "Auto Rules…", onSelect: () => setShowAutoRules(true) },
+          {
+            kind: "item",
+            label: "Check for Updates",
+            disabled: updater.state.stage === "checking",
+            onSelect: () => updater.checkNow(),
+          },
+        ],
+      },
+      {
+        label: "Help",
+        mnemonic: "H",
+        items: [
+          {
+            kind: "item",
+            label: "Keyboard Shortcuts",
+            shortcut: "Ctrl+/",
+            onSelect: () => setShowShortcuts(true),
+          },
+          {
+            kind: "item",
+            label: "What's New",
+            onSelect: () => commands.openWhatsNewWindow(),
+          },
+          {
+            kind: "item",
+            label: "About Azhura Download Manager",
+            onSelect: () => commands.openAboutWindow(),
+          },
+        ],
+      },
+    ];
+  }
 
   return (
     <div className="app">
@@ -370,8 +711,23 @@ function App() {
         totalSpeed={totalSpeed}
         activeCount={activeCount}
         queuedCount={queuedCount}
+        groupBy={grouped.groupBy}
+        // These controls act on the table, so using any of them brings it
+        // back into view if the dashboard is currently showing.
+        onGroupByChange={(v) => {
+          setView("table");
+          grouped.setGroupBy(v);
+        }}
+        statusFilter={sorted.statusFilter}
+        onStatusFilterChange={(v) => {
+          setView("table");
+          sorted.setStatusFilter(v);
+        }}
         searchQuery={sorted.searchQuery}
-        onSearchChange={sorted.setSearchQuery}
+        onSearchChange={(v) => {
+          setView("table");
+          sorted.setSearchQuery(v);
+        }}
         onResume={resumeWithOverride}
         onPause={downloadsApi.pauseMany}
         onCancel={downloadsApi.cancelMany}
@@ -383,16 +739,25 @@ function App() {
         onToggleSidebar={() => settings.setSidebarCollapsedSetting(!settings.sidebarCollapsed)}
       />
 
+      {/* ---- Menu bar: hidden until an Alt tap reveals it ---- */}
+      {menubar.visible && <MenuBar menus={buildMenus()} onDismiss={menubar.hide} />}
+
       {/* ---- Body: sidebar + table ---- */}
       <div className="body">
         <Sidebar
           category={sorted.category}
-          setCategory={sorted.setCategory}
+          setCategory={(c) => {
+            setView("table");
+            sorted.setCategory(c);
+          }}
           totalCount={downloads.length}
           activeCount={sorted.activeItems.length}
           finishedCount={sorted.finishedItems.length}
           categoryCounts={sorted.categoryCounts}
+          activeCategoryCounts={sorted.activeCategoryCounts}
           collapsed={settings.sidebarCollapsed}
+          dashboardActive={showDashboard}
+          onToggleDashboard={toggleDashboard}
         />
 
         <DownloadTable
@@ -400,6 +765,7 @@ function App() {
           onTableMouseDown={marquee.handleTableMouseDown}
           onTableClick={marquee.handleTableClick}
           onTableContextMenu={handleEmptyContext}
+          onHeaderContextMenu={handleHeaderContext}
           sort={sorted.sort}
           onSort={sorted.toggleSort}
           rows={infiniteRows.visibleRows}
@@ -408,7 +774,7 @@ function App() {
           onRowContext={handleRowContext}
           onRowDoubleClick={handleRowDoubleClick}
           marquee={marquee.marquee}
-          order={columnOrder.order}
+          order={columnOrder.visible}
           widths={columnWidths.widths}
           onResizeStart={columnWidths.startResize}
           onAutoFit={columnWidths.autoFit}
@@ -418,7 +784,25 @@ function App() {
           offsetX={columnOrder.offsetX}
           onReorderStart={columnOrder.startReorder}
           sentinelRef={infiniteRows.sentinelRef}
+          heldUntil={queue.held ? settings.scheduledStartTime : null}
+          density={rowDensity.density}
+          headersBefore={grouped.headersBefore}
+          trailingGroups={
+            infiniteRows.visibleRows.length >= rows.length ? grouped.trailingGroups : []
+          }
+          onToggleGroup={grouped.toggleGroup}
+          queue={{
+            positions: sorted.queuePos,
+            canDrag: canDragQueue,
+            dragId: queueDrag.dragId,
+            dropBefore: queueDrag.dropBefore,
+            onGripMouseDown: queueDrag.startDrag,
+          }}
+          hidden={showDashboard}
         />
+        {showDashboard && (
+          <Dashboard days={stats.days} activeNow={sorted.activeItems.length} onReset={stats.reset} />
+        )}
       </div>
 
       {/* ---- Status bar ---- */}
@@ -431,6 +815,7 @@ function App() {
         >
           Azhura Download Manager{version ? ` v${version}` : ""}
         </button>
+        <SpeedGraph samples={totalSpeedHistory} total={totalSpeed} />
         {updater.state.stage === "ready" && (
           <button
             className="sb-update"
@@ -451,16 +836,10 @@ function App() {
             Queue starts at {settings.scheduledStartTime}
           </span>
         )}
-        <select
-          className="sb-postqueue"
-          aria-label="Action when the queue finishes"
-          value={postQueueAction}
-          onChange={(e) => setPostQueueAction(e.currentTarget.value as "none" | PowerAction)}
-        >
-          <option value="none">When done: nothing</option>
-          <option value="sleep">When done: sleep</option>
-          <option value="shutdown">When done: shut down</option>
-        </select>
+        {/* `.sb-grabber` below carries `margin-left: auto`, which pushes it
+            (and everything after it in the DOM) to the status bar's far
+            right — so this select rides along in that same right-aligned
+            cluster instead of sitting loose among the left-aligned items. */}
         <span
           className="sb-grabber"
           data-tip={
@@ -473,6 +852,16 @@ function App() {
           <span className={`sb-dot ${grabber.running ? "on" : "off"}`} />
           {grabber.running ? `Grabber active · :${grabber.port}` : "Grabber inactive"}
         </span>
+        <select
+          className="sb-postqueue"
+          aria-label="Action when the queue finishes"
+          value={postQueueAction}
+          onChange={(e) => setPostQueueAction(e.currentTarget.value as "none" | PowerAction)}
+        >
+          <option value="none">When done: nothing</option>
+          <option value="sleep">When done: sleep</option>
+          <option value="shutdown">When done: shut down</option>
+        </select>
         {import.meta.env.DEV && (
           <span className="sb-dev" data-tip="Running a development build (tauri dev)" data-tip-side="top">
             dev
@@ -498,6 +887,12 @@ function App() {
             historyMaxEntries={settings.historyMaxEntries}
             historyRetentionDays={settings.historyRetentionDays}
             historyCount={historyRows.length}
+            globalHotkey={settings.globalHotkey}
+            autoRulesActive={settings.autoRules.filter((r) => r.enabled).length}
+            onOpenAutoRules={() => {
+              setShowSettings(false);
+              setShowAutoRules(true);
+            }}
             onSetMaxActive={settings.setMaxActive}
             onSetGlobalLimit={settings.setGlobalLimit}
             onSetMaxRetryAttempts={settings.setMaxRetryAttemptsSetting}
@@ -511,11 +906,20 @@ function App() {
             onSetScheduledStartTime={settings.setScheduledStartTimeSetting}
             onSetHistoryMaxEntries={settings.setHistoryMaxEntriesSetting}
             onSetHistoryRetentionDays={settings.setHistoryRetentionDaysSetting}
+            onSetGlobalHotkey={settings.setGlobalHotkeySetting}
+            onExportCsv={exportHistoryCsv}
             onClearHistory={() => {
               // Reuses the normal delete flow rather than a parallel one, so
               // the user still gets the "also delete the files" choice.
               setShowSettings(false);
               downloadsApi.requestDelete(historyRows);
+            }}
+            onExportBackup={exportBackup}
+            onImportBackup={importBackup}
+            lockEnabled={appLock.status?.enabled ?? false}
+            onPinAction={(mode) => {
+              setShowSettings(false);
+              setPinDialog(mode);
             }}
             updateChecking={updater.state.stage === "checking"}
             autoInstallUpdates={settings.autoInstallUpdates}
@@ -548,6 +952,17 @@ function App() {
         {showExtensions && <ExtensionsDialog onClose={() => setShowExtensions(false)} />}
       </AnimatePresence>
 
+      {/* ---- Auto rules dialog ---- */}
+      <AnimatePresence>
+        {showAutoRules && (
+          <AutoRulesDialog
+            rules={settings.autoRules}
+            onSave={settings.setAutoRulesSetting}
+            onClose={() => setShowAutoRules(false)}
+          />
+        )}
+      </AnimatePresence>
+
       {/* ---- Keyboard shortcuts cheat sheet ---- */}
       <AnimatePresence>
         {showShortcuts && <ShortcutsDialog onClose={() => setShowShortcuts(false)} />}
@@ -570,6 +985,13 @@ function App() {
             canModify={selectedItems.length > 0}
             currentSpeedLimit={singleSelected?.speedLimit ?? null}
             currentConnections={singleSelected?.connections ?? null}
+            canMoveInQueue={selectedItems.some((d) => d.state === "queued")}
+            onMoveInQueue={(where) =>
+              downloadsApi.moveInQueue(
+                new Set(selectedItems.filter((d) => d.state === "queued").map((d) => d.id)),
+                where,
+              )
+            }
             onResume={() => resumeWithOverride(resumableSel)}
             onPause={() => downloadsApi.pauseMany(pausableSel)}
             onCancel={() => downloadsApi.cancelMany(cancelableSel)}
@@ -602,12 +1024,29 @@ function App() {
             x={menu.x}
             y={menu.y}
             clipboardUrl={clipboardUrl}
-            selectableCount={sorted.rows.length}
+            selectableCount={rows.length}
             clearableCount={clearableRows.length}
-            onSelectAll={() => setSelectedIds(new Set(sorted.rows.map((d) => d.id)))}
+            onSelectAll={() => setSelectedIds(new Set(rows.map((d) => d.id)))}
             onRefresh={refreshMissing}
             onClearHistory={() => downloadsApi.requestDelete(clearableRows)}
             onOpenSettings={() => setShowSettings(true)}
+            onClose={() => setMenu(null)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* ---- Column show/hide menu (right-click the header row) ---- */}
+      <AnimatePresence>
+        {menu?.kind === "columns" && (
+          <ColumnMenu
+            x={menu.x}
+            y={menu.y}
+            order={columnOrder.order}
+            hidden={columnVisibility.hidden}
+            onToggle={columnVisibility.toggle}
+            onShowAll={columnVisibility.showAll}
+            density={rowDensity.density}
+            onDensity={rowDensity.setDensity}
             onClose={() => setMenu(null)}
           />
         )}
@@ -651,6 +1090,34 @@ function App() {
           />
         )}
       </AnimatePresence>
+
+      {/* ---- Set/Change/Remove PIN dialog ---- */}
+      <AnimatePresence>
+        {pinDialog && (
+          <PinDialog
+            mode={pinDialog}
+            onClose={() => {
+              setPinDialog(null);
+              setShowSettings(true);
+            }}
+            onDone={(msg) => {
+              showToast(msg, "info");
+              appLock.refresh();
+              setPinDialog(null);
+              setShowSettings(true);
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* ---- PIN lock screen — overlays everything above while locked ---- */}
+      {appLock.status === null ? (
+        <LockScreen loading />
+      ) : (
+        appLock.status.locked && (
+          <LockScreen onUnlock={appLock.unlock} initialRetrySecs={appLock.status.retryAfterSecs} />
+        )
+      )}
 
       {/* ---- Post-queue sleep/shutdown countdown ---- */}
       <AnimatePresence>

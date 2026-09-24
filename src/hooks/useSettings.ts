@@ -4,6 +4,8 @@ import type { AppSettings, Theme } from "../types";
 import { broadcastTheme, normalizeTheme, useTheme } from "../theme";
 import { broadcastReducedMotion } from "../reducedMotion";
 import { initNotifications, setNotificationsEnabled } from "../notify";
+import { showToast } from "../toast";
+import { normalizeAutoRule, type AutoRule } from "../autoRules";
 
 const SIDEBAR_COLLAPSED_KEY = "adm-sidebar-collapsed";
 
@@ -42,44 +44,57 @@ export function useSettings() {
   const [historyRetentionDays, setHistoryRetentionDays] = useState(0);
   const [autoInstallUpdates, setAutoInstallUpdates] = useState(true);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsedMirror);
+  const [globalHotkey, setGlobalHotkey] = useState("");
+  const [autoRules, setAutoRules] = useState<AutoRule[]>([]);
 
   useTheme();
+
+  // Applies a full settings snapshot (initial load, or an imported backup)
+  // to every piece of local state that mirrors it — everything the load
+  // effect below used to do inline. Split out so `applyImportedSettings`
+  // can reuse it instead of duplicating the field list.
+  function applySnapshot(s: AppSettings) {
+    // The generated binding types every field optional (it doubles as
+    // save_settings's input type, where a partial settings.json on disk
+    // falls back to `#[serde(default)]`) — load_settings itself always
+    // returns the struct fully populated, so these fallbacks are never
+    // actually exercised; they just match AppSettings::default() in Rust.
+    const globalLimitMbps = s.globalLimitMbps ?? 0;
+    const notifications = s.notifications ?? true;
+    const sidebarCollapsed = s.sidebarCollapsed ?? false;
+    setMaxConcurrent(s.maxConcurrent ?? 3);
+    setGlobalLimitMbps(globalLimitMbps);
+    setMaxRetryAttempts(s.maxRetryAttempts ?? 3);
+    setMinimizeToTray(s.minimizeToTray ?? false);
+    setTheme(normalizeTheme(s.theme));
+    setNotifications(notifications);
+    setNotificationsEnabled(notifications);
+    setReduceMotion(s.reduceMotion ?? false);
+    setClipboardWatch(s.clipboardWatch ?? false);
+    setScheduledStartEnabled(s.scheduledStartEnabled ?? false);
+    setScheduledStartTime(s.scheduledStartTime ?? "02:00");
+    setHistoryMaxEntries(s.historyMaxEntries ?? 500);
+    setHistoryRetentionDays(s.historyRetentionDays ?? 0);
+    setAutoInstallUpdates(s.autoInstallUpdates ?? true);
+    setSidebarCollapsed(sidebarCollapsed);
+    setGlobalHotkey(s.globalHotkey ?? "");
+    setAutoRules((s.autoRules ?? []).map(normalizeAutoRule));
+    try {
+      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, sidebarCollapsed ? "1" : "0");
+    } catch {
+      /* the setting still persists via settings.json either way */
+    }
+    if (globalLimitMbps > 0) {
+      commands.setGlobalSpeedLimit({
+        bytesPerSec: Math.round(globalLimitMbps * 1024 * 1024),
+      });
+    }
+  }
 
   // Restore persisted settings (scheduler knobs + tray behavior) from a
   // previous session; they otherwise reset to defaults every launch.
   useEffect(() => {
-    commands
-      .loadSettings()
-      .then((s) => {
-        // The generated binding types every field optional (it doubles as
-        // save_settings's input type, where a partial settings.json on disk
-        // falls back to `#[serde(default)]`) — load_settings itself always
-        // returns the struct fully populated, so these fallbacks are never
-        // actually exercised; they just match AppSettings::default() in Rust.
-        const globalLimitMbps = s.globalLimitMbps ?? 0;
-        const notifications = s.notifications ?? true;
-        setMaxConcurrent(s.maxConcurrent ?? 3);
-        setGlobalLimitMbps(globalLimitMbps);
-        setMaxRetryAttempts(s.maxRetryAttempts ?? 3);
-        setMinimizeToTray(s.minimizeToTray ?? false);
-        setTheme(normalizeTheme(s.theme));
-        setNotifications(notifications);
-        setNotificationsEnabled(notifications);
-        setReduceMotion(s.reduceMotion ?? false);
-        setClipboardWatch(s.clipboardWatch ?? false);
-        setScheduledStartEnabled(s.scheduledStartEnabled ?? false);
-        setScheduledStartTime(s.scheduledStartTime ?? "02:00");
-        setHistoryMaxEntries(s.historyMaxEntries ?? 500);
-        setHistoryRetentionDays(s.historyRetentionDays ?? 0);
-        setAutoInstallUpdates(s.autoInstallUpdates ?? true);
-        setSidebarCollapsed(s.sidebarCollapsed ?? false);
-        if (globalLimitMbps > 0) {
-          commands.setGlobalSpeedLimit({
-            bytesPerSec: Math.round(globalLimitMbps * 1024 * 1024),
-          });
-        }
-      })
-      .catch(() => {});
+    commands.loadSettings().then(applySnapshot).catch(() => {});
   }, []);
 
   // Asked for once per launch. A denial silently disables toasts rather than
@@ -121,6 +136,8 @@ export function useSettings() {
       historyRetentionDays,
       autoInstallUpdates,
       sidebarCollapsed,
+      globalHotkey,
+      autoRules,
       ...overrides,
     } as AppSettings);
   }
@@ -229,6 +246,51 @@ export function useSettings() {
     commands.setRunAtStartup(v).catch(() => setRunAtStartup(!v));
   }
 
+  function setAutoRulesSetting(v: AutoRule[]) {
+    setAutoRules(v);
+    persistSettings({ autoRules: v });
+  }
+
+  /** Registers first; only a shortcut the OS accepted gets saved. */
+  function setGlobalHotkeySetting(v: string) {
+    commands
+      .setGlobalHotkey(v)
+      .then(() => {
+        setGlobalHotkey(v);
+        persistSettings({ globalHotkey: v });
+      })
+      .catch((e) => showToast(String(e)));
+  }
+
+  /** Applies a backup's settings (already sanitized in Rust) and persists them. */
+  function applyImportedSettings(s: AppSettings) {
+    applySnapshot(s);
+    // `applySnapshot` only updates the React state that mirrors settings.json
+    // (matching what the initial-load effect above does — the actual paint
+    // is handled separately there by `useTheme()`/`useReducedMotionSetting()`
+    // reloading on mount). An import happens *after* mount, so nothing else
+    // is going to pick this up — broadcast explicitly, the same as
+    // `setThemeSetting`/`setReduceMotionSetting` do for a manual change.
+    broadcastTheme(normalizeTheme(s.theme));
+    broadcastReducedMotion(s.reduceMotion ?? false);
+    // Same reasoning, unconditionally this time: `applySnapshot` only calls
+    // this when the imported limit is > 0 (the initial-load path relies on
+    // the backend's own limiter already starting at 0/unlimited, so skipping
+    // the call there is a no-op) — but on import the *live* limiter may
+    // already be non-zero from earlier this session, and a backup that says
+    // "unlimited" needs to actually clear it, not just update the display.
+    commands.setGlobalSpeedLimit({
+      bytesPerSec: Math.round((s.globalLimitMbps ?? 0) * 1024 * 1024),
+    });
+    commands.saveSettings(s).catch(() => {});
+    const hk = s.globalHotkey ?? "";
+    commands.setGlobalHotkey(hk).catch((e) => {
+      setGlobalHotkey("");
+      commands.saveSettings({ ...s, globalHotkey: "" }).catch(() => {});
+      showToast(`Imported shortcut ${hk} couldn't be registered: ${e}`);
+    });
+  }
+
   return {
     maxConcurrent,
     globalLimitMbps,
@@ -245,6 +307,8 @@ export function useSettings() {
     historyRetentionDays,
     autoInstallUpdates,
     sidebarCollapsed,
+    globalHotkey,
+    autoRules,
     setMaxActive,
     setGlobalLimit,
     setMaxRetryAttemptsSetting,
@@ -260,5 +324,8 @@ export function useSettings() {
     setHistoryRetentionDaysSetting,
     setAutoInstallUpdatesSetting,
     setSidebarCollapsedSetting,
+    setGlobalHotkeySetting,
+    setAutoRulesSetting,
+    applyImportedSettings,
   };
 }

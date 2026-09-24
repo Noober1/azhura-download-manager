@@ -1,7 +1,7 @@
-# Checklist Manual Testing — Phase 1 · 2 · 3 · 4 · 5
+# Checklist Manual Testing — Phase 1 · 2 · 3 · 4 · 5 · 6
 
 Jalankan `bun run tauri dev`, lalu centang satu per satu. Checklist ini menutup
-semua fitur yang sudah selesai di TODO.md (`## Done (Phase 1/2/3/4/5)`).
+semua fitur yang sudah selesai di TODO.md (`## Done (Phase 1/2/3/4/5/6)`).
 
 Simpan file ini — ini daftar regresi yang dipakai ulang tiap perubahan besar,
 bukan checklist sekali buang.
@@ -29,6 +29,14 @@ bukan checklist sekali buang.
   keyboard, animasi ikon — baru di v0.2.4). Lolos build + test otomatis, dan
   delay tooltip 500ms sudah dikonfirmasi manual sekilas, tapi checklist
   lengkapnya di §19 belum dijalankan satu per satu.
+- 🆕 **Belum diuji manual sama sekali:** §20 (header sticky, show/hide kolom,
+  kolom ETA/Connections/Pieces — Phase 6). Lolos `tsc` + `vitest` (124 test),
+  tapi belum ada satu pun langkah §20 yang dijalankan di app beneran.
+- 🆕 **Belum diuji manual sama sekali:** §21 (filter status, cek disk space,
+  export CSV, backup/restore, global hotkey — Batch 2). Lolos `tsc --noEmit`,
+  `vitest` (157 test), `cargo check --all-targets`, dan `cargo test --lib`
+  (135 test), tapi belum ada satu pun langkah §21 yang dijalankan di app
+  beneran.
 
 Kalau waktunya terbatas, kerjakan **§0 Prasyarat** dan bagian bertanda ⚠️ dulu —
 itu yang paling mungkin menyembunyikan bug yang mahal.
@@ -471,3 +479,488 @@ dicek sekilas selama development.
 - [ ] Settings → **Reduce motion** ON → semua animasi ikon di atas berhenti
       total (langsung ke state akhir), tapi tooltip tetap muncul/hilang
       (cuma fade, tanpa scale/slide)
+
+---
+
+## 20. Header sticky + show/hide kolom + kolom baru (baru di Phase 6)
+
+Belum pernah diuji manual. Butuh minimal ~30 baris di tabel supaya bisa
+di-scroll, dan minimal satu unduhan besar yang lagi jalan multi-koneksi
+supaya kolom ETA/Pieces ada isinya.
+
+**Header sticky:**
+
+- [ ] Scroll tabel ke bawah sampai jauh → baris header (Name, Date Added, …)
+      **tetap menempel** di atas, tidak ketutupan baris
+- [ ] Garis pembatas 1px di bawah header **ikut menempel**, tidak ikut
+      ter-scroll ke atas
+- [ ] Sambil ter-scroll, klik header untuk sort → tetap jalan (asc → desc →
+      off), panah ▲/▼ muncul di tempat yang benar
+- [ ] Sambil ter-scroll, drag handle resize di tepi kanan header → resize
+      tetap jalan, tidak ikut ke-trigger sort
+- [ ] Sambil ter-scroll, drag header untuk reorder → ghost mengikuti kursor,
+      garis drop muncul, kolom pindah saat dilepas
+- [ ] Baris yang di-select (background accent) **tidak** menimpa header saat
+      lewat di belakangnya
+- [ ] Cek di tema terang **dan** gelap: background header solid, teks baris
+      di belakangnya tidak tembus
+
+**Show/hide kolom:**
+
+- [ ] Klik kanan di baris header → menu daftar kolom muncul (bukan menu
+      "Add Download / Paste URL" milik area kosong)
+- [ ] Klik kanan di area kosong tabel → tetap menu lama, bukan menu kolom
+- [ ] Centang/uncentang satu kolom → kolom langsung hilang/muncul, dan
+      **menu tetap terbuka** (bisa matikan beberapa kolom sekaligus)
+- [ ] ⚠️ Matikan kolom satu per satu sampai tinggal satu → entry kolom
+      terakhir jadi **abu-abu dan tidak bisa diklik** (header tidak boleh
+      sampai kosong, karena itu satu-satunya jalan balik ke menu ini)
+- [ ] "Show all columns" mengembalikan semua kolom; entry-nya abu-abu kalau
+      memang tidak ada yang disembunyikan
+- [ ] Sembunyikan satu kolom → lebar tabel menyusut (scrollbar horizontal
+      berkurang), kolom Name tetap yang melar mengisi sisa ruang
+- [ ] ⚠️ Sembunyikan kolom di tengah (mis. Status), lalu drag-reorder kolom
+      lain → kolom yang pindah mendarat di tempat yang benar, tidak meleset
+      satu kolom
+- [ ] ⚠️ Setelah reorder di atas, munculkan lagi kolom yang disembunyikan →
+      dia balik di sebelah kolom yang dulu ada di depannya, bukan di ujung
+- [ ] Double-click handle resize (auto-fit) pada kolom **setelah** ada kolom
+      yang disembunyikan → yang di-fit kolom yang benar, bukan tetangganya
+- [ ] Tutup app, buka lagi → kolom yang disembunyikan tetap tersembunyi,
+      urutan dan lebar juga tetap
+
+**Kolom ETA / Connections / Pieces:**
+
+Ketiganya **hidden by default** — nyalakan dulu lewat klik kanan header
+sebelum mengerjakan bagian ini.
+
+- [ ] Install bersih (atau hapus key `adm-column-hidden` di localStorage
+      lewat devtools) → tabel muncul dengan **tujuh kolom lama saja**; ETA,
+      Connections, dan Pieces ada di menu header tapi tidak tercentang
+- [ ] Nyalakan ketiganya lewat menu header → muncul di urutan setelah Speed
+- [ ] Saat unduhan jalan, **ETA** terisi dan menghitung turun; saat
+      pause/selesai/queued berubah jadi `—`
+- [ ] ETA di kolom tabel **sama** dengan ETA di window Details untuk baris
+      yang sama (dalam satu-dua detik, karena beda tick render)
+- [ ] Klik header **ETA** untuk sort naik → yang paling cepat selesai di
+      atas, baris yang tidak jalan (`—`) di **paling bawah**
+- [ ] **Connections** menampilkan angka koneksi maksimum baris itu; ubah
+      lewat klik kanan baris → **Connections** → angkanya ikut berubah
+- [ ] Hover cell Connections saat unduhan jalan → tooltip "N of M
+      connections in use"; saat tidak jalan tidak ada tooltip
+- [ ] **Pieces** menampilkan `X / Y` dan X naik sepanjang unduhan; unduhan
+      single-connection (server tanpa range request, atau Connections = 1)
+      menampilkan `—`
+- [ ] ⚠️ Pause unduhan multi-koneksi, tutup app, buka lagi, resume →
+      angka Pieces **lanjut** dari posisi sebelumnya, bukan mulai dari 0
+- [ ] Sort by Connections dan by Pieces jalan dua arah
+- [ ] Semua tiga kolom bisa di-resize, di-reorder, dan di-hide seperti
+      kolom lama
+
+---
+
+## 21. Filter status, cek disk space, export CSV, backup/restore, global hotkey (Batch 2, baru)
+
+Belum pernah diuji manual sama sekali.
+
+**Filter status:**
+
+- [ ] Dropdown baru di toolbar, sebelah kiri search box, isinya "All statuses"
+      + 7 status
+- [ ] Pilih "Completed" → tabel cuma nampilin baris selesai; gabung dengan
+      kategori sidebar (mis. "Video") → cuma baris Video yang selesai
+- [ ] Gabung dengan search box → ketiga filter (kategori + status + teks)
+      jalan bareng (AND)
+- [ ] Dropdown ter-highlight (border/teks warna aksen) saat bukan "All
+      statuses", normal lagi saat balik ke "All statuses"
+- [ ] Klik kanan area kosong tabel → "Clear history" tetap menghapus semua
+      riwayat category-scoped, **mengabaikan** filter status yang aktif
+
+**Cek disk space:**
+
+- [ ] Set save path ke drive/folder yang hampir penuh (atau flashdisk kecil),
+      tempel URL file yang lebih besar dari sisa ruang → di Add window,
+      setelah "Check size"/probe kelar, muncul teks merah "Not enough disk
+      space — X free" di sebelah ukuran file
+- [ ] Tetap bisa submit walau ada warning → download dimulai, lalu **gagal**
+      dengan pesan error "Not enough disk space — …"
+- [ ] Baris yang gagal karena disk space **tidak** di-auto-retry (beda dari
+      error jaringan biasa yang di-retry otomatis)
+- [ ] Ganti save path ke folder yang cukup ruang → warning merah hilang
+
+**Export CSV:**
+
+- [ ] Settings → History → "Export CSV…" → dialog save native muncul, nama
+      default `azhura-history-YYYY-MM-DD.csv`
+- [ ] Buka hasilnya di Excel/Sheets → kolom rapi (Name, Status, Size, URL,
+      Referer, Saved to, Added, Finished, Error), karakter non-ASCII di nama
+      file terbaca benar (bukan ganti jadi tanda tanya)
+- [ ] File riwayat dengan nama yang diawali `=`, `+`, `-`, atau `@` **tidak**
+      dieksekusi sebagai rumus saat dibuka di Excel
+- [ ] Tombol "Export CSV…" disabled kalau riwayat kosong
+
+**Backup export/import:**
+
+- [ ] Settings → Backup → "Export backup…" → dialog save native, nama default
+      `azhura-backup-YYYY-MM-DD.json`; buka file JSON-nya, pastikan field
+      `proxy.password` kosong meskipun proxy asli ada passwordnya
+- [ ] Ubah beberapa setting (mis. max concurrent, theme) dan hapus beberapa
+      baris riwayat, lalu "Import backup…" pakai file yang tadi diexport →
+      muncul dialog konfirmasi native menyebutkan jumlah entry riwayat yang
+      mau ditambahkan
+- [ ] Setelah konfirmasi: setting balik ke nilai waktu export, riwayat yang
+      tadi dihapus muncul lagi, **tidak ada duplikat** untuk baris yang masih
+      ada
+- [ ] Buka Add window setelah import → default Connections/Speed
+      cap/proxy host ikut isi backup; kalau proxy asli punya password lokal,
+      password itu **tetap ada** (bukan kosong, karena backup gak bawa
+      password)
+- [ ] Import file JSON yang bukan backup (mis. asal-asalan atau backup app
+      lain) → muncul toast error, tidak ada yang berubah
+- [ ] Batalkan dialog save/open di tengah jalan (klik Cancel) → tidak ada
+      efek apa pun, tidak ada toast error
+
+**Global hotkey:**
+
+- [ ] Settings → System → field "Add download shortcut" → klik → berubah
+      jadi "Press a shortcut…"; tekan Ctrl+Alt+D → field jadi "Ctrl+Alt+D"
+      dan langsung tersimpan
+- [ ] Minimize app ke tray, buka app lain, tekan Ctrl+Alt+D dari situ →
+      window "Add Download" muncul
+- [ ] Coba rekam kombinasi yang sudah dipakai app lain (mis. yang jelas
+      bentrok) → toast error muncul, field balik ke shortcut sebelumnya (yang
+      lama tetap berfungsi)
+- [ ] Fokus field lalu tekan Backspace atau Delete → shortcut jadi "Not set"
+      (off), dan hotkey lama tidak lagi merespons
+- [ ] Restart app sepenuhnya → shortcut yang tersimpan otomatis aktif lagi
+      tanpa perlu di-set ulang
+- [ ] Saat field lagi fokus/merekam, tombol Ctrl+N atau shortcut app lain
+      **tidak** ikut ter-trigger oleh tombol yang ditekan buat merekam
+
+## 22. Update pending-install senyap, grouping tabel, grafik speed gabungan (Batch 3a, baru)
+
+Belum pernah diuji manual sama sekali. Lolos `tsc --noEmit`, `vitest run` (181
+test), `cargo check --all-targets`, dan `cargo test --lib` (138 test).
+
+**Grouping tabel:**
+
+- [ ] Dropdown baru di toolbar, sebelah kiri filter status: "No grouping" /
+      "Group by category" / "Group by date"
+- [ ] Pilih "Group by category" → muncul header grup per kategori (Videos,
+      Audios, Programs, Documents, Archives, Others), cuma yang punya baris;
+      tiap header nampilin jumlah baris di dalamnya
+- [ ] Pilih "Group by date" → header grup "Today" / "Yesterday" / "Earlier
+      this week" / "Earlier this month" / "Older", sesuai tanggal ditambahkan
+- [ ] Klik header grup → grup collapse (baris hilang, chevron berputar);
+      klik lagi → expand lagi
+- [ ] Restart app → grouping mode dan grup yang di-collapse tadi tetap
+      kepilih/collapse (persisted di localStorage, bukan settings.json)
+- [ ] Collapse **semua** grup → tabel kosong secara visual tapi header-header
+      grup tetap kelihatan; pesan "No downloads yet" **tidak** muncul
+- [ ] Dengan satu grup di-collapse: Ctrl+A, panah atas/bawah, Home/End,
+      shift-click, dan drag marquee semuanya **skip** baris yang
+      disembunyikan dan **tidak pernah** mendarat di baris header grup
+- [ ] Grouping tetap jalan bareng filter kategori sidebar, filter status
+      toolbar, dan search box (kombinasi AND seperti biasa)
+- [ ] Scroll tabel yang panjang dengan grouping aktif → infinite-scroll tetap
+      nge-load per halaman; header grup collapsed di ujung baru muncul
+      setelah scroll sampai ke bawah semua
+
+**Grafik speed gabungan:**
+
+- [ ] Status bar bawah kosong (gak ada grafik) saat idle/tidak ada unduhan
+      aktif
+- [ ] Mulai unduhan → sparkline kecil + angka speed total muncul di status
+      bar, di sebelah kanan tombol "Azhura Download Manager"
+- [ ] Hover grafiknya → tooltip nampilin "Last 60s · avg … · peak …" dengan
+      angka yang masuk akal
+- [ ] Pause semua unduhan → garis grafik landai turun lalu grafik hilang lagi
+      setelah ~60 detik semua sample jadi 0
+
+**Update pending-install senyap** (bagian paling berisiko — uji pakai draft
+release beneran, atau sementara arahkan `updater.endpoints` di
+`tauri.conf.json` ke feed test):
+
+- [ ] Ada update tersedia → app download-nya diam-diam di background dan
+      **tetap kebuka** (gak nutup sendiri). Status bar nampilin "Restart to
+      update". Gak ada window installer nongol, gak ada app nutup sendiri.
+      Cek `%APPDATA%\AzhuraDownloadManager\pending-update.json` dan file
+      `-setup.exe` di sebelahnya beneran ada
+- [ ] Quit dari tray dengan toggle "Install updates when you quit" ON → app
+      nutup dan **tidak nyala lagi sendiri**; buka manual lagi → versi sudah
+      baru, dan `pending-update.json` sudah hilang
+- [ ] Quit dengan toggle OFF → gak ada yang keinstall; "Restart to update"
+      masih ada di launch berikutnya tanpa download ulang
+- [ ] Matikan proses paksa lewat Task Manager selagi ada update pending
+      (toggle ON), lalu buka app lagi → installer jalan **sebelum** window
+      manapun kelihatan, app kebuka langsung di versi baru
+- [ ] Klik "Restart to update" manual → dialog konfirmasi → app nutup dan
+      kebuka lagi di versi baru
+- [ ] Tandai feed test `"critical": true` → dialog countdown 30 detik tetap
+      muncul dan tetap maksa restart (gak kepengaruh toggle
+      "Install updates when you quit")
+- [ ] Offline saat launch → gak ada toast/error; klik "Check for updates"
+      selagi offline → toast error muncul
+
+## 23. Menubar klasik tap-Alt (Batch 3b-1, baru)
+
+Belum pernah diuji manual sama sekali. Lolos `tsc --noEmit`, `vitest run` (207 test), `cargo check
+--all-targets`, dan `cargo test --lib` (138 test).
+
+**Deteksi tap-Alt:**
+
+- [ ] Tap dan lepas Alt dengan tabel dalam keadaan fokus → menubar muncul di bawah toolbar, "File"
+      langsung fokus
+- [ ] Tap Alt lagi → menubar hilang; fokus balik ke elemen yang tadi dipegang
+- [ ] Tahan Alt lalu tekan Enter pas satu baris ke-select → window Detail kebuka dan menubar **tidak**
+      muncul (regresi klasik yang desain ini jaga)
+- [ ] Tahan Alt, tekan-lepas tombol lain, baru lepas Alt → menubar tidak muncul
+- [ ] Tahan Alt, klik di mana pun, lepas Alt → menubar tidak muncul
+- [ ] Alt+Tab keluar dan balik lagi → menubar tidak muncul pas balik
+- [ ] Tekan Alt selagi fokus di search box → tidak ada yang terjadi
+- [ ] Buka Settings, tap Alt → tidak ada yang terjadi; tutup Settings, tap Alt → menubar muncul
+- [ ] Tap Alt biar menubar muncul, lalu klik baris di tabel unduhan (atau tombol toolbar, atau search
+      box) → menubar **langsung hilang sendiri** (bukan nyangkut kebuka tapi gak bisa dipencet)
+- [ ] Ulangi di atas tapi klik ke tombol trigger menubar lain (mis. dari "File" ke "View") →
+      menubar **tetap kebuka**, cuma pindah menu
+
+**Mnemonic huruf (baru):**
+
+- [ ] Tiap judul menu (File/Downloads/View/Tools/Help) nampilin satu huruf digaris bawahi (F/D/V/T/H)
+- [ ] Selagi menubar kebuka, tekan huruf mnemonic (mis. "V") **tanpa** Alt → langsung buka dropdown
+      menu itu (View), gak perlu navigasi panah dulu
+- [ ] Ganti ke huruf mnemonic lain (mis. "T") selagi menu lain lagi kebuka → langsung pindah ke menu
+      itu (Tools), yang lama tertutup
+- [ ] Tekan huruf yang gak match mnemonic manapun → gak ada yang terjadi, dropdown yang kebuka tetap
+      di situ
+- [ ] Huruf mnemonic tetap kebaca jelas (underline-nya kontras) pas menu-nya lagi ke-highlight aktif
+      (background aksen)
+
+**Submenu View > Group Rows / Filter by Status / Theme (baru):**
+
+- [ ] Di menu View, ketiga item ini nampilin caret "▸" di kanan (bukan lagi list rata dipisah
+      separator)
+- [ ] Hover salah satu (mis. "Group Rows") → flyout-nya langsung muncul di sebelah kanan, isinya
+      pilihan yang sesuai (No grouping/Group by category/Group by date), tanda centang ada di pilihan
+      yang aktif
+- [ ] Hover ke item submenu lain (mis. "Theme") selagi flyout "Group Rows" kebuka → langsung pindah
+      ke flyout "Theme", yang lama nutup
+- [ ] Hover item BIASA (bukan submenu, mis. "Toggle Sidebar") selagi ada flyout kebuka → flyout-nya
+      nutup
+- [ ] Keyboard: navigasi ke salah satu item submenu (panah atas/bawah), tekan panah **kanan** →
+      flyout-nya kebuka, cursor pindah ke item pertama di dalamnya
+- [ ] Di dalam flyout: panah atas/bawah pindah antar pilihan, Home/End ke awal/akhir, Enter milih
+      dan **nutup seluruh menubar** (bukan cuma flyout-nya)
+- [ ] Di dalam flyout: panah **kiri** atau Esc → cuma nutup flyout-nya, balik ke menu View dengan
+      baris "Group Rows"/dst tetap ke-highlight, menubar-nya sendiri tetap kebuka
+- [ ] Klik langsung salah satu pilihan di dalam flyout (mis. "Group by category") → langsung
+      keterapkan (grouping tabel berubah) dan seluruh menubar nutup
+- [ ] Klik di luar menubar selagi flyout kebuka → semuanya nutup, gak nyangkut setengah-setengah
+- [ ] Flyout-nya kelihatan di ATAS panel View (gak ketutupan), posisinya nempel di sebelah kanan
+      baris submenu yang dibuka
+
+**Navigasi:**
+
+- [ ] Panah kiri/kanan pindah antar File…Help; panah bawah buka menu di item pertama; panah atas di
+      item terakhir; Home/End lompat ke awal/akhir; Enter jalanin item; Esc nutup dropdown, Esc kedua
+      nutup menubar-nya
+- [ ] Navigasi panah skip separator dan item yang di-grey-out di kedua arah, dan wrap di ujung-ujungnya
+- [ ] Selagi satu menu kebuka, hover ke judul menu lain langsung pindah; selagi belum ada yang kebuka,
+      hover doang tidak munculin apa-apa
+- [ ] Highlight mouse dan cursor keyboard tidak pernah dobel — selalu satu highlight yang sama
+- [ ] Selagi menubar kebuka: Space **tidak** pause download, panah **tidak** gerakin seleksi tabel,
+      Ctrl+A **tidak** select all
+
+**Item menu:**
+
+- [ ] Semua item File/Downloads/View/Tools/Help ngelakuin hal yang sama kayak tombol toolbar/shortcut
+      yang sepadan, dan menubar-nya nutup sendiri sesudahnya
+- [ ] Status grey-out ngikutin seleksi persis kayak tombol toolbar (gak ada yang di-select → Resume /
+      Pause / Cancel / Delete / Copy Link semua grey)
+- [ ] View > Theme nampilin centang di sebelah tema aktif dan ganti tema langsung keterapkan
+- [ ] View > Show/Hide Columns… buka menu kolom yang sudah ada, posisinya pas di bawah item itu
+- [ ] File > Open Downloads Folder buka `…\Downloads\AzhuraDownloadManager` di Explorer
+- [ ] File > Exit beneran nutup app (ikon tray hilang, proses gak ada lagi) dan unduhan yang lagi
+      jalan balik jadi resumable pas dibuka lagi
+- [ ] Tools > Check for Updates kelakuannya sama kayak tombol di Settings, dan grey selagi lagi ngecek
+
+**Chrome:**
+
+- [ ] Drag window lewat toolbar tetap jalan; drag lewat baris menubar **tidak** ikut mindahin window,
+      dan klik "File" gak pernah ke-anggep drag
+- [ ] Tabel ngecil persis setinggi menubar pas toggle, gak ada layout yang loncat
+- [ ] Kedua tema kelihatan pas; judul menu yang lagi kebuka ke-highlight
+
+## 24. Auto rules — URL pattern → folder otomatis (Batch 3b-2, baru)
+
+Belum pernah diuji manual sama sekali. Lolos `tsc --noEmit`, `vitest run` (219 test), `cargo check
+--all-targets`, dan `cargo test --lib` (158 test).
+
+**Editor (Tools > Auto Rules… atau Settings > Downloads > Auto rules "Manage…"):**
+
+- [ ] Kedua entry point buka dialog yang sama; baris "Auto rules" di Settings nampilin "N active"
+      sesuai jumlah rule yang enabled
+- [ ] Tambah rule baru ("Add rule") → muncul baris kosong, default Wildcard + target Folder
+- [ ] Ketik regex yang salah (mis. cuma `(`) di rule yang **enabled** → muncul pesan error di bawah
+      pattern-nya dan tombol Save ke-disable; benerin pattern-nya → error hilang, Save aktif lagi
+- [ ] Rule dengan target Folder yang kosong atau path relatif → Save tetap disabled; isi lewat
+      "Browse…" → Save aktif (asal semua rule enabled lainnya juga valid)
+- [ ] Rule yang **disabled** (checkbox off) boleh punya pattern/folder kosong atau salah tanpa
+      nge-block Save
+- [ ] Tombol ▲/▼ mindahin urutan rule; ✕ ngehapus rule (dengan konfirmasi dari card-nya sendiri,
+      gak ada dialog tambahan)
+- [ ] "Cancel" nutup dialog tanpa nyimpen perubahan apapun; buka lagi → balik ke rule yang tersimpan
+      terakhir
+- [ ] "Save" nyimpen dan nutup dialog; restart app sepenuhnya → rule-nya tetap ada
+- [ ] "Test a URL": ketik URL yang cocok salah satu rule → muncul "Matches rule N → saves to …"
+      dengan nomor dan folder yang bener; ketik URL yang gak cocok → "No match — the Add window will
+      open."
+- [ ] Ganti "Save to" dari Folder ke salah satu kategori (mis. "Videos folder") → input path+Browse
+      hilang, select kategori aja yang kelihatan
+
+**Capture warm start (app lagi jalan):**
+
+- [ ] Bikin rule wildcard `*.iso` → Folder `D:\ISO` (atau folder test lain). Klik link `.iso` di
+      browser → window Add **tidak** muncul, baris langsung queued/downloading, dan toast
+      `Auto rule "*.iso" → D:\ISO` muncul. File akhirnya ada di folder itu
+- [ ] Bikin rule wildcard host/path (mis. `*github.com/*`) → target kategori Programs → file akhirnya
+      masuk folder Programs (atau folder override kategori itu kalau ada)
+- [ ] Rule yang di-disable diabaikan sepenuhnya — link yang cocok pattern-nya tetap buka window Add
+- [ ] Dua rule yang sama-sama cocok satu URL → yang urutannya lebih atas yang menang
+- [ ] Link yang gak cocok rule manapun → window Add kebuka seperti biasa, gak ada bedanya
+- [ ] Klik link buat baris yang lagi nunggu re-capture kredensial (`awaitingCapture`) — baris itu
+      tetap ke-claim dan **tidak** kebuat duplikat, walaupun ada rule yang cocok sama URL-nya
+
+**Capture cold start (app dalam keadaan tertutup):**
+
+- [ ] Tutup app sepenuhnya (proses tray-nya juga gak ada), klik link yang cocok rule → app kebuka
+      sendiri, main window kelihatan, unduhannya langsung queued, toast muncul, dan window Add
+      **tidak pernah** kelihatan sama sekali
+- [ ] Tutup app, klik link yang gak cocok rule manapun → window Add kebuka dengan form terisi
+      seperti biasa (perilaku lama, gak berubah)
+
+**Lain-lain:**
+
+- [ ] Clipboard watch dan "Paste & download" (klik kanan tabel) tetap **selalu** buka window Add,
+      walaupun URL-nya cocok sama sebuah rule
+- [ ] Export backup lalu import lagi → rule-rule auto ikut ke-roundtrip persis
+- [ ] Edit manual `settings.json` biar salah satu rule regex-nya rusak (mis. `"pattern": "("`), lalu
+      import backup apapun → rule yang rusak itu ilang sendiri dari list (bukan bikin crash atau
+      nge-block rule lainnya)
+- [ ] Kalau "Hold the queue until a set time" (scheduled start) aktif, unduhan yang lolos auto rule
+      tetap ketahan sampai jam yang dijadwalkan — bukan langsung jalan (dia cuma `queued`, sama kayak
+      unduhan biasa)
+
+## 25. Drag-reorder antrean (Batch 4a, baru)
+
+Belum pernah diuji manual sama sekali. Frontend-only, tidak ada perubahan Rust/bindings.
+
+- [ ] Set Max concurrent download = 1 di Settings, tambah 4 download berurutan A, B, C, D → A langsung
+      jalan, sisanya masuk kolom Queue dengan posisi 1..3 berurutan B, C, D (FIFO — ditambah duluan
+      mulai duluan)
+- [ ] Klik header **Queue** (sort ascending) → grip `⋮⋮` di baris queued jadi aktif (kursor grab); drag
+      D ke atas B → urutan berubah jadi D, B, C; begitu A selesai/di-pause, **D** yang mulai jalan
+      duluan, bukan B
+- [ ] Ganti sort ke **Date Added** (atau kolom lain) → grip `⋮⋮` **hilang sepenuhnya** dari kolom
+      Queue (cuma nomor posisi yang tetap kelihatan); hover angka posisinya → tooltip "Sort by the
+      Queue column to reorder"
+- [ ] Klik-kanan, multi-select dua baris queued (mis. B, C) → menu **Queue ▸** → "Move to top" →
+      B, C pindah ke depan (urutan relatif B sebelum C tetap terjaga); ulangi untuk "Move up" / "Move
+      down" / "Move to bottom" dan cek masing-masing sesuai
+- [ ] Submenu Queue ▸ tetap berfungsi walau sort **bukan** Queue asc (beda dari drag yang butuh sort
+      Queue asc)
+- [ ] Drag dari grip **tidak** ikut mengubah seleksi baris dan **tidak** memunculkan marquee; klik biasa
+      di baris (bukan grip) tetap memilih baris seperti biasa
+- [ ] Nyalakan grouping (kategori atau tanggal) sambil sort tetap Queue asc → grip tetap hilang (drag
+      butuh grouping = none juga, bukan cuma sort Queue asc)
+- [ ] Tambah download baru setelah reorder di atas → masuk ke **ekor** antrean (posisi terakhir), bukan
+      menyisipkan di tengah urutan yang sudah diatur manual
+- [ ] Restart app dengan beberapa baris masih queued → urutan boleh balik ke default (prioritas
+      session-only, sengaja tidak dipersist — baris queued memang tidak pernah disimpan ke history)
+
+## 26. Dashboard statistik (Batch 4b, baru)
+
+Belum pernah diuji manual sama sekali. Butuh restart `bun run tauri dev` (bukan cuma reload
+frontend) karena ada dua command Rust baru (`load_stats`/`save_stats`).
+
+- [ ] Start app dari kondisi tertutup → **Dashboard tampil duluan secara default** (bukan tabel);
+      sidebar nge-highlight baris "Dashboard", bukan kategori manapun
+- [ ] Dengan history yang sudah ada isinya → tile dan bar chart nampilin total backfill dari
+      hari-hari download selesai; avg speed tile/tooltip tampil "—" untuk hari-hari backfill (gak ada
+      active time tercatat); file `%APPDATA%\AzhuraDownloadManager\stats.json` sekarang ada
+- [ ] Highlight tombol Dashboard geser dari baris kategori yang aktif sebelumnya; klik Dashboard lagi,
+      atau klik kategori manapun di sidebar → balik ke tabel dengan posisi scroll tetap sama
+- [ ] Mulai download baru sambil dashboard terbuka → bar "hari ini" dan tile "Today" naik dalam ~1
+      detik; setelah selesai, "Files completed" naik 1 dan tooltip bar hari itu nampilin avg speed
+- [ ] Tile **"Active now"** selalu sama persis dengan angka "Active" di sidebar (downloading +
+      verifying + queued + paused) — naik/turun langsung real-time pas start/pause/selesai download,
+      tanpa nunggu tick 1 detik seperti tile lain
+- [ ] Bikin satu download gagal (error) dan satu lagi di-cancel → tile **"Errors"** dan **"Canceled"**
+      masing-masing naik 1; retry otomatis yang akhirnya sukses **tidak** menambah "Errors" tiap kali
+      retry (cuma kalau baris beneran menetap di state error)
+- [ ] Hapus baris yang sudah selesai/error/canceled, atau Clear History → semua angka statistik
+      (termasuk Errors/Canceled) tidak berubah
+- [ ] Pause lalu resume sebuah download → byte tidak dihitung dobel (kecuali overlap kecil di piece
+      yang lagi jalan pas pause)
+- [ ] Toggle Daily/Monthly di chart → 30 bar / 12 bar; label sumbu-x kebaca jelas dan tooltip tiap bar
+      benar (bytes, jumlah file, avg speed kalau ada)
+- [ ] Quit dari tray lalu buka lagi → angka statistik (termasuk Errors/Canceled) tetap ada (persisted)
+- [ ] Klik "Reset statistics…" → konfirmasi inline muncul → klik Reset → semua tile (termasuk Active
+      now, Errors, Canceled) balik ke nol/nilai live yang benar, dan tetap nol setelah restart (gak
+      di-backfill ulang dari history)
+- [ ] Selagi dashboard terbuka: arrow key, Ctrl+A, dan Space **tidak** memengaruhi baris tabel yang
+      tersembunyi; Ctrl+N dan Ctrl+B tetap jalan seperti biasa; ketik di search box, atau ganti filter
+      status/grouping di toolbar → otomatis balik ke tampilan tabel
+- [ ] Menu View (tekan Alt) ▸ Dashboard → toggle tampilan dan nampilin tanda centang saat aktif
+- [ ] Export/import backup, dan CSV export riwayat → tidak menyertakan/mempengaruhi stats.json (fitur
+      ini sengaja gak ikut backup/restore)
+- [ ] Cek tampilan di kedua tema (light & dark)
+
+## 27. PIN lock (Batch 4c, baru)
+
+Belum pernah diuji manual sama sekali. Butuh restart `bun run tauri dev` (bukan cuma reload
+frontend) karena ada lima command Rust baru (`lock_status`/`unlock_app`/`lock_app`/`set_app_pin`/
+`clear_app_pin`).
+
+- [ ] Settings ▸ Security → status "App lock is off", tombol "Set PIN…" → set PIN 5 digit → toast
+      "PIN set", status berubah jadi "App lock is on…" dengan tombol "Change PIN…"/"Remove PIN…"
+- [ ] Restart app → lock screen langsung muncul duluan (tabel/dashboard **tidak** kelihatan sekilas
+      pun), fokus otomatis di kotak PIN
+- [ ] Ketik PIN salah 5× berturut-turut → muncul countdown "Try again in 30s", kotak PIN & tombol
+      Unlock disabled selama countdown; PIN benar setelah countdown habis → berhasil unlock
+- [ ] Titlebar **X** (ke tray) → klik ikon tray lagi → lock screen muncul. Minimize dengan "Minimize
+      to tray" **ON** → juga locked. Minimize dengan opsi itu **OFF** → **tidak** locked
+- [ ] Selagi locked: buka menu tray → tulisan "No active downloads" walau ada download yang lagi
+      jalan; unlock → daftar tray kembali normal dalam ~1 detik. Download tetap jalan/nambah persen
+      selama locked (cuma UI yang ketutup)
+- [ ] Selagi locked: capture dari browser extension → main nampilin lock screen, window Add **tidak**
+      kebuka; setelah unlock → window Add muncul kepenuhan (prefilled). Sama untuk global hotkey
+      (Add window baru kebuka setelah unlock)
+- [ ] Auto rule yang match sambil locked → download langsung masuk antrean tanpa window Add sama
+      sekali (baik locked maupun tidak)
+- [ ] Ctrl+L / File ▸ Lock Now → langsung locked, popup Detail yang lagi kebuka ikut ketutup. Ctrl+L
+      pas belum ada PIN → tidak ngapa-ngapain (menu File ▸ Lock Now juga disabled)
+- [ ] Selagi locked: tombol Space/Delete/Ctrl+F/F5/Alt/Ctrl+N di lock screen **tidak** menembus ke
+      tabel/menubar di belakangnya
+- [ ] Trigger countdown sleep/shutdown pas-queue selagi locked → dialog countdown tetap kelihatan di
+      **atas** lock screen dan tombol Cancel/"Sleep now"/"Shut down now" tetap berfungsi
+- [ ] Change PIN dengan current PIN salah → error "Wrong PIN" inline (dialog tetap terbuka). Remove
+      PIN dengan current PIN benar → restart app → tidak ada lock lagi
+- [ ] Hapus `%APPDATA%\AzhuraDownloadManager\lock.json` manual lalu restart → tidak ada lock (link
+      "Forgot PIN?" di lock screen nunjukin path & pesan ini persis)
+- [ ] Export lalu import backup → PIN yang sudah di-set **tidak** berubah/hilang (lock.json sengaja
+      gak ikut backup/restore)
+- [ ] Cek tampilan lock screen di kedua tema (light & dark)
+
+## 28. What's New (Batch 4d, baru)
+
+Belum pernah diuji manual. Butuh restart `bun run tauri dev` (bukan cuma reload frontend) karena ada dua
+command Rust baru (`open_whats_new_window`/`close_whats_new_window`) dan capability `whats-new`.
+
+- [ ] Di DevTools main: `localStorage.removeItem("adm-whats-new-seen")`, restart → window What's New
+      kebuka sekali di atas main, entry 0.2.4 ada badge "Installed"; restart lagi → gak kebuka
+- [ ] Help ▸ What's New kebuka kapan aja; klik lagi pas masih kebuka → cuma fokus; Close / X → window hilang
+- [ ] `localStorage.setItem("adm-whats-new-seen","0.2.3")` + PIN aktif, restart → lock screen dulu,
+      window baru muncul setelah unlock
+- [ ] Pas window kebuka, Ctrl+L / kirim ke tray → window ikut ke-hide
+- [ ] Ganti tema (light/dark) → window ikut; konten bisa di-scroll; `code` dan **bold** ke-render

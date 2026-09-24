@@ -1,0 +1,61 @@
+/* ---- What's New window ---------------------------------------------------- */
+
+.whats-new-body {
+  align-items: stretch;
+  gap: 1.25rem;
+  overflow-y: auto;
+}
+.wn-version {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  font-family: var(--font-head);
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--ink);
+}
+.wn-current {
+  padding: 0.05rem 0.5rem;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  color: var(--accent);
+}
+.wn-date {
+  margin-bottom: 0.5rem;
+  font-size: var(--fs-sm);
+  color: var(--faint);
+}
+.wn-section {
+  margin: 0.6rem 0 0.25rem;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.wn-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: var(--fs-sm);
+  color: var(--ink-soft);
+  line-height: 1.55;
+}
+.wn-list code {
+  padding: 0.05rem 0.3rem;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--ink);
+  background: var(--surface-2);
+}
+.wn-list strong {
+  color: var(--ink);
+}
+.wn-empty {
+  font-size: var(--fs-sm);
+  color: var(--faint);
+}

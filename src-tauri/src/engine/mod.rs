@@ -159,6 +159,9 @@ pub(crate) async fn download_inner(
             .map(sanitize)
             .filter(|s| !s.is_empty() && s != "download.bin")
             .unwrap_or(info.filename);
+        if let Some(total) = info.total {
+            crate::paths::ensure_space(total, &chosen_filename, save_path, prefs)?;
+        }
         let temp_dir = temp_download_dir()?;
         tokio::fs::create_dir_all(&temp_dir)
             .await

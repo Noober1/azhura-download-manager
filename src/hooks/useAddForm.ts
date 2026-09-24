@@ -28,6 +28,10 @@ export type AddFormState = {
    *  every earlier version of this probe; the Archive Preview feature is
    *  the first thing that needs it. */
   supportsRanges: boolean;
+  /** Free bytes on the folder that's short, once the size is known and a
+   *  soft disk-space check comes back short. `null` = enough room, or not
+   *  checked yet (no size, or still probing). */
+  diskFree: number | null;
 
   // More Options tab
   savePath: string;
@@ -64,6 +68,7 @@ const initialState: AddFormState = {
   probeStatus: "idle",
   total: null,
   supportsRanges: false,
+  diskFree: null,
   savePath: "",
   defaultDir: "",
   connections: 8,
@@ -106,26 +111,36 @@ export function useAddForm() {
 
   // Remembered Connections / Speed cap defaults, and any per-category save
   // paths set from a previous session's "Remember this path" checkbox.
+  // Also re-run on a `prefs-changed` event: an imported backup replaces
+  // prefs.json from the main window while this (kept-alive) Add window is
+  // only ever reading it, so it needs to be told to reload.
   useEffect(() => {
-    commands
-      .loadPrefs()
-      .then((p) => {
-        const upd: Partial<AddFormState> = { categoryPaths: p.categoryPaths ?? {} };
-        if (p.connections && p.connections > 0) upd.connections = p.connections;
-        upd.perLimitMbps = p.speedLimitMbps ?? 0;
-        if (p.proxy) {
-          upd.proxyEnabled = p.proxy.enabled;
-          // The generated binding types `scheme` as plain `string` — the
-          // value itself is still always one of the three ProxyScheme literals.
-          if (p.proxy.scheme) upd.proxyScheme = p.proxy.scheme as ProxyScheme;
-          upd.proxyHost = p.proxy.host;
-          upd.proxyPort = p.proxy.port;
-          upd.proxyUsername = p.proxy.username;
-          upd.proxyPassword = p.proxy.password;
-        }
-        patch(upd);
-      })
-      .catch(() => {});
+    function loadPrefs() {
+      commands
+        .loadPrefs()
+        .then((p) => {
+          const upd: Partial<AddFormState> = { categoryPaths: p.categoryPaths ?? {} };
+          if (p.connections && p.connections > 0) upd.connections = p.connections;
+          upd.perLimitMbps = p.speedLimitMbps ?? 0;
+          if (p.proxy) {
+            upd.proxyEnabled = p.proxy.enabled;
+            // The generated binding types `scheme` as plain `string` — the
+            // value itself is still always one of the three ProxyScheme literals.
+            if (p.proxy.scheme) upd.proxyScheme = p.proxy.scheme as ProxyScheme;
+            upd.proxyHost = p.proxy.host;
+            upd.proxyPort = p.proxy.port;
+            upd.proxyUsername = p.proxy.username;
+            upd.proxyPassword = p.proxy.password;
+          }
+          patch(upd);
+        })
+        .catch(() => {});
+    }
+    loadPrefs();
+    const un = listen("prefs-changed", loadPrefs);
+    return () => {
+      un.then((f) => f());
+    };
   }, []);
 
   // A disabled checkbox left checked (from before the path was cleared) would
@@ -167,6 +182,7 @@ export function useAddForm() {
       pendingLater: false,
       probedFilename: "",
       total: null,
+      diskFree: null,
       probeStatus: "idle",
       supportsRanges: false,
       perLimitMbps: p.speedLimit > 0 ? p.speedLimit / (1024 * 1024) : 0,
@@ -298,6 +314,23 @@ export function useAddForm() {
     state.proxyPort,
   ]);
 
+  // Soft disk-space warning once the size is known; the engine hard-fails
+  // at start anyway, this just lets the user notice before submitting.
+  useEffect(() => {
+    if (state.probeStatus !== "done" || !state.total) {
+      patch({ diskFree: null });
+      return;
+    }
+    const name = state.filenameText.trim() || state.probedFilename;
+    const t = window.setTimeout(() => {
+      commands
+        .checkDiskSpace(state.savePath, name, state.total!)
+        .then((r) => patch({ diskFree: r.enough ? null : (r.free ?? 0) }))
+        .catch(() => patch({ diskFree: null }));
+    }, 300);
+    return () => window.clearTimeout(t);
+  }, [state.probeStatus, state.total, state.savePath, state.filenameText, state.probedFilename]);
+
   const headerCount = useMemo(
     () =>
       mergeHeaders(state.headersText, {
@@ -378,6 +411,7 @@ export function useAddForm() {
       filenameText: "",
       probedFilename: "",
       total: null,
+      diskFree: null,
       probeStatus: "idle",
       supportsRanges: false,
       rememberPath: false,
@@ -449,6 +483,8 @@ export function useAddForm() {
     savePathPlaceholder,
     showCheckSizeButton,
     size,
+    diskWarning:
+      state.diskFree === null ? null : `Not enough disk space — ${formatBytes(state.diskFree)} free`,
     canPreviewArchive,
     openArchivePreview,
     runProbe,

@@ -9,6 +9,7 @@ import { fallbackName } from "../format";
 import { notify } from "../notify";
 import { pushSpeedSample, SPEED_SAMPLE_INTERVAL_MS } from "../speedHistory";
 import { retryBackoffMs } from "../retryBackoff";
+import { queueOrder, moveIds, type QueueMove } from "../queueOrder";
 
 // Progress events themselves arrive roughly every 150ms (`engine/progress.rs`'s
 // tick) — far more often than the speed history / piece map need, and a
@@ -28,6 +29,10 @@ import { retryBackoffMs } from "../retryBackoff";
 // checksum-mismatch kembali di-retry seperti error lain — bukan gagal
 // secara diam-diam yang berbahaya.
 const CHECKSUM_MISMATCH_PREFIX = "Checksum mismatch —";
+// Kehabisan disk space juga gak akan sembuh dengan retry otomatis — kalau
+// drive-nya masih penuh, percobaan berikutnya bakal gagal dengan alasan yang
+// sama persis. mirrors DISK_SPACE_PREFIX di paths.rs.
+const DISK_SPACE_PREFIX = "Not enough disk space —";
 
 /** Owns the download list itself plus every action that mutates it: running,
  *  pausing, canceling, resuming, deleting, and applying live speed/connection
@@ -128,7 +133,8 @@ export function useDownloads({
 
     const item = downloadsRef.current.find((d) => d.id === id);
     const attempts = item?.retryCount ?? 0;
-    const retryWouldHelp = !message.startsWith(CHECKSUM_MISMATCH_PREFIX);
+    const retryWouldHelp =
+      !message.startsWith(CHECKSUM_MISMATCH_PREFIX) && !message.startsWith(DISK_SPACE_PREFIX);
 
     if (attempts < maxRetryAttempts && retryWouldHelp) {
       // A new failure episode starts — drop any "already finalized" marker
@@ -320,6 +326,18 @@ export function useDownloads({
     onItemAdded?.(id);
   }
 
+  // Queue reorder (drag in the Queue column, or the row menu's Queue ▸
+  // submenu): renumbers every queued row 0..n-1 in `orderedIds` order, so any
+  // row that later enters the queue (rank = addedAt) lands behind all of them.
+  function reorderQueue(orderedIds: string[]) {
+    const rank = new Map(orderedIds.map((id, i) => [id, i]));
+    setDownloads((ds) => ds.map((d) => (rank.has(d.id) ? { ...d, queueRank: rank.get(d.id)! } : d)));
+  }
+  function moveInQueue(ids: Set<string>, where: QueueMove) {
+    const order = queueOrder(downloadsRef.current).map((d) => d.id);
+    reorderQueue(moveIds(order, ids, where));
+  }
+
   function pauseMany(items: DownloadItem[]) {
     items.forEach((i) => commands.pauseDownload(i.id));
   }
@@ -471,6 +489,8 @@ export function useDownloads({
     removeMany,
     applySpeedCap,
     applyConnections,
+    reorderQueue,
+    moveInQueue,
     connRestart,
     setConnRestart,
     confirmConnRestart,

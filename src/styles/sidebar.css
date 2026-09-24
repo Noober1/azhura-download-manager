@@ -125,9 +125,24 @@
   opacity: 0.8;
 }
 
+/* Small pill showing how many of a category's downloads are currently
+   active — sits between the label and the total count. */
+.cat-active {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+  background: var(--accent);
+  border-radius: 8px;
+  padding: 0 5px;
+  line-height: 14px;
+}
+
 /* Collapsed: an icon-only rail — center the icon, drop the label/count text
    and the row's own horizontal padding (the icon centers in the full 40px
-   instead). */
+   instead). The active badge collapses to a small dot pinned to the icon's
+   corner instead of disappearing, so an active category stays noticeable. */
 .sidebar.collapsed .cat {
   padding: 0;
 }
@@ -138,4 +153,14 @@
 .sidebar.collapsed .cat-label,
 .sidebar.collapsed .cat-n {
   display: none;
+}
+.sidebar.collapsed .cat-active {
+  position: absolute;
+  top: 3px;
+  right: 8px;
+  width: 6px;
+  height: 6px;
+  padding: 0;
+  font-size: 0;
+  line-height: 0;
 }

@@ -243,3 +243,26 @@ pub(crate) async fn set_category_path(
     };
     write_json_atomic(&prefs_path()?, &StoredPrefs::from_wire(&prefs)).await
 }
+
+/// Replaces prefs with an imported backup's. A backup never carries the proxy
+/// password (export strips it), so an empty one keeps the current password.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn apply_imported_prefs(
+    app: tauri::AppHandle,
+    mut prefs: Prefs,
+    state: tauri::State<'_, PrefsState>,
+) -> Result<(), String> {
+    let merged = {
+        let mut guard = state.0.lock().unwrap();
+        if prefs.proxy.password.is_empty() {
+            prefs.proxy.password = guard.proxy.password.clone();
+        }
+        *guard = prefs;
+        guard.clone()
+    };
+    write_json_atomic(&prefs_path()?, &StoredPrefs::from_wire(&merged)).await?;
+    // The Add window is kept alive and only reads prefs on mount.
+    let _ = tauri::Emitter::emit_to(&app, "add", "prefs-changed", ());
+    Ok(())
+}

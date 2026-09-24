@@ -55,6 +55,11 @@ export const commands = {
 	/**  The default destination folder, for the Add window's "Save path" field. */
 	defaultDownloadDir: () => __TAURI_INVOKE<string>("default_download_dir"),
 	/**
+	 *  Soft pre-check for the Add window once the probe knows the size — the
+	 *  engine re-checks (and hard-fails) at start regardless.
+	 */
+	checkDiskSpace: (savePath: string, filename: string, total: number | null) => __TAURI_INVOKE<DiskCheck>("check_disk_space", { savePath, filename, total }),
+	/**
 	 *  Folder containing the unpacked browser extension, for the titlebar
 	 *  "install extension" button. In a bundled build this is the `extension`
 	 *  resource shipped next to the app (see `bundle.resources` in
@@ -182,10 +187,33 @@ export const commands = {
 	 */
 	closeAboutWindow: () => __TAURI_INVOKE<void>("close_about_window"),
 	/**
+	 *  Build (or, if one is already open, reveal and focus) the "What's New"
+	 *  popup — a single window, labeled `whats-new`, opened by Help ▸ What's New
+	 *  and automatically once per new version by `useWhatsNewAutoOpen`. Owned by
+	 *  `main` (not modal), like the About popup.
+	 * 
+	 *  Everything shown is bundled into the frontend (`CHANGELOG.md`), so there's
+	 *  no async data to wait on and this builds straight to visible — see
+	 *  `about.rs` for the same reasoning.
+	 * 
+	 *  Must be `async` for the same thread-affinity reason as `open_about_window`:
+	 *  creating a new OS window has to hand off to the event loop thread that a
+	 *  blocking command would be occupying.
+	 */
+	openWhatsNewWindow: () => __TAURI_INVOKE<null>("open_whats_new_window"),
+	/**
+	 *  Destroys the What's New popup — created on demand, not pooled.
+	 * 
+	 *  `async` for the same reason as `open_whats_new_window`.
+	 */
+	closeWhatsNewWindow: () => __TAURI_INVOKE<void>("close_whats_new_window"),
+	/**
 	 *  Push a fresh snapshot of active downloads into the tray menu, called
 	 *  roughly once a second from the frontend. Patches labels in place when the
 	 *  same set of ids is still showing (by far the common case) so the menu
-	 *  doesn't visibly flicker; otherwise rebuilds it.
+	 *  doesn't visibly flicker; otherwise rebuilds it. While the app is locked,
+	 *  the frontend's own list is ignored — the tray shows nothing rather than
+	 *  letting a locked screen still reveal filenames.
 	 */
 	updateTrayDownloads: (items: TrayDownload[], tooltip: string) => __TAURI_INVOKE<null>("update_tray_downloads", { items, tooltip }),
 	loadSettings: () => __TAURI_INVOKE<AppSettings>("load_settings"),
@@ -196,9 +224,39 @@ export const commands = {
 	loadPrefs: () => __TAURI_INVOKE<Prefs>("load_prefs"),
 	saveAddDefaults: (args: SaveAddDefaultsArgs) => __TAURI_INVOKE<null>("save_add_defaults", { args }),
 	setCategoryPath: (category: string, path: string) => __TAURI_INVOKE<null>("set_category_path", { category, path }),
+	/**
+	 *  Replaces prefs with an imported backup's. A backup never carries the proxy
+	 *  password (export strips it), so an empty one keeps the current password.
+	 */
+	applyImportedPrefs: (prefs: Prefs) => __TAURI_INVOKE<null>("apply_imported_prefs", { prefs }),
 	loadHistory: () => __TAURI_INVOKE<HistoryLoad_Serialize>("load_history"),
 	saveHistory: (entries: HistoryEntry_Deserialize[]) => __TAURI_INVOKE<null>("save_history", { entries }),
+	loadStats: () => __TAURI_INVOKE<StatsLoad>("load_stats"),
+	saveStats: (days: DayRecord[]) => __TAURI_INVOKE<null>("save_stats", { days }),
+	/**
+	 *  Writes `csv` (built by the frontend, see `src/csvExport.ts`) to a path the
+	 *  user picks in a native save dialog. Ok(None) = user canceled.
+	 */
+	exportHistoryCsv: (csv: string, defaultName: string) => __TAURI_INVOKE<string | null>("export_history_csv", { csv, defaultName }),
+	exportBackup: (history: HistoryEntry_Deserialize[], defaultName: string) => __TAURI_INVOKE<string | null>("export_backup", { history, defaultName }),
+	/**
+	 *  Pick → parse → confirm. Applies nothing itself: the frontend applies
+	 *  settings/history (it owns that state) and calls `apply_imported_prefs`.
+	 *  Ok(None) = canceled at either step.
+	 */
+	importBackup: () => __TAURI_INVOKE<{
+	exportedAt: number,
+	settings: AppSettings,
+	prefs: Prefs,
+	history: HistoryEntry_Serialize[],
+} | null>("import_backup"),
 	runPowerAction: (action: string) => __TAURI_INVOKE<null>("run_power_action", { action }),
+	/**
+	 *  Swaps the registered shortcut. On failure the previous one is restored so
+	 *  a typo never leaves the user with none. Persisting is the frontend's job
+	 *  (via `save_settings`), only after this returns Ok.
+	 */
+	setGlobalHotkey: (accel: string) => __TAURI_INVOKE<null>("set_global_hotkey", { accel }),
 	/**
 	 *  Same preparation, minus the exit: the update installer takes the process
 	 *  down itself moments later. Without this the installer would kill downloads
@@ -206,7 +264,54 @@ export const commands = {
 	 *  The caller waits out the same grace period before installing.
 	 */
 	prepareForUpdate: () => __TAURI_INVOKE<void>("prepare_for_update"),
+	/**
+	 *  File > Exit, from the menu bar. A thin wrapper rather than a
+	 *  `#[tauri::command]` on `quit_app` itself: commands take an owned
+	 *  `AppHandle`, while the tray's "Quit" handler calls `quit_app(&app)` with a
+	 *  borrow — this just bridges the two. Same path either way, including the
+	 *  pending-update install on the way out.
+	 */
+	exitApp: () => __TAURI_INVOKE<void>("exit_app"),
+	/**
+	 *  Checks the feed, downloads and signature-verifies the update package (the
+	 *  plugin's own `download` does the verification), and records it as
+	 *  pending. `Ok(None)` when already up to date.
+	 */
+	downloadUpdate: () => __TAURI_INVOKE<{
+	version: string,
+	critical: boolean,
+} | null>("download_update"),
+	/**
+	 *  What the frontend shows at launch without re-downloading — e.g. the
+	 *  status bar's "Restart to update" button.
+	 */
+	pendingUpdate: () => __TAURI_INVOKE<{
+	version: string,
+	critical: boolean,
+} | null>("pending_update"),
+	/**
+	 *  Explicit "Restart now" path: install and relaunch. Callers must run
+	 *  `prepare_for_update` (pause downloads, flush history) and wait out its
+	 *  grace period first — this only handles the installer itself.
+	 */
+	installPendingUpdate: () => __TAURI_INVOKE<null>("install_pending_update"),
 	grabberStatus: () => __TAURI_INVOKE<GrabberStatus>("grabber_status"),
+	/**
+	 *  Validates a single pattern exactly the way `first_match` will evaluate
+	 *  it, so the rules dialog's inline error can never disagree with what a
+	 *  real capture does. Used for live validation while a rule is being edited.
+	 */
+	validateAutoRulePattern: (kind: string, pattern: string) => __TAURI_INVOKE<null>("validate_auto_rule_pattern", { kind, pattern }),
+	/**
+	 *  Runs `first_match` against a draft rule list the dialog hasn't saved yet,
+	 *  for its "Test a URL" box — returns the matching rule's index, if any.
+	 */
+	testAutoRules: (rules: AutoRule[], url: string) => __TAURI_INVOKE<number | null>("test_auto_rules", { rules, url }),
+	lockStatus: () => __TAURI_INVOKE<LockStatus>("lock_status"),
+	unlockApp: (pin: string) => __TAURI_INVOKE<UnlockResult>("unlock_app", { pin }),
+	lockApp: () => __TAURI_INVOKE<void>("lock_app"),
+	setAppPin: (current: string | null, newPin: string) => __TAURI_INVOKE<null>("set_app_pin", { current, newPin }),
+	clearAppPin: (current: string) => __TAURI_INVOKE<null>("clear_app_pin", { current }),
 };
 
 /* Types */
@@ -263,14 +368,14 @@ export type AppSettings = {
 	 */
 	historyRetentionDays?: number,
 	/**
-	 *  Apply a downloaded update at startup instead of waiting for the user to
-	 *  click through the restart prompt. On by default: a downloaded update
-	 *  that nobody ever installs is the failure mode this exists to prevent,
-	 *  and startup is the moment when restarting costs least. Only ever acts
-	 *  when nothing is downloading. An update the feed marks `critical`
-	 *  ignores this — that flag exists precisely for fixes that can't wait on
-	 *  a preference. Applied entirely on the frontend (see
-	 *  `useUpdateCheck.ts`); Rust only persists it.
+	 *  Whether a downloaded update may be installed silently: on quit, and on
+	 *  the next cold start if that was missed (e.g. the process was
+	 *  force-killed before it could quit normally). On by default: a
+	 *  downloaded update that nobody ever installs is the failure mode this
+	 *  exists to prevent. An update the feed marks `critical` ignores this —
+	 *  that flag already forced the restart dialog when it arrived, so it
+	 *  doesn't need this path too. Read by `update.rs`; the frontend only
+	 *  toggles it (see `useUpdateCheck.ts`).
 	 */
 	autoInstallUpdates?: boolean,
 	/**
@@ -279,6 +384,19 @@ export type AppSettings = {
 	 *  only persists it.
 	 */
 	sidebarCollapsed?: boolean,
+	/**
+	 *  System-wide shortcut that opens the Add window, in global-hotkey
+	 *  syntax ("Ctrl+Alt+D"). "" = off (the default — a preset combo could
+	 *  collide with another app). Registered by Rust (see `hotkey.rs`).
+	 */
+	globalHotkey?: string,
+	/**
+	 *  Ordered URL-pattern rules that auto-start a browser-extension capture
+	 *  straight into a chosen folder, skipping the Add window. Evaluated by
+	 *  Rust at capture time (see `auto_rules.rs`); the frontend only edits
+	 *  this list.
+	 */
+	autoRules?: AutoRule[],
 };
 
 export type ArchiveEntry = {
@@ -316,10 +434,59 @@ export type ArchiveRequest = {
 	proxy: ProxyConfig | null,
 };
 
+export type AutoRule = {
+	id?: string,
+	enabled?: boolean,
+	/**  "wildcard" | "regex" */
+	kind?: string,
+	pattern?: string,
+	/**  "folder" | "category" */
+	target?: string,
+	/**  Absolute path, used when `target == "folder"`. */
+	folder?: string,
+	/**  Category id, used when `target == "category"`. */
+	category?: string,
+};
+
+export type BackupImport = BackupImport_Serialize | BackupImport_Deserialize;
+
+export type BackupImport_Deserialize = {
+	exportedAt: number,
+	settings: AppSettings,
+	prefs: Prefs,
+	history: HistoryEntry_Deserialize[],
+};
+
+export type BackupImport_Serialize = {
+	exportedAt: number,
+	settings: AppSettings,
+	prefs: Prefs,
+	history: HistoryEntry_Serialize[],
+};
+
 export type ConnInfo = {
 	downloaded: number,
 	total: number,
 	pieces: number,
+};
+
+export type DayRecord = {
+	/**  Local calendar day, "YYYY-MM-DD" (computed by the frontend). */
+	day: string,
+	bytes: number,
+	activeMs: number,
+	completed: number,
+	/**  Rows that ended in "error" this day (see `src/stats.ts`'s `observeDownloads`). */
+	errored: number,
+	/**  Rows that ended in "canceled" this day. */
+	canceled: number,
+	peakBps: number,
+};
+
+export type DiskCheck = {
+	enough: boolean,
+	/**  Free bytes on the folder that's short; None when there's enough room. */
+	free: number | null,
 };
 
 export type DownloadEvent = { event: "started"; data: {
@@ -463,6 +630,12 @@ export type HistoryLoad_Serialize = {
 	readable: boolean,
 };
 
+export type LockStatus = {
+	enabled: boolean,
+	locked: boolean,
+	retryAfterSecs: number,
+};
+
 export type Prefs = {
 	/**  Add-window defaults, remembered across sessions. */
 	connections?: number,
@@ -550,8 +723,27 @@ export type StartDownloadArgs = {
 	proxy: ProxyConfig | null,
 };
 
+export type StatsLoad = {
+	/**
+	 *  False when there was no usable stats.json — the frontend backfills from
+	 *  history then.
+	 */
+	existed: boolean,
+	days: DayRecord[],
+};
+
 export type TrayDownload = {
 	id: string,
 	label: string,
+};
+
+export type UnlockResult = {
+	ok: boolean,
+	retryAfterSecs: number,
+};
+
+export type UpdateInfo = {
+	version: string,
+	critical: boolean,
 };
 

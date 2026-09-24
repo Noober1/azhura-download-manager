@@ -1,0 +1,80 @@
+/* ---- Auto Rules dialog ----------------------------------------------------
+   The first list-editor UI in the app (add/remove/reorder rows) — see
+   AutoRulesDialog.tsx. Built on the existing .field-row/.field-unit/.danger
+   primitives from dialogs.css/add-tabs.css/forms.css, plus a handful of rules
+   specific to the row layout below. */
+
+/* Wider than the default `.dialog` (440px) — this is a data-editor dialog
+   with several controls per row, not a short settings list. */
+.auto-rules-dialog {
+  max-width: 580px;
+}
+
+.auto-rules-intro {
+  margin: 0;
+}
+
+.auto-rules-empty {
+  margin: 0;
+  padding: 0.75rem;
+  text-align: center;
+  color: var(--faint);
+  font-size: var(--fs-sm);
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-field);
+}
+
+.auto-rules-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.auto-rule {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.5rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-field);
+}
+
+.auto-rule-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  /* Row 1 alone packs six controls (checkbox, kind select, pattern input,
+     ▲/▼/✕) — on a dialog this narrow that leaves the pattern input almost no
+     room. Wrapping lets it (and the folder path input on row 2) drop to
+     their own line instead of being squeezed to a sliver. */
+  flex-wrap: wrap;
+}
+
+.auto-rule-kind {
+  flex-shrink: 0;
+  width: 6.5rem;
+}
+
+.auto-rule-pattern,
+.auto-rule-folder {
+  flex: 1 1 12rem;
+  min-width: 12rem;
+  font-family: var(--font-mono);
+}
+
+.auto-rule-target {
+  flex-shrink: 0;
+  max-width: 9rem;
+}
+
+.auto-rule-row button {
+  flex-shrink: 0;
+  padding: 0.35em 0.5em;
+}
+
+.auto-rule-error {
+  font-size: var(--fs-xs);
+  color: var(--danger);
+}

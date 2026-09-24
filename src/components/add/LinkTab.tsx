@@ -8,6 +8,7 @@ export function LinkTab({
   runProbe,
   showCheckSizeButton,
   size,
+  diskWarning,
   canPreviewArchive,
   openArchivePreview,
 }: {
@@ -18,6 +19,7 @@ export function LinkTab({
   runProbe: (allowInsecure: boolean) => void;
   showCheckSizeButton: boolean;
   size: string | null;
+  diskWarning: string | null;
   canPreviewArchive: boolean;
   openArchivePreview: () => void;
 }) {
@@ -68,6 +70,11 @@ export function LinkTab({
           </button>
         )}
         {size && <span className="size-readout">{size}</span>}
+        {diskWarning && (
+          <span className="size-readout disk-warn" role="status">
+            {diskWarning}
+          </span>
+        )}
       </div>
     </div>
   );

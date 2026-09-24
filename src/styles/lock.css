@@ -1,0 +1,83 @@
+/* ---- PIN lock screen ------------------------------------------------------
+   Rendered inside `main` (not a separate window) so every download hook
+   stays mounted underneath it. z-index 85 sits above dialogs (50) and toasts
+   (80, which can show filenames), and below tooltips (90). */
+
+.lock-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 85;
+  background: var(--canvas);
+  display: flex;
+  flex-direction: column;
+}
+
+.lock-top {
+  display: flex;
+  justify-content: flex-end;
+  height: 32px;
+  flex-shrink: 0;
+}
+
+.lock-center {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 1.5rem;
+  text-align: center;
+}
+
+.lock-app-name {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.lock-prompt {
+  color: var(--ink-soft);
+  margin-bottom: 0.5rem;
+}
+
+.lock-pin-input {
+  width: 12rem;
+  text-align: center;
+  font-size: 1.4rem;
+  letter-spacing: 0.3em;
+  padding: 0.5rem;
+}
+
+.lock-unlock-btn {
+  width: 12rem;
+  margin-top: 0.5rem;
+}
+
+.lock-error {
+  color: var(--danger);
+  min-height: 1.2em;
+  font-size: 0.9rem;
+}
+
+.lock-forgot {
+  background: none;
+  border: none;
+  color: var(--ink-soft);
+  text-decoration: underline;
+  cursor: pointer;
+  margin-top: 1rem;
+  padding: 0;
+}
+
+.lock-forgot-hint {
+  max-width: 24rem;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+
+/* ---- Set/Change/Remove PIN dialog (Settings ▸ Security) ---- */
+
+.pin-dialog-error {
+  color: var(--danger);
+  font-size: 0.85rem;
+}

@@ -2,6 +2,7 @@ import { motion } from "motion/react";
 import { SPEED_PRESETS, CONNECTION_PRESETS } from "../constants";
 import { MENU_POP } from "../motion";
 import { useContextMenuShell } from "./useContextMenuShell";
+import type { QueueMove } from "../queueOrder";
 
 /* Fixed-position right-click menu for the selected row(s). Clamps itself to
    stay inside the window and dismisses on outside click, Escape, scroll, or
@@ -20,6 +21,8 @@ export function ContextMenu({
   canModify,
   currentSpeedLimit,
   currentConnections,
+  canMoveInQueue,
+  onMoveInQueue,
   onResume,
   onPause,
   onCancel,
@@ -47,6 +50,8 @@ export function ContextMenu({
   canModify: boolean;
   currentSpeedLimit: number | null;
   currentConnections: number | null;
+  canMoveInQueue: boolean;
+  onMoveInQueue: (where: QueueMove) => void;
   onResume: () => void;
   onPause: () => void;
   onCancel: () => void;
@@ -182,6 +187,52 @@ export function ContextMenu({
               {n}
             </button>
           ))}
+        </div>
+      </div>
+      <div
+        className={`ctx-item ctx-sub ${!canMoveInQueue ? "disabled" : ""}`}
+        role="menuitem"
+        aria-haspopup="true"
+      >
+        Queue
+        <span className="ctx-caret" aria-hidden="true">▸</span>
+        <div className="ctx-flyout" role="menu">
+          <button
+            type="button"
+            role="menuitem"
+            className="ctx-item"
+            disabled={!canMoveInQueue}
+            onClick={() => run(() => onMoveInQueue("top"))}
+          >
+            Move to top
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="ctx-item"
+            disabled={!canMoveInQueue}
+            onClick={() => run(() => onMoveInQueue("up"))}
+          >
+            Move up
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="ctx-item"
+            disabled={!canMoveInQueue}
+            onClick={() => run(() => onMoveInQueue("down"))}
+          >
+            Move down
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="ctx-item"
+            disabled={!canMoveInQueue}
+            onClick={() => run(() => onMoveInQueue("bottom"))}
+          >
+            Move to bottom
+          </button>
         </div>
       </div>
       <div className="ctx-sep" />

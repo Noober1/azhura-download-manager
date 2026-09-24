@@ -135,6 +135,34 @@ dependency.
       restart either way, so the cost of a wrongly-flagged release is an
       interruption, not lost work.
 
+## Done (Phase 6)
+
+- [x] **Table header stays pinned while scrolling.** `.dtable thead th` was
+      already `position: sticky`, but `sortable-headers.css` re-declared
+      `position: relative` on `.dtable thead th.sortable` — one class more
+      specific, so it won regardless of load order and un-stuck the header.
+      Removed, with a note at both ends so it doesn't come back. The pinned
+      bottom rule is now an inset `box-shadow` as well as a border: under
+      `border-collapse: collapse` the collapsed border belongs to the table,
+      not to the sticky cell, and Chromium scrolls it away with the rows.
+- [x] **Show/hide columns.** Right-click the header row → `ColumnMenu.tsx`,
+      one checkable entry per column plus "Show all columns".
+      `src/hooks/useColumnVisibility.ts`, `src/columns.ts`
+      (`visibleOrder`/`applyVisibleOrder`). Hidden keys — not visible ones —
+      are what gets persisted, so a column added in a later release shows up
+      for existing installs. `order` still lists every column, so hiding and
+      re-showing one puts it back where it sat. The last visible column can't
+      be switched off (the header row is the only way back into the menu).
+- [x] **ETA, Connections, and Pieces columns.** Hidden by default
+      (`DEFAULT_HIDDEN_COLUMNS`) — all three on at once pushes the table's
+      minimum width past the default 1034px window, and Connections/Pieces are
+      diagnostics the Detail window already covers. `etaOf`/`piecesDoneOf` in
+      `src/format.ts`; `renderCell` in `DownloadTable.tsx`. `etaOf` is now
+      shared with the Detail window, which used to inline the same math.
+      Pieces is derived from bytes (`downloaded / pieceSize`) rather than
+      summed from `conns[].pieces`, which only counts pieces finished *this
+      run* and so would restart at zero on a resumed download.
+
 ## Features
 
 Nothing queued — everything that was listed here has shipped. The one piece of

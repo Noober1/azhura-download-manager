@@ -11,6 +11,7 @@ import {
   formatBytes,
   formatSpeed,
   formatEta,
+  etaOf,
   statusClass,
   statusLabel,
   pctOf,
@@ -122,8 +123,7 @@ export function DetailWindow() {
   }
 
   const pct = pctOf(item);
-  const eta =
-    item.total && item.speed > 0 ? Math.max(0, (item.total - item.downloaded) / item.speed) : null;
+  const eta = etaOf(item);
   const elapsed =
     item.startedAt && item.state === "downloading" ? (Date.now() - item.startedAt) / 1000 : null;
 

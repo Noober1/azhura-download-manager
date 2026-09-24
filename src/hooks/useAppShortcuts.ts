@@ -35,6 +35,8 @@ export function useAppShortcuts(opts: {
   onCopyLink: (items: DownloadItem[]) => void;
   singleSelected: DownloadItem | null;
   openDetail: (id: string) => void;
+  lockEnabled: boolean;
+  onLockNow: () => void;
 }) {
   const {
     anyDialogOpen,
@@ -51,6 +53,8 @@ export function useAppShortcuts(opts: {
     onCopyLink,
     singleSelected,
     openDetail,
+    lockEnabled,
+    onLockNow,
   } = opts;
 
   useEffect(() => {
@@ -85,6 +89,11 @@ export function useAppShortcuts(opts: {
         onShowShortcuts();
         return;
       }
+      if (mod && !e.shiftKey && e.key.toLowerCase() === "l") {
+        e.preventDefault();
+        if (lockEnabled) onLockNow();
+        return;
+      }
       // Pause-before-resume: for a mixed selection, the reversible action
       // (pausing something running) is what an ambiguous keypress should
       // start — never the surprising one (resuming a row the user
@@ -108,5 +117,5 @@ export function useAppShortcuts(opts: {
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [anyDialogOpen, pausableSel, resumableSel, selectedItems, singleSelected]);
+  }, [anyDialogOpen, pausableSel, resumableSel, selectedItems, singleSelected, lockEnabled]);
 }
