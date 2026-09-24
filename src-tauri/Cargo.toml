@@ -1,6 +1,6 @@
 [package]
 name = "azhura-download-manager"
-version = "0.2.4"
+version = "0.2.5"
 description = "Download files from the internet faster, tidier, and more in control than a browser's own downloader"
 authors = ["Azhura"]
 edition = "2021"

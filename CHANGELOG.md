@@ -5,7 +5,7 @@ release notes. Format: `## [X.Y.Z] - YYYY-MM-DD` (or `- Unreleased` until the re
 then `### Added` / `### Changed` / `### Fixed` sections of `- ` bullets. Inline `code` and **bold** are
 rendered; nothing else in Markdown is.
 
-## [0.2.5] - Unreleased
+## [0.2.5] - 2026-09-24
 
 ### Added
 - **Menu bar** — tap Alt to show a classic File / Downloads / View / Tools / Help menu bar with keyboard mnemonics.
