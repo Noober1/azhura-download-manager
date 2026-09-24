@@ -91,6 +91,8 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         windows::archive::close_archive_window,
         windows::about::open_about_window,
         windows::about::close_about_window,
+        windows::whats_new::open_whats_new_window,
+        windows::whats_new::close_whats_new_window,
         tray::update_tray_downloads,
         config::settings::load_settings,
         config::settings::save_settings,

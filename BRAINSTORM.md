@@ -37,7 +37,7 @@ beneran masalah).
       - **Tools** — Settings… (Ctrl+,), Extensions… (Ctrl+Shift+X), Check for
         Updates
       - **Help** — Keyboard Shortcuts (Ctrl+/), About Azhura Download Manager
-- [ ] **Changelog viewer / "What's New" window.** Muncul otomatis sekali
+- [x] **Changelog viewer / "What's New" window.** Muncul otomatis sekali
       setelah app selesai update dan restart (setelah [Fitur baru] silent
       auto-update install di atas kepasang), nampilin ringkasan perubahan
       versi baru. Catatan: `releaseBody` di `.github/workflows/release.yml`
@@ -46,7 +46,7 @@ beneran masalah).
       nyata per versi dulu (lihat follow-up di bawah) sebelum window ini ada
       isinya.
 
-  **Follow-up sesudah fitur ini diimplementasi:** tambahin behavior ke
+  **Follow-up (SUDAH dikerjakan di Batch 4d — CLAUDE.md + release.yml dari CHANGELOG):** tambahin behavior ke
   `CLAUDE.md` project (belum ada — perlu dibuat) yang mewajibkan nulis entry
   changelog tiap ada perubahan user-facing selama pengembangan, supaya
   window "What's New" selalu punya konten yang akurat dan gak nyusul manual

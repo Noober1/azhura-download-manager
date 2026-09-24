@@ -8,7 +8,7 @@ const host = process.env.TAURI_DEV_HOST;
 export default defineConfig(async () => ({
   plugins: [react()],
 
-  // Two HTML entry points: the main window and the separate "Add Download" window.
+  // One HTML entry point per native window.
   build: {
     rollupOptions: {
       input: {
@@ -17,6 +17,7 @@ export default defineConfig(async () => ({
         detail: "detail.html",
         archive: "archive.html",
         about: "about.html",
+        "whats-new": "whats-new.html",
       },
     },
   },

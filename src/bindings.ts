@@ -187,6 +187,27 @@ export const commands = {
 	 */
 	closeAboutWindow: () => __TAURI_INVOKE<void>("close_about_window"),
 	/**
+	 *  Build (or, if one is already open, reveal and focus) the "What's New"
+	 *  popup — a single window, labeled `whats-new`, opened by Help ▸ What's New
+	 *  and automatically once per new version by `useWhatsNewAutoOpen`. Owned by
+	 *  `main` (not modal), like the About popup.
+	 * 
+	 *  Everything shown is bundled into the frontend (`CHANGELOG.md`), so there's
+	 *  no async data to wait on and this builds straight to visible — see
+	 *  `about.rs` for the same reasoning.
+	 * 
+	 *  Must be `async` for the same thread-affinity reason as `open_about_window`:
+	 *  creating a new OS window has to hand off to the event loop thread that a
+	 *  blocking command would be occupying.
+	 */
+	openWhatsNewWindow: () => __TAURI_INVOKE<null>("open_whats_new_window"),
+	/**
+	 *  Destroys the What's New popup — created on demand, not pooled.
+	 * 
+	 *  `async` for the same reason as `open_whats_new_window`.
+	 */
+	closeWhatsNewWindow: () => __TAURI_INVOKE<void>("close_whats_new_window"),
+	/**
 	 *  Push a fresh snapshot of active downloads into the tray menu, called
 	 *  roughly once a second from the frontend. Patches labels in place when the
 	 *  same set of ids is still showing (by far the common case) so the menu

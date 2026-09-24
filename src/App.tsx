@@ -27,6 +27,7 @@ import { useAppLock } from "./hooks/useAppLock";
 import { useDetailWindows } from "./hooks/useDetailWindows";
 import { useDeepLinkCapture } from "./hooks/useDeepLinkCapture";
 import { useSortedRows } from "./hooks/useSortedRows";
+import { useWhatsNewAutoOpen } from "./hooks/useWhatsNewAutoOpen";
 import { useGroupedRows } from "./hooks/useGroupedRows";
 import { useColumnWidths } from "./hooks/useColumnWidths";
 import { useColumnOrder } from "./hooks/useColumnOrder";
@@ -232,6 +233,8 @@ function App() {
       .then(setVersion)
       .catch(() => {});
   }, []);
+
+  useWhatsNewAutoOpen(version, locked);
 
   // Fires the armed post-queue action once the queue drains.
   //
@@ -678,6 +681,11 @@ function App() {
             label: "Keyboard Shortcuts",
             shortcut: "Ctrl+/",
             onSelect: () => setShowShortcuts(true),
+          },
+          {
+            kind: "item",
+            label: "What's New",
+            onSelect: () => commands.openWhatsNewWindow(),
           },
           {
             kind: "item",

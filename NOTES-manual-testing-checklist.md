@@ -951,3 +951,16 @@ frontend) karena ada lima command Rust baru (`lock_status`/`unlock_app`/`lock_ap
 - [ ] Export lalu import backup → PIN yang sudah di-set **tidak** berubah/hilang (lock.json sengaja
       gak ikut backup/restore)
 - [ ] Cek tampilan lock screen di kedua tema (light & dark)
+
+## 28. What's New (Batch 4d, baru)
+
+Belum pernah diuji manual. Butuh restart `bun run tauri dev` (bukan cuma reload frontend) karena ada dua
+command Rust baru (`open_whats_new_window`/`close_whats_new_window`) dan capability `whats-new`.
+
+- [ ] Di DevTools main: `localStorage.removeItem("adm-whats-new-seen")`, restart → window What's New
+      kebuka sekali di atas main, entry 0.2.4 ada badge "Installed"; restart lagi → gak kebuka
+- [ ] Help ▸ What's New kebuka kapan aja; klik lagi pas masih kebuka → cuma fokus; Close / X → window hilang
+- [ ] `localStorage.setItem("adm-whats-new-seen","0.2.3")` + PIN aktif, restart → lock screen dulu,
+      window baru muncul setelah unlock
+- [ ] Pas window kebuka, Ctrl+L / kirim ke tray → window ikut ke-hide
+- [ ] Ganti tema (light/dark) → window ikut; konten bisa di-scroll; `code` dan **bold** ke-render

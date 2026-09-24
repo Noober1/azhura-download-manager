@@ -36,6 +36,18 @@ jobs:
 
       - run: bun install --frozen-lockfile
 
+      # Release notes come from CHANGELOG.md, the same file the in-app What's New
+      # window shows. Fails the release if the tag has no dated entry.
+      - name: Extract release notes
+        id: notes
+        shell: bash
+        run: |
+          {
+            echo 'body<<CHANGELOG_EOF'
+            bun scripts/release-notes.ts "${GITHUB_REF_NAME}"
+            echo 'CHANGELOG_EOF'
+          } >> "$GITHUB_OUTPUT"
+
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -44,7 +56,7 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "Azhura Download Manager ${{ github.ref_name }}"
-          releaseBody: "See the assets below to download and install this version."
+          releaseBody: ${{ steps.notes.outputs.body }}
           # Published as a draft so a broken build can be discarded before
           # anyone's updater sees it -- `releases/latest` skips drafts.
           #

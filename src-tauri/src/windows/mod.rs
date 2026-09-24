@@ -2,6 +2,7 @@ pub(crate) mod about;
 pub(crate) mod add;
 pub(crate) mod archive;
 pub(crate) mod detail;
+pub(crate) mod whats_new;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
@@ -60,6 +61,9 @@ pub(crate) fn hide_secondary_windows(app: &tauri::AppHandle) {
         let _ = w.hide();
     }
     if let Some(w) = app.get_webview_window("about") {
+        let _ = w.hide();
+    }
+    if let Some(w) = app.get_webview_window("whats-new") {
         let _ = w.hide();
     }
     for (label, w) in app.webview_windows() {
